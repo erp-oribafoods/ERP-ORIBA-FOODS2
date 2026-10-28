@@ -352,3 +352,12 @@ img.piece { max-width: 100%; border-radius: 6px; }
 .grid-in input[type=number] { width: 78px; padding: 5px 6px; text-align: right; }
 .grid-in input.w-txt { width: 200px; padding: 5px 6px; }
 .grid-in td { vertical-align: middle; }
+
+/* Page « Saisie et import » */
+.sec-t { font-family: var(--f-head, inherit); font-size: 1.05rem; margin: 22px 0 10px; color: var(--ink-2); text-transform: uppercase; letter-spacing: .06em; }
+.saisie-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.saisie-c { display: flex; flex-direction: column; gap: 6px; }
+.saisie-c h3 { margin: 0; font-size: 1rem; }
+.saisie-c p { margin: 0 0 6px; }
+.saisie-a { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+.steps-imp { margin: 0 0 12px; padding-left: 20px; line-height: 1.7; }

@@ -12,6 +12,7 @@ const FONTS = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz
 
 const res = await build({ entryPoints: ['src/main.js'], bundle: true, format: 'iife', minify: true, write: false, target: ['es2020'], legalComments: 'none', platform: 'browser', define: { 'process.env.NODE_ENV': '"production"' } });
 const js = res.outputFiles[0].text;
+const VER = Date.now().toString(36); // force le navigateur à recharger la nouvelle version
 const css = fs.readFileSync('src/styles.css', 'utf8');
 
 fs.mkdirSync('public', { recursive: true });
@@ -43,8 +44,8 @@ fs.writeFileSync('docs/app.js', js);
 fs.writeFileSync('docs/styles.css', css);
 fs.writeFileSync('docs/.nojekyll', '');
 fs.writeFileSync('docs/index.html', fs.readFileSync('public/index.html', 'utf8')
-  .replace('href="/styles.css"', 'href="styles.css"')
-  .replace('<script src="/app.js" defer></script>', '<script>window.ERP_API_URL = "https://zzycbxyefporwjztybix.supabase.co/functions/v1/erp-api";</script>\n<script src="app.js" defer></script>'));
+  .replace('href="/styles.css"', `href="styles.css?v=${VER}"`)
+  .replace('<script src="/app.js" defer></script>', `<script>window.ERP_API_URL = "https://zzycbxyefporwjztybix.supabase.co/functions/v1/erp-api";</script>\n<script src="app.js?v=${VER}" defer></script>`));
 
 // Démonstration autonome (artefact) : fragment sans doctype, tout en ligne
 fs.mkdirSync('dist', { recursive: true });

@@ -160,7 +160,10 @@ export function renderReprise(root) {
     const type = $('#rt', root).value;
     try {
       const wb = window.XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
-      const raw = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: true });
+      const ONGLET = { produits: 'produits', agents: 'agents', marches: 'marches', clients: 'clients', ventes_comptant: 'ventes_comptant', ventes_credit: 'ventes_credit', remboursements: 'remboursements', stock_remises: 'remises_stock', depenses_agregees: 'depenses_mensuelles' };
+      const nomOnglet = wb.SheetNames.find((n) => norm(n) === ONGLET[type]) || wb.SheetNames.find((n) => !['lisez_moi', 'listes'].includes(norm(n))) || wb.SheetNames[0];
+      if (wb.SheetNames.length > 1) toast(`Onglet lu : « ${nomOnglet} »`);
+      const raw = window.XLSX.utils.sheet_to_json(wb.Sheets[nomOnglet], { defval: '', raw: true });
       const res = analyse(type, raw);
       drawRes(type, file.name, res);
     } catch (er) { toast('Lecture du fichier impossible : ' + er.message, 'err'); }

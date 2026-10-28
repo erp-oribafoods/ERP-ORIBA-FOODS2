@@ -3,7 +3,7 @@
 import pg from "npm:pg@8.13.1";
 import bcrypt from "npm:bcryptjs@3.0.3";
 import { SignJWT, jwtVerify } from "npm:jose@6.2.13";
-import { handle, AppError } from "https://raw.githubusercontent.com/ibro50/ERP-ORIBA-FOODS2/e4226adbc61a2c8bf8404a0d6b7f306f2fe58c33/shared/core.js";
+import { handle, AppError } from "https://raw.githubusercontent.com/erp-oribafoods/ERP-ORIBA-FOODS2/e4226adbc61a2c8bf8404a0d6b7f306f2fe58c33/shared/core.js";
 
 const SCHEMA = "erp";
 pg.types.setTypeParser(1700, (v: string) => (v === null ? null : parseFloat(v)));
@@ -95,7 +95,7 @@ const blobs = {
   async get(key: string) { const r = await pool.query(`select type, nom, base64 from ${SCHEMA}.fichiers where cle = $1`, [key]); return r.rows[0] || null; },
 };
 
-const ORIGINS = ["https://ibro50.github.io", "https://oriba-erp-gestion.netlify.app", "http://localhost:8888"];
+const ORIGINS = ["https://erp-oribafoods.github.io", "https://ibro50.github.io", "https://oriba-erp-gestion.netlify.app", "http://localhost:8888"];
 function cors(req: Request) {
   const o = req.headers.get("origin") || "";
   return { "access-control-allow-origin": ORIGINS.includes(o) ? o : ORIGINS[0], "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": "content-type, authorization", "access-control-max-age": "86400", vary: "origin" };

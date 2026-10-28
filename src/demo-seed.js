@@ -159,7 +159,11 @@ export async function seedDemo(db, crypto, state) {
     for (const tcode of teams) {
       const e = eq(tcode);
       const items = [['CARB', 30000 + Math.round(r() * 40) * 1000], ['SALA', 150000], ['GADG', r() < 0.4 ? 25000 : 0]];
-      if (tcode === 'ZIN') items.push(['INSA', r() < 0.4 ? 15000 : 0]);
+      if (tcode === 'ZIN') items.push(['INSA', r() < 0.4 ? 15000 : 0], ['AUTO', mo === '2026-06' ? 30000 : 0]);
+      if (vehDe(tcode)) items.push(['FILT', r() < 0.35 ? 18000 : 0]);
+      if (mo === '2026-05' && tcode !== 'CTR') items.push(['PATE', 60000]);
+      if (mo === '2026-06') items.push(['CCAA', 20000]);
+      items.push(['CCAN', r() < 0.15 ? 12000 : 0], ['AUTR', r() < 0.12 ? 15000 + Math.round(r() * 10) * 1000 : 0]);
       for (const [cc, mt] of items) {
         if (!mt) continue;
         const day = `${mo}-${String(3 + Math.floor(r() * 24)).padStart(2, '0')}`;
@@ -179,6 +183,13 @@ export async function seedDemo(db, crypto, state) {
         }
       }
     }
+  }
+  // Objectifs commerciaux (agents, zones, produits) de mai au mois en cours
+  for (const mo of months) {
+    await handle(db, 'objectif.bulk', { mois: mo, axe: 'agent', lignes: agents.map((ag) => { const q = 30 + Math.round(r() * 12) * 5; return { cible_id: ag.id, objectif_cartons: q, objectif_ca: q * 13500 }; }) }, C);
+    await handle(db, 'objectif.bulk', { mois: mo, axe: 'zone', lignes: state.zones.filter((z) => z.nom !== 'Agadez').map((z) => { const q = z.nom === 'Niamey' ? 420 : 110 + Math.round(r() * 8) * 10; return { cible_id: z.id, objectif_cartons: q, objectif_ca: q * 13500 }; }) }, C);
+    await handle(db, 'objectif.bulk', { mois: mo, axe: 'produit', lignes: produits.map((p, k) => ({ cible_id: p.id, objectif_cartons: [450, 260, 180][k], objectif_ca: [450, 260, 180][k] * p.prix_ref })) }, C);
+    await handle(db, 'objectif.bulk', { mois: mo, axe: 'marche', lignes: state.marches.slice(0, 12).map((m) => ({ cible_id: m.id, objectif_cartons: 40 + Math.round(r() * 6) * 5 })) }, C);
   }
   for (const mo of months.slice(-2)) for (const tcode of teams) await handle(db, 'budget.save', { budget: { mois: mo, equipe_id: eq(tcode).id, montant: tcode === 'ZIN' ? 320000 : 230000 } }, ctx(U.daf));
   for (const mo of months.slice(0, -2)) await handle(db, 'cloture.set', { mois: mo, statut: 'cloture', commentaire: 'Clôture démo' }, ctx(U.daf));

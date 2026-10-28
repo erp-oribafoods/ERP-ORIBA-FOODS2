@@ -13,6 +13,7 @@ import { renderAudit } from './pages/audit.js';
 import { renderReprise } from './pages/reprise.js';
 import { renderTerrain, renderAgents, renderClients } from './pages/terrain.js';
 import { renderLogistique } from './pages/logistique.js';
+import { renderObjectifs } from './pages/objectifs.js';
 import { DEMO_USERS, DEMO_PASSWORD } from './demo-seed.js';
 
 const DEMO = !!window.ERP_DEMO || (() => { try { return new URLSearchParams(location.search).has('demo'); } catch { return false; } })();
@@ -26,6 +27,7 @@ const NAV = [
     ['terrain', 'Zones et équipes', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderTerrain],
     ['agents', 'Agents commerciaux', () => App.can('ventes') || App.can('dashboard'), renderAgents],
     ['clients', 'Clients et grossistes', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderClients],
+    ['objectifs', 'Objectifs et réalisations', () => App.can('objectifs'), renderObjectifs],
   ]],
   ['Ventes et créances', [
     ['ventes-comptant', 'Ventes au comptant', () => App.can('ventes'), (r) => renderVentes(r, 'comptant')],
@@ -36,7 +38,7 @@ const NAV = [
   ]],
   ['Dépenses et logistique', [
     ['depenses', 'Saisie et validation', () => App.can('depenses'), renderDepenses],
-    ['logistique', 'Logistique et véhicules', () => App.can('depenses'), renderLogistique],
+    ['logistique', 'Logistique et charges', () => App.can('depenses'), renderLogistique],
     ['pilotage-depenses', 'Pilotage des dépenses', () => App.can('depenses'), renderPilotage],
     ['budgets', 'Budgets', () => App.can('budgets'), renderBudgets],
     ['cloture', 'Clôture mensuelle', () => App.can('cloture'), renderCloture],

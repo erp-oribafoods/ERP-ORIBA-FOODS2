@@ -1,8 +1,8 @@
 // Logistique : parc de véhicules, documents (assurance, vignette, visite technique), entretien, réparations, carburant.
 import { App, nm, filterBar, describeFilters, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtD, Table, pill, icon, chart, palette } from '../lib/ui.js';
-import { periodRange, monthsBetween, moisLabel } from '../lib/facts.js';
-import { documentsVehicule, today, num } from '../../shared/logic.js';
+import { periodRange, monthsBetween, moisLabel, salesFacts } from '../lib/facts.js';
+import { documentsVehicule, depenseAllocations, today, num } from '../../shared/logic.js';
 import { CATS_LOGISTIQUE, STATUTS_DEPENSE } from '../../shared/schema.js';
 import { depenseForm, openDepense, ficheVehicule } from './depenses.js';
 
@@ -10,9 +10,17 @@ const catCode = (id) => App.I.categories.get(id)?.code;
 
 export function renderLogistique(root) {
   const canNew = App.can('depenses', 'creer');
-  root.innerHTML = pageHead('Logistique et véhicules', 'Parc roulant du service commercial : documents à jour, entretien, réparations, carburant et coût par véhicule.',
+  App.filters.logTab = App.filters.logTab || 'charges';
+  root.innerHTML = pageHead('Logistique et charges', 'Charges de la force de vente par nature et coût par carton vendu ; parc roulant, documents des véhicules, entretien et réparations.',
     `${App.can('referentiels', 'modifier') ? `<button class="btn" id="newveh">${icon('plus')} Ajouter un véhicule</button>` : ''}${canNew ? `<button class="btn primary" id="newdep">${icon('plus')} Nouvelle dépense logistique</button>` : ''}`) +
-    '<div id="flt"></div><div id="lg"></div>';
+    `<div class="tabs" role="tablist"><button role="tab" data-lt="charges" class="${App.filters.logTab === 'charges' ? 'on' : ''}">Charges du mois et coût par carton</button><button role="tab" data-lt="parc" class="${App.filters.logTab === 'parc' ? 'on' : ''}">Parc de véhicules et entretien</button></div>
+    <div id="flt"></div><div id="lg"></div>`;
+  $$('[data-lt]', root).forEach((b) => b.addEventListener('click', () => { App.filters.logTab = b.dataset.lt; App.rerender(); }));
+  if (App.filters.logTab === 'charges') {
+    $('#newdep', root)?.addEventListener('click', () => depenseForm(null));
+    $('#newveh', root)?.addEventListener('click', () => import('./admin.js').then((x) => x.refFormPublic('vehicules')));
+    return drawCharges(root);
+  }
   const draw = () => {
     const f = App.filters.depenses;
     const [du, au] = periodRange(f);
@@ -64,3 +72,74 @@ export function renderLogistique(root) {
   $('#newveh', root)?.addEventListener('click', () => import('./admin.js').then((x) => x.refFormPublic('vehicules')));
   draw();
 }
+
+// ---------- Charges du mois et coût par carton ----------
+const ENGAGE = ['soumise', 'controlee', 'a_completer', 'validee'];
+function drawCharges(root) {
+  const t = today();
+  App.filters.charges = App.filters.charges || { mois: t.slice(0, 7), equipe_id: '', zone_id: '' };
+  const F = App.filters.charges;
+  $('#flt', root).innerHTML = `<div class="filters"><label class="ff"><span>Mois</span><input type="month" id="c-mois" value="${F.mois}"></label>
+    <label class="ff"><span>Équipe</span><select id="c-eq"><option value="">Toutes</option>${App.D.equipes.map((e) => `<option value="${e.id}" ${F.equipe_id === e.id ? 'selected' : ''}>${esc(e.nom)}</option>`).join('')}</select></label>
+    <label class="ff"><span>Zone</span><select id="c-zone"><option value="">Toutes</option>${App.D.zones.map((z) => `<option value="${z.id}" ${F.zone_id === z.id ? 'selected' : ''}>${esc(z.nom)}</option>`).join('')}</select></label></div>`;
+  const I = App.I;
+  const zoneOf = (d) => d.zone_id || I.equipes.get(d.equipe_id)?.zone_id;
+  // Dépenses visibles + agrégats des dépenses sensibles (validées) pour les profils sans accès au détail
+  const ag = (App.D.depenses_agregats || []).map((a) => ({ agrege: true, mois: a.mois, categorie_id: a.categorie_id, equipe_id: a.equipe_id, montant: a.montant, statut: 'validee', partagee: false }));
+  const all = [...(App.D.depenses || []), ...ag].filter((d) => (!F.zone_id || zoneOf(d) === F.zone_id));
+  const part = (d) => (F.equipe_id ? depenseAllocations(d, I).filter((a) => a.equipe_id === F.equipe_id).reduce((s, a) => s + a.montant, 0) : num(d.montant));
+  const cartons = (mois) => salesFacts(I, { preset: 'perso', du: `${mois}-01`, au: `${mois}-31`, equipe_id: F.equipe_id, zone_id: F.zone_id }).reduce((s, x) => s + x.cartons, 0);
+  const totaux = (mois) => {
+    const ds = all.filter((d) => d.mois === mois);
+    const byCat = new Map();
+    let eng = 0, val = 0;
+    for (const d of ds) {
+      const m = part(d); if (!m) continue;
+      if (ENGAGE.includes(d.statut)) { eng += m; const o = byCat.get(d.categorie_id) || { eng: 0, val: 0 }; o.eng += m; if (d.statut === 'validee') o.val += m; byCat.set(d.categorie_id, o); }
+      if (d.statut === 'validee') val += m;
+    }
+    return { eng, val, byCat, ctn: cartons(mois) };
+  };
+  const cur = totaux(F.mois), prev = totaux(moisPrecedent(F.mois));
+  const annee = monthsBetween(`${F.mois.slice(0, 4)}-01-01`, `${F.mois}-01`);
+  const histoAll = annee.map((m) => ({ id: m, mois: m, ...totaux(m) }));
+  const first = histoAll.findIndex((h) => h.eng || h.ctn);
+  const histo = first < 0 ? histoAll.slice(-1) : histoAll.slice(first);
+  const cumulCat = new Map(); for (const h of histo) for (const [k, o] of h.byCat) cumulCat.set(k, (cumulCat.get(k) || 0) + o.val);
+  const cpc = (x, k) => (x.ctn ? x[k] / x.ctn : null);
+  const host = $('#lg', root);
+  host.innerHTML = `<section class="kpis">
+      ${[['Dépenses totales engagées', fmtF(cur.eng), `${moisLabel(F.mois)} · validées et en cours de validation`, ''], ['Dont validées', fmtF(cur.val), `${fmtF(cur.eng - cur.val)} en attente`, ''],
+        ['Cartons vendus', `${fmtN(cur.ctn, 2)} ctn`, 'ventes validées du mois, même périmètre', ''],
+        ['Coût par carton', cpc(cur, 'eng') !== null ? fmtF(cpc(cur, 'eng')) : '—', 'dépenses totales engagées ÷ cartons vendus', ''],
+        ['Coût par carton (validé)', cpc(cur, 'val') !== null ? fmtF(cpc(cur, 'val')) : '—', prev.ctn && cpc(prev, 'val') !== null ? `mois précédent : ${fmtF(cpc(prev, 'val'))}` : '', '']]
+        .map(([l, v, s, c]) => `<div class="kpi static ${c}"><span class="kpi-l">${l}</span><span class="kpi-v">${v}</span>${s ? `<span class="kpi-s">${s}</span>` : ''}</div>`).join('')}</section>
+    <p class="note">Formule du cahier des charges : <b>coût commercial par carton = dépenses totales ÷ nombre de cartons vendus</b> sur le même mois et le même périmètre. Exemple : 1 200 000 FCFA ÷ 4 000 cartons = 300 FCFA par carton.</p>
+    <article class="card"><header><h3>Charges de ${moisLabel(F.mois)} par nature</h3></header><div id="c-tab"></div></article>
+    <section class="grid g2"><article class="card"><header><h3>Charges et coût par carton, mois par mois</h3></header><div class="cv h260"><canvas id="c-ch"></canvas></div></article>
+      <article class="card"><header><h3>Répartition des charges du mois</h3></header><div class="cv h260"><canvas id="c-pie"></canvas></div></article></section>
+    <article class="card"><header><h3>Évolution depuis janvier</h3></header><div id="c-hist"></div></article>`;
+  const cats = App.D.categories_depense.slice().sort((a, b) => DEFAULT_ORDER(a) - DEFAULT_ORDER(b));
+  const rows = cats.map((c) => { const o = cur.byCat.get(c.id) || { eng: 0, val: 0 }; const p = prev.byCat.get(c.id)?.val || 0; return { id: c.id, nature: c.libelle, eng: o.eng, val: o.val, prev: p, var: o.val - p, part: cur.eng ? (o.eng / cur.eng) * 100 : 0, cumul: cumulCat.get(c.id) || 0, parCarton: cur.ctn ? o.eng / cur.ctn : 0 }; });
+  new Table({ title: `Charges ${F.mois}`, rows, pageSize: 30, sort: null, meta: () => `Mois : ${moisLabel(F.mois)}${F.equipe_id ? ' · équipe ' + nm.equipe(F.equipe_id) : ''}${F.zone_id ? ' · zone ' + nm.zone(F.zone_id) : ''} · cartons vendus : ${fmtN(cur.ctn, 2)}`,
+    foot: (c, rs) => ({ nature: '<b>Dépenses totales</b>', eng: `<b>${fmtN(cur.eng)}</b>`, val: `<b>${fmtN(cur.val)}</b>`, prev: `<b>${fmtN(prev.val)}</b>`, var: `<b>${fmtN(cur.val - prev.val)}</b>`, part: '<b>100 %</b>', cumul: `<b>${fmtN(rs.reduce((s, r) => s + r.cumul, 0))}</b>`, parCarton: `<b>${cur.ctn ? fmtN(cur.eng / cur.ctn) : '—'}</b>` }[c.k] ?? ''),
+    cols: [{ k: 'nature', l: 'Nature de la charge' }, { k: 'eng', l: 'Engagé du mois', num: 1, f: (r) => (r.eng ? `<b>${fmtN(r.eng)}</b>` : '—') }, { k: 'val', l: 'dont validé', num: 1, f: (r) => (r.val ? fmtN(r.val) : '—') },
+      { k: 'prev', l: 'Mois précédent (validé)', num: 1, f: (r) => (r.prev ? fmtN(r.prev) : '—') }, { k: 'var', l: 'Variation', num: 1, f: (r) => (r.var ? `<span class="${r.var > 0 ? 't-crit' : 't-ok'}">${r.var > 0 ? '+' : ''}${fmtN(r.var)}</span>` : '—') },
+      { k: 'part', l: 'Part', num: 1, f: (r) => (r.part ? `${fmtN(r.part, 1)} %` : '—') }, { k: 'parCarton', l: 'FCFA par carton', num: 1, f: (r) => (r.parCarton ? fmtN(r.parCarton, 1) : '—') }, { k: 'cumul', l: `Cumul ${F.mois.slice(0, 4)} (validé)`, num: 1, f: (r) => (r.cumul ? fmtN(r.cumul) : '—') }] }).mount($('#c-tab', host));
+  const pal = palette();
+  chart($('#c-ch', host), { type: 'bar', y2: true, data: { labels: histo.map((h) => moisLabel(h.mois)), datasets: [
+    { type: 'bar', label: 'Dépenses engagées', data: histo.map((h) => h.eng), backgroundColor: pal[0], borderRadius: 3, yAxisID: 'y', order: 2 },
+    { type: 'line', label: 'Coût par carton (FCFA)', data: histo.map((h) => (h.ctn ? Math.round(h.eng / h.ctn) : null)), borderColor: pal[1], backgroundColor: pal[1], yAxisID: 'y2', tension: 0.3, pointRadius: 3, order: 1 }] },
+    tip: (c) => (c.dataset.yAxisID === 'y2' ? `Coût par carton : ${fmtF(c.parsed.y)}` : `Dépenses engagées : ${fmtF(c.parsed.y)}`) });
+  const pie = rows.filter((r) => r.eng).sort((a, b) => b.eng - a.eng);
+  chart($('#c-pie', host), { type: 'doughnut', cutout: '58%', legendPos: 'right', data: { labels: pie.map((r) => r.nature), datasets: [{ data: pie.map((r) => r.eng), backgroundColor: pie.map((_, i) => pal[i % pal.length]), borderWidth: 0 }] }, tip: (c) => `${c.label} : ${fmtF(c.parsed)} (${fmtN((c.parsed / (cur.eng || 1)) * 100, 1)} %)` });
+  new Table({ title: `Évolution des charges ${F.mois.slice(0, 4)}`, rows: histo.slice().reverse(), pageSize: 12, sort: null,
+    cols: [{ k: 'mois', l: 'Mois', f: (r) => moisLabel(r.mois) }, { k: 'eng', l: 'Dépenses engagées', num: 1, f: (r) => fmtN(r.eng) }, { k: 'val', l: 'dont validées', num: 1, f: (r) => fmtN(r.val) },
+      { k: 'ctn', l: 'Cartons vendus', num: 1, f: (r) => fmtN(r.ctn, 2) }, { k: 'cpc', l: 'Coût par carton', num: 1, v: (r) => (r.ctn ? Math.round(r.eng / r.ctn) : 0), f: (r) => (r.ctn ? `<b>${fmtN(r.eng / r.ctn)}</b>` : '—') },
+      { k: 'cpv', l: 'Coût par carton (validé)', num: 1, v: (r) => (r.ctn ? Math.round(r.val / r.ctn) : 0), f: (r) => (r.ctn ? fmtN(r.val / r.ctn) : '—') }] }).mount($('#c-hist', host));
+  const go = (k) => (e) => { F[k] = e.target.value; drawCharges(root); };
+  $('#c-mois', root).addEventListener('change', go('mois')); $('#c-eq', root).addEventListener('change', go('equipe_id')); $('#c-zone', root).addEventListener('change', go('zone_id'));
+}
+const ORDRE = ['CARB', 'VIDA', 'FILT', 'VIGN', 'PATE', 'ASSU', 'REPA', 'VTEC', 'CCAN', 'CCAA', 'SALA', 'GADG', 'INSA', 'AUTO', 'AUTR'];
+const DEFAULT_ORDER = (c) => { const i = ORDRE.indexOf(c.code); return i < 0 ? 99 : i; };
+const moisPrecedent = (m) => { const [y, mm] = m.split('-').map(Number); return new Date(Date.UTC(y, mm - 2, 1)).toISOString().slice(0, 7); };

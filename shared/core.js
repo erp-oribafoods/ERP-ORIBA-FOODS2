@@ -1,6 +1,6 @@
 // Cœur applicatif : toutes les opérations passent par ici, avec contrôle des droits côté serveur,
 // règles de gestion et journal d'audit. Le même code tourne dans la fonction Netlify et dans la démo.
-import { MODULES, REFS, WRITABLE, DEFAULT_PARAMS, DEFAULT_ROLES, STOCK_TYPES } from './schema.js';
+import { MODULES, REFS, WRITABLE, DEFAULT_PARAMS, DEFAULT_ROLES, STOCK_TYPES, AXES_OBJECTIF } from './schema.js';
 import {
   buildIndex, creditInfo, encoursClient, plafondClient, niveauPlafond, lots, lineCalc, today, nowISO, moisDe,
   isDate, num, round2, addDays, moisClos, fmtF, fmtQ,
@@ -265,6 +265,7 @@ A['data.bootstrap'] = async ({ t, user, perms }) => {
     D.depense_validations = (await t.select('depense_validations')).filter((r) => ids.has(r.depense_id));
   } else { D.depenses = []; D.depense_repartitions = []; D.depense_validations = []; D.depenses_agregats = []; }
   D.budgets = P('budgets') || P('depenses') ? await t.select('budgets') : [];
+  D.objectifs = P('objectifs') || P('dashboard') ? (await t.select('objectifs')).filter((o) => o.actif !== false) : [];
   D.anomalies = P('audit') ? await t.select('anomalies') : (await t.select('anomalies', { created_by: user.id }));
   D.imports = P('import', 'creer') || P('audit') ? await t.select('imports') : [];
   return { data: D, user: publicUser(user, D.roles), serverDate: today() };
@@ -702,6 +703,41 @@ A['budget.save'] = async ({ t, user, perms, payload, ip }) => {
   const r = await t.insert('budgets', { id: uid(), ...b, actif: b.actif !== false, approuve_par: user.id, date_approbation: nowISO(), created_at: nowISO() });
   await audit(t, user, 'CREATION', 'budgets', r.id, null, r, null, ip);
   return { budget: r };
+};
+
+// Objectifs commerciaux : saisie groupée d'un mois pour un axe
+const AXE_TABLE = { agent: 'agents', zone: 'zones', equipe: 'equipes', marche: 'marches', produit: 'produits' };
+A['objectif.bulk'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'objectifs', 'modifier')) fail('Droit insuffisant pour définir les objectifs.', 403);
+  const { mois, axe } = payload;
+  if (!/^\d{4}-\d{2}$/.test(mois || '')) fail('Mois invalide (AAAA-MM).');
+  if (!AXES_OBJECTIF[axe]) fail('Axe d’objectif invalide.');
+  const produitId = payload.produit_id || null;
+  if (produitId) await one(t, 'produits', produitId, 'Produit');
+  const existants = (await t.select('objectifs', { mois, axe })).filter((o) => o.actif !== false && (o.produit_id || null) === produitId);
+  const changes = [];
+  for (const l of payload.lignes || []) {
+    const cible = axe === 'global' ? null : l.cible_id;
+    if (axe !== 'global') await one(t, AXE_TABLE[axe], cible, AXES_OBJECTIF[axe]);
+    const qc = l.objectif_cartons === '' || l.objectif_cartons === null || l.objectif_cartons === undefined ? null : Number(l.objectif_cartons);
+    const ca = l.objectif_ca === '' || l.objectif_ca === null || l.objectif_ca === undefined ? null : Number(l.objectif_ca);
+    if ((qc !== null && (isNaN(qc) || qc < 0)) || (ca !== null && (isNaN(ca) || ca < 0))) fail('Les objectifs doivent être des nombres positifs.');
+    const ex = existants.find((o) => (o.cible_id || null) === cible);
+    if (qc === null && ca === null) {
+      if (ex) { await t.update('objectifs', ex.id, { actif: false, updated_by: user.id, updated_at: nowISO() }); changes.push({ cible, retire: true }); }
+      continue;
+    }
+    if (ex) {
+      if (Number(ex.objectif_cartons ?? -1) === (qc ?? -1) && Number(ex.objectif_ca ?? -1) === (ca ?? -1)) continue;
+      await t.update('objectifs', ex.id, { objectif_cartons: qc, objectif_ca: ca, updated_by: user.id, updated_at: nowISO() });
+      changes.push({ cible, avant: { cartons: ex.objectif_cartons, ca: ex.objectif_ca }, apres: { cartons: qc, ca } });
+    } else {
+      await t.insert('objectifs', { id: uid(), mois, axe, cible_id: cible, produit_id: produitId, objectif_cartons: qc, objectif_ca: ca, actif: true, created_by: user.id, created_at: nowISO() });
+      changes.push({ cible, apres: { cartons: qc, ca } });
+    }
+  }
+  if (changes.length) await audit(t, user, 'OBJECTIFS', 'objectifs', `${mois}/${axe}`, null, { mois, axe, produit_id: produitId, changements: changes }, payload.motif, ip);
+  return { modifies: changes.length };
 };
 
 A['cloture.set'] = async ({ t, user, perms, payload, ip }) => {

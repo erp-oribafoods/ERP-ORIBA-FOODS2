@@ -171,6 +171,16 @@ const imp = await call(sessions.com, 'import.run', { type: 'ventes_comptant', fi
 ] });
 ok(imp.integrees.length === 1 && imp.refuses.length === 1, `Import : ${imp.integrees.length} intégrée, ${imp.refuses.length} rejetée (${imp.refuses[0]?.erreur})`);
 
+console.log('Objectifs commerciaux');
+const ob = await call(sessions.com, 'objectif.bulk', { mois: today().slice(0, 7), axe: 'agent', lignes: [{ cible_id: ag.id, objectif_cartons: 50, objectif_ca: 650000 }] });
+ok(ob.modifies === 1, 'Objectif mensuel enregistré pour un agent');
+const ob2 = await call(sessions.com, 'objectif.bulk', { mois: today().slice(0, 7), axe: 'agent', lignes: [{ cible_id: ag.id, objectif_cartons: 60, objectif_ca: 650000 }] });
+D = (await call(sessions.dg, 'data.bootstrap')).data;
+ok(ob2.modifies === 1 && D.objectifs.filter((o) => o.cible_id === ag.id).length === 1 && D.objectifs[0].objectif_cartons === 60, 'Objectif mis à jour sans doublon');
+await expectErr(call(sessions.daf, 'objectif.bulk', { mois: today().slice(0, 7), axe: 'agent', lignes: [] }), 'La DAF consulte les objectifs sans les modifier', /insuffisant/);
+const dv = (await call(sessions.com, 'dep.save', { depense: { date: today(), categorie_id: cats.ASSU.id, montant: 150000, equipe_id: eq.id, vehicule_id: B.vehicules[0].id, reference_piece: 'POL-1', validite_debut: today(), validite_fin: '2027-10-27' } })).depense;
+ok(dv.validite_fin === '2027-10-27', 'Assurance enregistrée avec sa date de fin de validité');
+
 console.log('Sécurité');
 await call(sessions.admin, 'user.save', { user: { id: uCG.id, statut: 'desactive' } });
 await expectErr(call(sessions.cg, 'data.bootstrap'), 'Compte désactivé : accès révoqué', /désactivé/);

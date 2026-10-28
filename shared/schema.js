@@ -6,6 +6,7 @@ export const MODULES = [
   { k: 'remboursements', l: 'Remboursements', a: ['lire', 'creer', 'annuler', 'exporter'] },
   { k: 'creances', l: 'Créances & relances', a: ['lire', 'creer', 'exporter'] },
   { k: 'stock', l: 'Stock confié', a: ['lire', 'creer', 'annuler', 'exporter'] },
+  { k: 'objectifs', l: 'Objectifs commerciaux', a: ['lire', 'modifier'] },
   { k: 'depenses', l: 'Dépenses commerciales', a: ['lire', 'creer', 'modifier', 'controler', 'valider', 'annuler', 'exporter'] },
   { k: 'salaires', l: 'Détail des dépenses sensibles (salaires)', a: ['lire'] },
   { k: 'budgets', l: 'Budgets de dépenses', a: ['lire', 'modifier'] },
@@ -30,7 +31,7 @@ export const DEFAULT_ROLES = [
     description: 'Lecture globale, alertes, rapports. Validation exceptionnelle des dépenses.',
     permissions: {
       dashboard: ['lire'], ventes: ['lire', 'exporter'], remboursements: ['lire', 'exporter'],
-      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], depenses: ['lire', 'valider', 'exporter'],
+      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], objectifs: ['lire', 'modifier'], depenses: ['lire', 'valider', 'exporter'],
       salaires: ['lire'], budgets: ['lire', 'modifier'], cloture: ['lire'], referentiels: ['lire'],
       parametres: ['lire'], audit: ['lire', 'creer'],
     },
@@ -40,7 +41,7 @@ export const DEFAULT_ROLES = [
     description: 'Seul profil autorisé à créer, corriger et annuler les ventes et remboursements.',
     permissions: {
       dashboard: ['lire'], ventes: all('ventes'), remboursements: all('remboursements'),
-      creances: all('creances'), stock: all('stock'),
+      creances: all('creances'), stock: all('stock'), objectifs: ['lire', 'modifier'],
       depenses: ['lire', 'creer', 'modifier', 'controler', 'exporter'], budgets: ['lire'],
       cloture: ['lire'], referentiels: ['lire', 'modifier'], parametres: ['lire'], import: ['creer'],
     },
@@ -50,7 +51,7 @@ export const DEFAULT_ROLES = [
     description: 'Analyse, rapprochements, exports, audit et signalement des anomalies.',
     permissions: {
       dashboard: ['lire'], ventes: ['lire', 'exporter'], remboursements: ['lire', 'exporter'],
-      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], depenses: ['lire', 'exporter'],
+      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], objectifs: ['lire'], depenses: ['lire', 'exporter'],
       budgets: ['lire'], cloture: ['lire'], referentiels: ['lire'], parametres: ['lire'], audit: ['lire', 'creer'],
     },
   },
@@ -59,7 +60,7 @@ export const DEFAULT_ROLES = [
     description: 'Contrôle financier, validation des dépenses, clôture mensuelle, paramètres financiers.',
     permissions: {
       dashboard: ['lire'], ventes: ['lire', 'exporter'], remboursements: ['lire', 'exporter'],
-      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'],
+      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], objectifs: ['lire'],
       depenses: ['lire', 'valider', 'annuler', 'exporter'], salaires: ['lire'], budgets: ['lire', 'modifier'],
       cloture: ['lire', 'modifier'], referentiels: ['lire'], parametres: ['lire', 'modifier'], audit: ['lire', 'creer'],
     },
@@ -249,3 +250,5 @@ export const TABLES = [
 export const CATS_VALIDITE = ['ASSU', 'VIGN', 'VTEC', 'PATE', 'AUTO'];
 export const DOCS_VEHICULE = [['ASSU', 'Assurance'], ['VIGN', 'Vignette'], ['VTEC', 'Visite technique']];
 export const CATS_LOGISTIQUE = ['CARB', 'VIDA', 'FILT', 'VIGN', 'ASSU', 'REPA', 'VTEC', 'INSA', 'AUTO'];
+
+export const AXES_OBJECTIF = { agent: 'Agent', zone: 'Zone', equipe: 'Équipe', marche: 'Marché', produit: 'Produit', global: 'Global (tout le service)' };

@@ -3,7 +3,7 @@
 import pg from "npm:pg@8.13.1";
 import bcrypt from "npm:bcryptjs@3.0.3";
 import { SignJWT, jwtVerify } from "npm:jose@6.2.13";
-import { handle, AppError } from "https://raw.githubusercontent.com/ibro50/ERP-ORIBA-FOODS2/97cd9073449b3f6f0b83da14b873106053996713/shared/core.js";
+import { handle, AppError } from "https://raw.githubusercontent.com/ibro50/ERP-ORIBA-FOODS2/be7ba52c6d8efc329005a7c0dd68811d32ee0d99/shared/core.js";
 
 const SCHEMA = "erp";
 pg.types.setTypeParser(1700, (v: string) => (v === null ? null : parseFloat(v)));

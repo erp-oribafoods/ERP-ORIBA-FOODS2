@@ -6,6 +6,7 @@ import { periodRange, monthsBetween, moisLabel, salesFacts } from '../lib/facts.
 import { depenseAllocations, doublonsDepenses, documentsVehicule, today, num, round2, daysBetween, moisDe } from '../../shared/logic.js';
 import { STATUTS_DEPENSE, MODES_PAIEMENT_DEP, CATS_VALIDITE } from '../../shared/schema.js';
 import { signalAnomalie } from './audit.js';
+import { carteDemandes, demandeForm } from './demandes.js';
 
 const SEV = { brouillon: 'mute', soumise: 'info', controlee: 'info', a_completer: 'warn', validee: 'ok', rejetee: 'crit', annulee: 'mute' };
 const statutPill = (s) => pill(STATUTS_DEPENSE[s] || s, SEV[s]);
@@ -258,8 +259,13 @@ export function budgetsAvecRealise(mois) {
 }
 
 export function renderPilotage(root) {
-  root.innerHTML = pageHead('Pilotage des dépenses', 'Totaux officiels = dépenses validées uniquement. Les dépenses partagées sont imputées selon leur répartition.') +
-    '<div id="flt"></div><div id="dash"></div>';
+  const canDem = App.can('depenses', 'creer');
+  root.innerHTML = pageHead('Pilotage des dépenses', 'Totaux officiels = dépenses validées uniquement. Les dépenses partagées sont imputées selon leur répartition.',
+    canDem ? `<button class="btn" id="dem-c">${icon('plus')} Demande de carburant</button><button class="btn" id="dem-v">${icon('plus')} Demande de vidange</button>` : '') +
+    '<div id="dem"></div><div id="flt"></div><div id="dash"></div>';
+  $('#dem-c', root)?.addEventListener('click', () => demandeForm('carburant'));
+  $('#dem-v', root)?.addEventListener('click', () => demandeForm('vidange'));
+  carteDemandes($('#dem', root));
   const draw = () => {
     const f = App.filters.depenses;
     const deps = allDeps();

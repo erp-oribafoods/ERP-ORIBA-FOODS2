@@ -254,7 +254,7 @@ export const TABLES = [
   'zones', 'equipes', 'agents', 'marches', 'clients', 'produits', 'vehicules', 'categories_depense',
   'parametres', 'roles', 'utilisateurs', 'compteurs', 'ventes', 'vente_lignes', 'remboursements', 'relances',
   'stock_mouvements', 'depenses', 'depense_repartitions', 'depense_validations', 'budgets', 'clotures',
-  'anomalies', 'imports', 'audit_log', 'objectifs', 'suivi_agents',
+  'anomalies', 'imports', 'audit_log', 'objectifs', 'suivi_agents', 'demandes',
 ];
 
 // Fiche mensuelle d'un agent terrain (présence, activité, évaluation)

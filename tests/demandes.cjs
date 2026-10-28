@@ -1,0 +1,43 @@
+const { chromium } = require('playwright');
+const fs = require('fs'); const path = require('path');
+const CDN = process.env.CDN_DIR, OUT = process.env.OUT_DIR;
+const map = { 'chart.umd.min.js': 'chart.js/dist/chart.umd.js', 'xlsx.full.min.js': 'xlsx/dist/xlsx.full.min.js', 'jspdf.umd.min.js': 'jspdf/dist/jspdf.umd.min.js', 'jspdf.plugin.autotable.min.js': 'jspdf-autotable/dist/jspdf.plugin.autotable.min.js' };
+(async () => {
+  const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"></head><body>' + fs.readFileSync(path.join(__dirname, '../dist/demo.html'), 'utf8') + '</body></html>';
+  const browser = await chromium.launch(); const errors = [];
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
+  await ctx.route('**/*', (route) => { const u = route.request().url(); if (u.startsWith('http://erp.test/')) return route.fulfill({ contentType: 'text/html', body: html }); const f = Object.keys(map).find((k) => u.endsWith(k)); if (f) return route.fulfill({ contentType: 'application/javascript', body: fs.readFileSync(path.join(CDN, 'node_modules', map[f])) }); if (u.includes('fonts.g')) return route.fulfill({ contentType: 'text/css', body: '' }); return route.abort(); });
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => errors.push('PAGEERROR ' + e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  const login = async (u) => { await page.evaluate(() => sessionStorage.clear()).catch(() => {}); await page.goto('http://erp.test/?r=' + Math.random()); await page.waitForSelector('#lf', { timeout: 120000 }); await page.fill('[name=identifiant]', u); await page.fill('[name=password]', 'Demo2026'); await page.click('#lf button[type=submit]'); await page.waitForSelector('.layout'); };
+  await login('commercial');
+  await page.evaluate(() => { location.hash = 'pilotage-depenses'; }); await page.waitForTimeout(900);
+  await page.screenshot({ path: path.join(OUT, 'pilotage.png') });
+  // nouvelle demande de carburant
+  await page.click('#dem-c'); await page.waitForSelector('#dmf');
+  await page.selectOption('[name=equipe_id]', { index: 1 }); await page.waitForTimeout(200);
+  const vs = await page.$$eval('[name=vehicule_id] option', (o) => o.map((x) => x.value).filter(Boolean)); await page.selectOption('[name=vehicule_id]', vs[vs.length - 1]);
+  await page.fill('[name=km_actuel]', '88000'); await page.fill('[name=montant_demande]', '65000'); await page.fill('[name=motif]', 'Trajet Niamey – Dosso – Gaya pour livraisons grossistes');
+  await page.screenshot({ path: path.join(OUT, 'form-carb.png') });
+  await page.click('#dm-save'); await page.waitForTimeout(900);
+  const titre = await page.textContent('.modal h2');
+  console.log('Après enregistrement :', titre);
+  let [dl] = await Promise.all([page.waitForEvent('download'), page.click('#dm-pdf')]); await dl.saveAs(path.join(OUT, 'demande-carb.pdf'));
+  await page.keyboard.press('Escape');
+  [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-vierge=vidange]')]); await dl.saveAs(path.join(OUT, 'vierge-vid.pdf'));
+  // DG : décision sur la demande de vidange en attente
+  await login('dg');
+  await page.evaluate(() => { location.hash = 'pilotage-depenses'; }); await page.waitForTimeout(900);
+  await page.selectOption('#dem-st', 'soumise'); await page.waitForTimeout(300);
+  const rows = await page.$$eval('#dem-t tbody tr', (t) => t.map((r) => r.textContent));
+  console.log('En attente pour la DG :', rows.length);
+  const idx = rows.findIndex((t) => t.includes('Vidange'));
+  await (await page.$$('#dem-t tbody tr'))[idx].click(); await page.waitForSelector('#dm-dec');
+  await page.click('#dm-dec'); await page.waitForSelector('#dcf');
+  await page.fill('[name=cout_pris_en_charge]', '38000'); await page.fill('[name=commentaire]', 'Garage agréé uniquement');
+  await page.screenshot({ path: path.join(OUT, 'decision.png') });
+  await page.click('#dc-ok'); await page.waitForTimeout(900);
+  [dl] = await Promise.all([page.waitForEvent('download'), page.click('#dm-pdf')]); await dl.saveAs(path.join(OUT, 'demande-vid.pdf'));
+  console.log(errors.length ? 'ERREURS:\n' + errors.join('\n') : 'Aucune erreur');
+  await browser.close();
+})().catch((e) => { console.error(e); process.exit(1); });

@@ -203,6 +203,17 @@ export async function seedDemo(db, crypto, state) {
     }) }, C);
   }
   for (const mo of months.slice(-2)) for (const tcode of teams) await handle(db, 'budget.save', { budget: { mois: mo, equipe_id: eq(tcode).id, montant: tcode === 'ZIN' ? 320000 : 230000 } }, ctx(U.daf));
+  // Demandes de carburant et de vidange
+  {
+    const fl = state.vehicules.filter((v) => v.actif !== false && v.equipe_id).slice(0, 3);
+    const dd = (k) => { const x = new Date(Date.now() - k * 86400000); return x.toISOString().slice(0, 10); };
+    for (const [i, v] of fl.entries()) {
+      const km = 42000 + i * 9000;
+      const c1 = (await handle(db, 'demande.save', { demande: { type: 'carburant', date: dd(6 - i), equipe_id: v.equipe_id, vehicule_id: v.id, km_actuel: km, montant_demande: 50000 + i * 10000, motif: 'Tournée des marchés et livraisons grossistes (démo)' } }, C)).demande;
+      if (i < 2) await handle(db, 'demande.decision', { id: c1.id, decision: 'accordee', creer_depense: i === 0, direction: { solde_carte_avant: 850000 - i * 120000, montant_accorde: 50000 + i * 10000, plafond_restant: 180000 - i * 40000 } }, ctx(U.dg));
+      if (i === 1) await handle(db, 'demande.save', { demande: { type: 'vidange', date: dd(1), equipe_id: v.equipe_id, vehicule_id: v.id, km_actuel: km + 350, km_derniere_vidange: km - 4700, motif: 'Vidange périodique (5 000 km atteints)' } }, C);
+    }
+  }
   for (const mo of months.slice(0, -2)) await handle(db, 'cloture.set', { mois: mo, statut: 'cloture', commentaire: 'Clôture démo' }, ctx(U.daf));
   await handle(db, 'anomalie.create', { objet_type: 'depenses', description: 'Carburant Zinder en hausse : vérifier les relevés kilométriques (démo).' }, ctx(U.cdg));
   return U;

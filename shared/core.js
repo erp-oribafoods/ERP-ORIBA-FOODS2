@@ -266,6 +266,7 @@ A['data.bootstrap'] = async ({ t, user, perms }) => {
   } else { D.depenses = []; D.depense_repartitions = []; D.depense_validations = []; D.depenses_agregats = []; }
   D.budgets = P('budgets') || P('depenses') ? await t.select('budgets') : [];
   D.objectifs = P('objectifs') || P('dashboard') || P('suivi') ? (await t.select('objectifs')).filter((o) => o.actif !== false) : [];
+  D.demandes = P('depenses') ? (await t.select('demandes')).filter((d) => inScope(user, d.equipe_id, d.zone_id) || d.created_by === user.id) : [];
   D.suivi_agents = P('suivi') ? (await t.select('suivi_agents')).filter((r) => { const a = agents.get(r.agent_id); return a && inScope(user, a.equipe_id, a.zone_id); }) : [];
   D.anomalies = P('audit') ? await t.select('anomalies') : (await t.select('anomalies', { created_by: user.id }));
   D.imports = P('import', 'creer') || P('audit') ? await t.select('imports') : [];
@@ -739,6 +740,101 @@ A['objectif.bulk'] = async ({ t, user, perms, payload, ip }) => {
   }
   if (changes.length) await audit(t, user, 'OBJECTIFS', 'objectifs', `${mois}/${axe}`, null, { mois, axe, produit_id: produitId, changements: changes }, payload.motif, ip);
   return { modifies: changes.length };
+};
+
+// Demandes de carburant et de vidange (fiches imprimables), décidées par la Direction
+const DEM_PREFIX = { carburant: 'DEM-CARB', vidange: 'DEM-VID' };
+A['demande.save'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'depenses', 'creer')) fail('Droit insuffisant pour établir une demande.', 403);
+  const i = payload.demande || {};
+  const id = i.id;
+  let avant = null;
+  if (id) {
+    avant = await one(t, 'demandes', id, 'Demande');
+    if (avant.statut !== 'soumise') fail('Une demande déjà décidée ou annulée ne peut plus être modifiée.');
+    if (avant.created_by !== user.id && !can(perms, 'depenses', 'modifier')) fail('Seul le demandeur peut modifier sa demande.', 403);
+  }
+  const type = avant?.type || i.type;
+  if (!DEM_PREFIX[type]) fail('Type de demande inconnu (carburant ou vidange).');
+  const d = pick(i, ['date', 'equipe_id', 'vehicule_id', 'chef_equipe', 'km_actuel', 'montant_demande', 'km_derniere_vidange', 'motif']);
+  if (!isDate(d.date)) fail('Date de la demande invalide.');
+  if (!d.equipe_id) fail('Choisissez l’équipe.');
+  const eq = await one(t, 'equipes', d.equipe_id, 'Équipe');
+  if (!inScope(user, eq.id, eq.zone_id)) fail('Cette équipe est hors de votre périmètre.', 403);
+  if (!d.vehicule_id) fail('Choisissez le véhicule (immatriculation).');
+  await one(t, 'vehicules', d.vehicule_id, 'Véhicule');
+  d.km_actuel = num(d.km_actuel);
+  if (!(d.km_actuel > 0)) fail('Le kilométrage actuel est obligatoire.');
+  if (type === 'carburant') {
+    d.montant_demande = round2(d.montant_demande);
+    if (!(d.montant_demande > 0)) fail('Indiquez le montant demandé.');
+    if (!clean(d.motif)) fail('Indiquez le motif ou le trajet prévu.');
+    d.km_derniere_vidange = null;
+  } else {
+    d.montant_demande = null;
+    d.km_derniere_vidange = d.km_derniere_vidange === null || d.km_derniere_vidange === undefined ? null : num(d.km_derniere_vidange);
+    if (d.km_derniere_vidange !== null && d.km_derniere_vidange > d.km_actuel) fail('Le kilométrage de la dernière vidange dépasse le kilométrage actuel.');
+  }
+  const prec = (await t.select('demandes', { vehicule_id: d.vehicule_id })).filter((x) => x.statut !== 'annulee' && x.id !== id && num(x.km_actuel) > d.km_actuel && x.date <= d.date);
+  if (prec.length) fail(`Kilométrage inférieur à celui d’une demande antérieure (${fmtQ(Math.max(...prec.map((x) => num(x.km_actuel))))} km) : vérifiez le compteur.`);
+  d.chef_equipe = clean(d.chef_equipe) || eq.responsable || null;
+  d.zone_id = eq.zone_id || null;
+  d.motif = clean(d.motif);
+  if (avant) {
+    const r = await t.update('demandes', id, { ...d, updated_by: user.id, updated_at: nowISO() });
+    await audit(t, user, 'MODIFICATION', 'demandes', id, avant, r, payload.motif, ip);
+    return { demande: r };
+  }
+  const mm = d.date.slice(5, 7);
+  const n = await t.nextSeq(`${DEM_PREFIX[type]}-${d.date.slice(0, 7)}`);
+  const r = await t.insert('demandes', { id: uid(), numero: `${DEM_PREFIX[type]}-${mm}${String(n).padStart(3, '0')}`, type, ...d, statut: 'soumise', demandeur_nom: userName(user), created_by: user.id, created_at: nowISO() });
+  await audit(t, user, 'CREATION', 'demandes', r.id, null, r, null, ip);
+  return { demande: r };
+};
+
+A['demande.decision'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'depenses', 'valider')) fail('Seule la Direction (DG ou DAF) peut décider d’une demande.', 403);
+  const d = await one(t, 'demandes', payload.id, 'Demande');
+  if (d.statut !== 'soumise') fail('Cette demande a déjà été traitée.');
+  if (d.created_by === user.id) fail('Séparation des tâches : vous ne pouvez pas décider de votre propre demande.', 403);
+  const dec = payload.decision;
+  if (!['accordee', 'refusee'].includes(dec)) fail('Décision inconnue.');
+  const x = payload.direction || {};
+  const patch = { statut: dec, decision_commentaire: clean(x.commentaire), decide_par: user.id, decide_par_nom: userName(user), decide_le: nowISO() };
+  if (dec === 'refusee' && !patch.decision_commentaire) fail('Indiquez le motif du refus.');
+  if (d.type === 'carburant') {
+    patch.solde_carte_avant = x.solde_carte_avant === '' || x.solde_carte_avant == null ? null : round2(x.solde_carte_avant);
+    patch.plafond_restant = x.plafond_restant === '' || x.plafond_restant == null ? null : round2(x.plafond_restant);
+    patch.montant_accorde = dec === 'accordee' ? round2(x.montant_accorde ?? d.montant_demande) : 0;
+    if (dec === 'accordee' && !(patch.montant_accorde > 0)) fail('Indiquez le montant transféré accordé.');
+  } else {
+    patch.cout_pris_en_charge = dec === 'accordee' && x.cout_pris_en_charge !== '' && x.cout_pris_en_charge != null ? round2(x.cout_pris_en_charge) : null;
+    patch.prochaine_vidange_km = x.prochaine_vidange_km === '' || x.prochaine_vidange_km == null ? null : num(x.prochaine_vidange_km);
+    if (patch.prochaine_vidange_km !== null && patch.prochaine_vidange_km <= num(d.km_actuel)) fail('La prochaine vidange doit être prévue au-delà du kilométrage actuel.');
+  }
+  for (const k of ['solde_carte_avant', 'plafond_restant', 'montant_accorde', 'cout_pris_en_charge']) if (patch[k] !== undefined && patch[k] !== null && !(patch[k] >= 0)) fail('Montant invalide.');
+  let r = await t.update('demandes', d.id, { ...patch, updated_at: nowISO() });
+  // Dépense correspondante créée en brouillon (le reçu reste à joindre), si demandé
+  const montant = d.type === 'carburant' ? patch.montant_accorde : patch.cout_pris_en_charge;
+  if (dec === 'accordee' && payload.creer_depense && montant > 0) {
+    const [cat] = await t.select('categories_depense', { code: d.type === 'carburant' ? 'CARB' : 'VIDA' });
+    if (cat) {
+      const dep = await saveDepense(t, user, { ...perms, depenses: [...new Set([...(perms.depenses || []), 'creer'])] }, { depense: { date: today(), categorie_id: cat.id, montant, equipe_id: d.equipe_id, zone_id: d.zone_id, vehicule_id: d.vehicule_id, kilometrage: d.km_actuel, reference_piece: d.numero, mode_paiement: d.type === 'carburant' ? 'Autre' : null, description: `${d.type === 'carburant' ? 'Transfert carte carburant' : 'Vidange'} — demande ${d.numero}${d.motif ? ' : ' + d.motif : ''}` }, soumettre: false }, { ip });
+      r = await t.update('demandes', d.id, { depense_id: dep.depense.id });
+    }
+  }
+  await audit(t, user, dec === 'accordee' ? 'ACCORD' : 'REFUS', 'demandes', d.id, { statut: d.statut }, r, patch.decision_commentaire, ip);
+  return { demande: r };
+};
+
+A['demande.cancel'] = async ({ t, user, perms, payload, ip }) => {
+  const d = await one(t, 'demandes', payload.id, 'Demande');
+  if (d.statut !== 'soumise') fail('Seule une demande en attente peut être annulée.');
+  if (d.created_by !== user.id && !can(perms, 'depenses', 'valider')) fail('Seul le demandeur ou la Direction peut annuler la demande.', 403);
+  if (!clean(payload.motif)) fail('Le motif d’annulation est obligatoire.');
+  const r = await t.update('demandes', d.id, { statut: 'annulee', decision_commentaire: clean(payload.motif), updated_by: user.id, updated_at: nowISO() });
+  await audit(t, user, 'ANNULATION', 'demandes', d.id, d, r, payload.motif, ip);
+  return { demande: r };
 };
 
 // Suivi mensuel des agents terrain : présence, activité, évaluation (saisie groupée d'un mois)

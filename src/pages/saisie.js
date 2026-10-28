@@ -20,6 +20,8 @@ const RUBRIQUES = [
   ]],
   ['Dépenses et logistique', [
     ['depenses', 'depenses', '#new', ['depenses', 'creer'], 'Nouvelle dépense'],
+    ['demande_carburant', 'pilotage-depenses', '#dem-c', ['depenses', 'creer'], 'Nouvelle demande'],
+    ['demande_vidange', 'pilotage-depenses', '#dem-v', ['depenses', 'creer'], 'Nouvelle demande'],
     ['budgets', 'budgets', '#new', ['budgets', 'modifier'], 'Nouveau budget'],
     ['vehicules', 'referentiels', '#add', ['referentiels', 'modifier'], 'Nouveau véhicule', () => { App.filters.ref = { t: 'vehicules' }; }],
   ]],
@@ -36,6 +38,10 @@ const DESCR = {
   depenses: 'Carburant, entretien, salaires, gadgets…', budgets: 'Par équipe et par catégorie.', vehicules: 'Immatriculation, équipe, conducteur.',
   produits: 'Code, libellé, packs par carton, prix.', marches: 'Marchés et villages par zone.', equipes: 'Équipes et centres de coût.', zones: 'Régions de la force de vente.',
 };
+
+const TITRES = { demande_carburant: 'Demande de carburant', demande_vidange: 'Demande de vidange' };
+DESCR.demande_carburant = 'Fiche imprimable en PDF, décidée par la Direction.';
+DESCR.demande_vidange = 'Fiche imprimable en PDF, décidée par la Direction.';
 
 export const peutSaisirOuImporter = () => RUBRIQUES.some(([, items]) => items.some(([type, , , perm]) => App.can(perm[0], perm[1]) || peutImporter(type)));
 
@@ -56,7 +62,7 @@ export function renderSaisie(root) {
       return `<h2 class="sec-t">${esc(titre)}</h2><section class="saisie-grid">${vis.map(([type, page, sel, perm, lib], i) => {
         const items2 = items.indexOf(vis[i]);
         const s = App.can(perm[0], perm[1]), im = peutImporter(type);
-        return `<article class="card saisie-c"><h3>${esc(TYPES[type].l)}</h3><p class="muted small">${esc(DESCR[type] || '')}</p>
+        return `<article class="card saisie-c"><h3>${esc(TYPES[type]?.l || TITRES[type])}</h3><p class="muted small">${esc(DESCR[type] || '')}</p>
           <div class="saisie-a">${s ? `<button class="btn primary sm" data-s="${titre}|${items2}">${icon('edit')} ${esc(lib)}</button>` : ''}
           ${im ? `<button class="btn sm" data-i="${type}">${icon('upload')} Importer Excel</button><button class="btn ghost sm" data-m="${type}" title="Télécharger le modèle Excel">${icon('download')} Modèle</button>` : ''}</div></article>`;
       }).join('')}</section>`;

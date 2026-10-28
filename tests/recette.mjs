@@ -207,6 +207,24 @@ ok(im.integrees.length === 2 && im.brouillons.length === 1, `Dépenses importée
 await expectErr(call(sessions.daf, 'import.run', { type: 'objectifs', mode: 'courant', rows: [] }).then((r) => { if (!r) throw new Error('x'); return call(sessions.daf, 'import.run', { type: 'ventes_comptant', mode: 'historique', rows: [] }); }), 'La reprise historique reste réservée', /insuffisant/);
 im = await call(sessions.daf, 'import.run', { type: 'objectifs', mode: 'courant', rows: [{ ligne: 2, data: { mois: m0, axe: 'agent', cible_id: ag.id, objectif_cartons: 1 } }] });
 ok(im.integrees.length === 0 && /insuffisant/.test(im.refuses[0]?.erreur || ''), 'Import par rubrique : les droits du module s’appliquent (DAF refusée sur les objectifs)');
+console.log('Demandes de carburant et de vidange');
+const veh = B.vehicules[0];
+const dc = (await call(sessions.com, 'demande.save', { demande: { type: 'carburant', date: today(), equipe_id: eq.id, vehicule_id: veh.id, km_actuel: 45210, montant_demande: 50000, motif: 'Tournée Dosso – Gaya' } })).demande;
+ok(/^DEM-CARB-\d{5}$/.test(dc.numero) && dc.statut === 'soumise', `Demande de carburant enregistrée (${dc.numero})`);
+await expectErr(call(sessions.com, 'demande.save', { demande: { type: 'vidange', date: today(), equipe_id: eq.id, vehicule_id: veh.id, km_actuel: 0 } }), 'Kilométrage obligatoire', /obligatoire/);
+await expectErr(call(sessions.com, 'demande.save', { demande: { type: 'vidange', date: today(), equipe_id: eq.id, vehicule_id: veh.id, km_actuel: 40000 } }), 'Kilométrage inférieur à une demande antérieure refusé', /inférieur/);
+await expectErr(call(sessions.com, 'demande.decision', { id: dc.id, decision: 'accordee' }), 'Le demandeur ne décide pas', /Direction/);
+const dcd = (await call(sessions.dg, 'demande.decision', { id: dc.id, decision: 'accordee', creer_depense: true, direction: { solde_carte_avant: 400000, montant_accorde: 45000, plafond_restant: 155000 } })).demande;
+D = (await call(sessions.com, 'data.bootstrap')).data;
+const depC = D.depenses.find((d) => d.id === dcd.depense_id);
+ok(dcd.statut === 'accordee' && Number(dcd.montant_accorde) === 45000 && depC && Number(depC.montant) === 45000 && depC.statut === 'brouillon' && depC.reference_piece === dc.numero, 'Accord de la DG : dépense carburant créée en brouillon avec le n° de demande');
+const dvi = (await call(sessions.com, 'demande.save', { demande: { type: 'vidange', date: today(), equipe_id: eq.id, vehicule_id: veh.id, km_actuel: 45300, km_derniere_vidange: 40300, motif: 'Vidange périodique' } })).demande;
+ok(/^DEM-VID-\d{5}$/.test(dvi.numero), `Demande de vidange enregistrée (${dvi.numero})`);
+await expectErr(call(sessions.daf, 'demande.decision', { id: dvi.id, decision: 'refusee' }), 'Refus sans motif impossible', /motif/);
+await expectErr(call(sessions.daf, 'demande.decision', { id: dvi.id, decision: 'accordee', direction: { prochaine_vidange_km: 45000 } }), 'Prochaine vidange au-delà du kilométrage actuel', /au-delà/);
+const dvd = (await call(sessions.daf, 'demande.decision', { id: dvi.id, decision: 'accordee', direction: { cout_pris_en_charge: 35000, prochaine_vidange_km: 50300 } })).demande;
+ok(dvd.statut === 'accordee' && !dvd.depense_id && Number(dvd.prochaine_vidange_km) === 50300, 'Vidange accordée par la DAF, sans dépense automatique');
+await expectErr(call(sessions.com, 'demande.cancel', { id: dvi.id, motif: 'x' }), 'Demande décidée non annulable', /en attente/);
 const dv = (await call(sessions.com, 'dep.save', { depense: { date: today(), categorie_id: cats.ASSU.id, montant: 150000, equipe_id: eq.id, vehicule_id: B.vehicules[0].id, reference_piece: 'POL-1', validite_debut: today(), validite_fin: '2027-10-27' } })).depense;
 ok(dv.validite_fin === '2027-10-27', 'Assurance enregistrée avec sa date de fin de validité');
 

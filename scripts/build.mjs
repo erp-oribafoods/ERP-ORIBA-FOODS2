@@ -37,6 +37,15 @@ ${CDN.map((u) => `<script src="${u}" defer></script>`).join('\n')}
 </html>
 `);
 
+// Version GitHub Pages (API sur Supabase)
+fs.mkdirSync('docs', { recursive: true });
+fs.writeFileSync('docs/app.js', js);
+fs.writeFileSync('docs/styles.css', css);
+fs.writeFileSync('docs/.nojekyll', '');
+fs.writeFileSync('docs/index.html', fs.readFileSync('public/index.html', 'utf8')
+  .replace('href="/styles.css"', 'href="styles.css"')
+  .replace('<script src="/app.js" defer></script>', '<script>window.ERP_API_URL = "https://zzycbxyefporwjztybix.supabase.co/functions/v1/erp-api";</script>\n<script src="app.js" defer></script>'));
+
 // Démonstration autonome (artefact) : fragment sans doctype, tout en ligne
 fs.mkdirSync('dist', { recursive: true });
 fs.writeFileSync('dist/demo.html', `<title>ORIBA ERP Démo</title>

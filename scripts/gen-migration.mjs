@@ -264,4 +264,10 @@ for (const c of ['VC', 'VR', 'RB', 'DP', 'SK']) seed += `insert into compteurs(c
 
 fs.mkdirSync('netlify/database/migrations', { recursive: true });
 fs.writeFileSync('netlify/database/migrations/20261028100000_schema_initial.sql', ddl + seed);
+// Variante Supabase : schéma dédié « erp », non exposé à l'API publique
+const supa = `create schema if not exists erp;\nrevoke all on schema erp from anon, authenticated;\nset search_path to erp, public;\n`
+  + (ddl + seed).replace(/language plpgsql as \$\$/g, 'language plpgsql set search_path = erp, public as $$$$')
+  + `\ncreate table fichiers (cle text primary key, type text, nom text, base64 text not null, created_at timestamptz not null default now());\n`;
+fs.mkdirSync('supabase', { recursive: true });
+fs.writeFileSync('supabase/erp_schema.sql', supa);
 console.log('Migration écrite');

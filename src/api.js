@@ -20,7 +20,7 @@ export function serverApi() {
     async call(action, payload = {}) {
       let res;
       try {
-        res = await fetch('/api', { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify({ action, payload }) });
+        res = await fetch(window.ERP_API_URL || '/api', { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: JSON.stringify({ action, payload }) });
       } catch { throw new ApiError('Connexion au serveur impossible. Vérifiez votre accès internet puis réessayez.', 0); }
       let j;
       try { j = await res.json(); } catch { throw new ApiError(`Réponse inattendue du serveur (${res.status}).`, res.status); }

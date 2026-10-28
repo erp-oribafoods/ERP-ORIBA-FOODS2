@@ -366,3 +366,8 @@ img.piece { max-width: 100%; border-radius: 6px; }
 .form-t { margin: 14px 0 6px; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); border-bottom: 2px solid var(--c1, #45307a); padding-bottom: 4px; }
 .dl-wrap { margin-bottom: 8px; }
 #dem-card > header .page-act { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Rapports */
+.hero-act { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.hero-act .btn { background: rgba(255,255,255,.92); color: var(--c1, #45307a); border-color: transparent; }
+.rp-list { margin: 6px 0 0; padding-left: 18px; line-height: 1.7; }

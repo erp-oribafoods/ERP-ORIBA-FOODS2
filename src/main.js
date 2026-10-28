@@ -19,6 +19,7 @@ import { renderSaisie, peutSaisirOuImporter } from './pages/saisie.js';
 import { DEMO_USERS, DEMO_PASSWORD } from './demo-seed.js';
 import { LOGO } from './assets/logo.js';
 import { decorate } from './lib/ui.js';
+import { ouvrirRapports } from './lib/rapports.js';
 
 const DEMO = !!window.ERP_DEMO || (() => { try { return new URLSearchParams(location.search).has('demo'); } catch { return false; } })();
 
@@ -118,6 +119,7 @@ function shell() {
     </aside>
     <div class="body">
       <header class="top"><button class="btn-icon menu" aria-label="Menu">${icon('menu')}</button><span class="crumb" id="crumb"></span><span class="grow"></span>
+        <button class="btn sm" id="rapports" title="Rapport hebdomadaire ou mensuel, en PDF ou Excel">${icon('file')}<span class="hide-sm">Rapports</span></button>
         <button class="btn sm ghost" id="refresh" title="Actualiser les données">${icon('refresh')}<span class="hide-sm">Actualiser</span></button>
         <button class="btn sm ghost" id="logout">${icon('logout')}<span class="hide-sm">Déconnexion</span></button></header>
       <main id="main" tabindex="-1"></main>
@@ -125,6 +127,7 @@ function shell() {
   </div>`;
   $('.menu').addEventListener('click', () => document.body.classList.toggle('nav-open'));
   $('#logout').addEventListener('click', () => logout());
+  $('#rapports').addEventListener('click', () => ouvrirRapports('hebdo'));
   $('#refresh').addEventListener('click', (e) => busy(e.currentTarget, async () => { try { await App.refresh(); App.rerender(); toast('Données actualisées.'); } catch (er) { handleErr(er); } }));
   $('#demo-reset')?.addEventListener('click', () => { App.api.reset(); location.reload(); });
   setExportContext(() => ({ user: [u.prenom, u.nom].filter(Boolean).join(' ') + ` (${u.role_nom || ''})`, filtres: ['tableau-de-bord', 'analyses', 'ventes-comptant', 'ventes-credit', 'remboursements', 'creances'].includes(current) ? describeFilters('ventes') : ['depenses', 'pilotage-depenses'].includes(current) ? describeFilters('depenses') : '' }));

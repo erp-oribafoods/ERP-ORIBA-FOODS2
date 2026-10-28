@@ -1,10 +1,11 @@
 // Tableau de bord de direction et analyses cumulées.
 import { App, nm, filterBar, describeFilters, pageHead } from '../app.js';
-import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, chart, palette, alpha, cssVar, Table, modal, pill, statutCreditPill } from '../lib/ui.js';
+import { esc, $, $$, icon, fmtF, fmtN, fmtQ, fmtD, chart, palette, alpha, cssVar, Table, modal, pill, statutCreditPill } from '../lib/ui.js';
 import { salesFacts, rembFacts, openCredits, creancesParMois, groupSum, monthsBetween, moisLabel, periodRange, isoWeek } from '../lib/facts.js';
 import { plafondsClients, lots, alertes, today, niveauPlafond, round2 } from '../../shared/logic.js';
 import { openVente } from './ventes.js';
 import { LOGO } from '../assets/logo.js';
+import { ouvrirRapports } from '../lib/rapports.js';
 
 function kpi(id, label, value, sub = '', sev = '') {
   return `<button class="kpi ${sev}" data-kpi="${id}"><span class="kpi-l">${esc(label)}</span><span class="kpi-v">${value}</span>${sub ? `<span class="kpi-s">${sub}</span>` : ''}</button>`;
@@ -54,9 +55,12 @@ export function renderDashboard(root) {
   root.innerHTML = `<section class="hero"><div><h1>${h < 13 ? 'Bonjour' : 'Bonsoir'}, ${esc(u.prenom || u.nom)}</h1>
       <p>${esc(jour.charAt(0).toUpperCase() + jour.slice(1))} · ${esc(u.role_nom || '')} · montants en FCFA, quantités en cartons équivalents</p>
       <div class="hero-chips"><span class="chip">Ventes du jour <b>${fmtF(duJour.reduce((s, x) => s + x.montant, 0))}</b></span><span class="chip">Cartons du jour <b>${fmtQ(duJour.reduce((s, x) => s + x.cartons, 0))}</b></span>
-      <span class="chip">Alertes <b>${nbAl.length}</b></span><span class="chip">Crédits en retard <b>${retards}</b></span></div></div>
+      <span class="chip">Alertes <b>${nbAl.length}</b></span><span class="chip">Crédits en retard <b>${retards}</b></span></div>
+      <div class="hero-act"><button class="btn sm" id="rp-h">${icon('file')} Rapport hebdomadaire</button><button class="btn sm" id="rp-m">${icon('file')} Rapport mensuel</button></div></div>
       <div class="hero-logo"><img src="${LOGO}" alt="Oriba Food"></div></section>
     <div id="flt"></div><div id="dash"></div>`;
+  $('#rp-h', root).addEventListener('click', () => ouvrirRapports('hebdo'));
+  $('#rp-m', root).addEventListener('click', () => ouvrirRapports('mensuel'));
   const draw = () => drawDash($('#dash', root));
   filterBar($('#flt', root), 'ventes', ['periode', 'zone_id', 'agent_id', 'marche_id', 'client_id', 'produit_id', 'unite', 'mode'], draw);
   draw();

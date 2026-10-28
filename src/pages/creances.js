@@ -33,7 +33,7 @@ export function renderCreances(root) {
       <div class="bar ${p.sev}"><i style="width:${Math.min(100, p.pct)}%"></i>${(App.I.p.seuils_plafond || []).slice(0, 2).map((s) => `<s style="left:${s}%"></s>`).join('')}</div>
       <div class="pl-sub">${fmtQ(p.encours)} / ${fmtQ(p.plafond)} ctn · ${fmtN(p.pct, 0)} % · marge ${fmtQ(p.marge)} ctn · ${fmtF(p.fcfa)}</div></li>`).join('') || '<li class="muted">Aucun client avec créance ouverte.</li>'}</ul>`;
     $$('[data-client]', $('#pl', root)).forEach((li) => { li.addEventListener('click', () => openClient(li.dataset.client)); li.addEventListener('keydown', (e) => e.key === 'Enter' && openClient(li.dataset.client)); });
-    const A = alertes(App.I, today(), App.user.permissions).filter((a) => a.page !== 'stock');
+    const A = alertes(App.I, today(), App.user.permissions).filter((a) => a.page !== 'stock' && a.page !== 'logistique');
     $('#al', root).innerHTML = `<ul class="alerts">${A.map((a) => `<li class="al ${a.sev}" data-id="${a.id}" data-page="${a.page}" tabindex="0"><b>${esc(a.type)}</b><span>${esc(a.msg)}</span></li>`).join('') || '<li class="muted">Aucune alerte.</li>'}</ul>`;
     $$('.al[data-id]', $('#al', root)).forEach((li) => li.addEventListener('click', () => (li.dataset.page === 'credit' ? openVente(li.dataset.id) : openClient(li.dataset.id))));
     const rows = (show === 'open' ? open : oc).map((x) => ({ ...x, id: x.v.id }));

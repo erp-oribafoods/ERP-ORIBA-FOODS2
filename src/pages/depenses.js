@@ -2,8 +2,8 @@
 import { App, nm, opts, filterBar, describeFilters, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, confirmBox, field, readForm, showErr, busy, toast, icon, pill, chart, palette, alpha, saveBlob, exportRows } from '../lib/ui.js';
 import { periodRange, monthsBetween, moisLabel, salesFacts } from '../lib/facts.js';
-import { depenseAllocations, doublonsDepenses, today, num, round2, daysBetween, moisDe } from '../../shared/logic.js';
-import { STATUTS_DEPENSE, MODES_PAIEMENT_DEP } from '../../shared/schema.js';
+import { depenseAllocations, doublonsDepenses, documentsVehicule, today, num, round2, daysBetween, moisDe } from '../../shared/logic.js';
+import { STATUTS_DEPENSE, MODES_PAIEMENT_DEP, CATS_VALIDITE } from '../../shared/schema.js';
 import { signalAnomalie } from './audit.js';
 
 const SEV = { brouillon: 'mute', soumise: 'info', controlee: 'info', a_completer: 'warn', validee: 'ok', rejetee: 'crit', annulee: 'mute' };
@@ -100,8 +100,8 @@ async function fileToBase64(file) {
   return { base64: b64, type: blob.type || file.type, nom: blob === file ? file.name : file.name.replace(/\.\w+$/, '') + '.jpg' };
 }
 
-export function depenseForm(dep) {
-  const d = dep || { date: today(), mode_paiement: 'Espèces' };
+export function depenseForm(dep, preset = {}) {
+  const d = dep || { date: today(), mode_paiement: 'Espèces', ...preset };
   const reps = dep ? (App.D.depense_repartitions || []).filter((r) => r.depense_id === dep.id && r.actif !== false) : [];
   const catOpts = opts('categories_depense', 'libelle', { all: !!dep }).filter((o) => App.can('salaires') || !App.I.categories.get(o.v)?.sensible);
   const eqOpts = opts('equipes', 'nom', { all: !!dep, filter: (e) => App.user.perimetre_type !== 'equipe' || App.user.perimetre_ids.includes(e.id) });
@@ -117,6 +117,7 @@ export function depenseForm(dep) {
     ${field({ k: 'reference_piece', l: 'Référence de pièce (reçu, facture, bon…)', t: 'text' }, d.reference_piece)}
     <div class="fld"><span>Justificatif (photo ou PDF, 4 Mo max)</span><input type="file" id="file" accept="image/*,application/pdf">${d.justificatif_nom ? `<small>Pièce actuelle : ${esc(d.justificatif_nom)}</small>` : ''}</div>
     <div class="veh-extra span2 grid3" hidden>${field({ k: 'kilometrage', l: 'Kilométrage', t: 'number' }, d.kilometrage)}${field({ k: 'litres', l: 'Litres', t: 'number' }, d.litres)}${field({ k: 'station', l: 'Station', t: 'text' }, d.station)}</div>
+    <div class="val-extra span2 grid2" hidden>${field({ k: 'validite_debut', l: 'Valable du', t: 'date' }, d.validite_debut)}${field({ k: 'validite_fin', l: 'Valable jusqu’au', t: 'date', help: 'Sert aux alertes de renouvellement (assurance, vignette, visite technique…).' }, d.validite_fin)}</div>
     ${field({ k: 'sans_piece', l: 'Dépense sans pièce justificative (à justifier dans la description)', t: 'bool', wide: 1 }, d.sans_piece)}
     ${field({ k: 'description', l: 'Description / motif', t: 'textarea', rows: 2, wide: 1 }, d.description)}
     ${field({ k: 'partagee', l: 'Dépense partagée entre plusieurs équipes', t: 'bool', wide: 1 }, d.partagee)}
@@ -146,6 +147,7 @@ export function depenseForm(dep) {
         $('#rep', m).hidden = !part;
         $('[name=equipe_id]', m).closest('.fld').hidden = part;
         $('.veh-extra', m).hidden = !(c && (c.famille === 'Véhicule' || c.code === 'CARB'));
+        $('.val-extra', m).hidden = !(c && CATS_VALIDITE.includes(c.code));
         const r = [];
         if (c?.justif_obligatoire) r.push('justificatif obligatoire');
         if (c?.vehicule_obligatoire) r.push('véhicule obligatoire');
@@ -329,15 +331,16 @@ export function renderPilotage(root) {
   draw();
 }
 
-function ficheVehicule(id) {
+export function ficheVehicule(id) {
   const v = App.I.vehicules.get(id);
   const ds = (App.D.depenses || []).filter((d) => d.vehicule_id === id && d.statut !== 'annulee').sort((a, b) => b.date.localeCompare(a.date));
   modal({ title: `Fiche véhicule — ${v.immatriculation}`, wide: true,
     body: `<dl class="dl"><dt>Modèle</dt><dd>${esc(v.modele || '—')}</dd><dt>Équipe</dt><dd>${esc(nm.equipe(v.equipe_id))}</dd><dt>Conducteur habituel</dt><dd>${esc(v.conducteur || '—')}</dd>
-      <dt>Coût cumulé validé</dt><dd><b>${fmtF(ds.filter((d) => d.statut === 'validee').reduce((s, d) => s + num(d.montant), 0))}</b></dd></dl><div id="vt"></div>`,
+      <dt>Coût cumulé validé</dt><dd><b>${fmtF(ds.filter((d) => d.statut === 'validee').reduce((s, d) => s + num(d.montant), 0))}</b></dd>
+      ${documentsVehicule(id, App.I).map((x) => `<dt>${esc(x.label)}</dt><dd>${x.fin ? `valable jusqu’au ${fmtD(x.fin)} ` : ''}${pill(x.etat === 'ok' ? 'À jour' : x.etat === 'bientot' ? `À renouveler (${x.jours} j)` : x.etat === 'expire' ? 'Expirée' : 'Non renseignée', x.etat === 'ok' ? 'ok' : x.etat === 'bientot' ? 'warn' : x.etat === 'expire' ? 'crit' : 'mute')}</dd>`).join('')}</dl><div id="vt"></div>`,
     onMount: (m) => new Table({ title: `Frais véhicule ${v.immatriculation}`, rows: ds, pageSize: 12, sort: { k: 'date', dir: -1 }, onRow: (r) => openDepense(r.id),
       cols: [{ k: 'numero', l: 'N°' }, { k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'cat', l: 'Catégorie', v: (r) => nm.categorie(r.categorie_id) }, { k: 'montant', l: 'Montant', num: 1, f: (r) => fmtN(r.montant) },
-        { k: 'km', l: 'Km', num: 1, v: (r) => r.kilometrage || '' }, { k: 'piece', l: 'Pièce', v: (r) => (r.justificatif_cle ? 'Jointe' : r.reference_piece || '') }, { k: 'statut', l: 'Statut', v: (r) => STATUTS_DEPENSE[r.statut], f: (r) => statutPill(r.statut) }] }).mount($('#vt', m)) });
+        { k: 'km', l: 'Km', num: 1, v: (r) => r.kilometrage || '' }, { k: 'validite', l: 'Validité', v: (r) => r.validite_fin || '', f: (r) => (r.validite_fin ? `jusqu’au ${fmtD(r.validite_fin)}` : '') }, { k: 'piece', l: 'Pièce', v: (r) => (r.justificatif_cle ? 'Jointe' : r.reference_piece || '') }, { k: 'statut', l: 'Statut', v: (r) => STATUTS_DEPENSE[r.statut], f: (r) => statutPill(r.statut) }] }).mount($('#vt', m)) });
 }
 
 // ---------- Budgets ----------

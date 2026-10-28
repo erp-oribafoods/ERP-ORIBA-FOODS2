@@ -244,3 +244,8 @@ export const TABLES = [
   'stock_mouvements', 'depenses', 'depense_repartitions', 'depense_validations', 'budgets', 'clotures',
   'anomalies', 'imports', 'audit_log',
 ];
+
+// Catégories dont la pièce a une période de validité (documents du véhicule)
+export const CATS_VALIDITE = ['ASSU', 'VIGN', 'VTEC', 'PATE', 'AUTO'];
+export const DOCS_VEHICULE = [['ASSU', 'Assurance'], ['VIGN', 'Vignette'], ['VTEC', 'Visite technique']];
+export const CATS_LOGISTIQUE = ['CARB', 'VIDA', 'FILT', 'VIGN', 'ASSU', 'REPA', 'VTEC', 'INSA', 'AUTO'];

@@ -3,7 +3,7 @@
 import pg from "npm:pg@8.13.1";
 import bcrypt from "npm:bcryptjs@3.0.3";
 import { SignJWT, jwtVerify } from "npm:jose@6.2.13";
-import { handle, AppError } from "./core.js";
+import { handle, AppError } from "https://raw.githubusercontent.com/ibro50/ERP-ORIBA-FOODS2/97cd9073449b3f6f0b83da14b873106053996713/shared/core.js";
 
 const SCHEMA = "erp";
 pg.types.setTypeParser(1700, (v: string) => (v === null ? null : parseFloat(v)));
@@ -80,12 +80,15 @@ db.tx = async (fn: any) => {
   finally { c.release(); }
 };
 
-const secret = () => {
-  const s = Deno.env.get("ERP_JWT_SECRET");
-  if (!s || s.length < 32) throw new AppError("Configuration serveur incomplète (ERP_JWT_SECRET).", 500);
-  return new TextEncoder().encode(s);
-};
-const issue = (u: any) => new SignJWT({ tv: u.token_version || 0 }).setProtectedHeader({ alg: "HS256" }).setSubject(u.id).setIssuedAt().setExpirationTime("10h").sign(secret());
+let secretKey: Uint8Array | null = null;
+async function secret() {
+  if (secretKey) return secretKey;
+  const s = Deno.env.get("ERP_JWT_SECRET") || (await pool.query(`select valeur from ${SCHEMA}.config where cle = 'jwt_secret'`)).rows[0]?.valeur;
+  if (!s || s.length < 32) throw new AppError("Configuration serveur incomplète (clé de session).", 500);
+  secretKey = new TextEncoder().encode(s);
+  return secretKey;
+}
+const issue = async (u: any) => new SignJWT({ tv: u.token_version || 0 }).setProtectedHeader({ alg: "HS256" }).setSubject(u.id).setIssuedAt().setExpirationTime("10h").sign(await secret());
 const cryptoImpl = { hash: (p: string) => bcrypt.hash(p, 10), verify: (p: string, h: string) => bcrypt.compare(p, h || "") };
 const blobs = {
   async put(key: string, base64: string, meta: any) { await pool.query(`insert into ${SCHEMA}.fichiers (cle, type, nom, base64) values ($1, $2, $3, $4) on conflict (cle) do update set base64 = excluded.base64`, [key, meta.type, meta.nom, base64]); },
@@ -118,7 +121,7 @@ Deno.serve(async (req: Request) => {
     let userId: string | undefined, tokenVersion: number | undefined;
     const auth = req.headers.get("authorization") || "";
     if (auth.startsWith("Bearer ")) {
-      try { const { payload } = await jwtVerify(auth.slice(7), secret()); userId = payload.sub as string; tokenVersion = Number(payload.tv || 0); } catch { /* non connecté */ }
+      try { const { payload } = await jwtVerify(auth.slice(7), await secret()); userId = payload.sub as string; tokenVersion = Number(payload.tv || 0); } catch { /* non connecté */ }
     }
     const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
     const result: any = await handle(db, String(body?.action || ""), body.payload || {}, { userId, tokenVersion, crypto: cryptoImpl, blobs, ip });

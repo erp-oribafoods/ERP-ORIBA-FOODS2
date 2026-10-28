@@ -537,7 +537,7 @@ async function requireComplete(t, d) {
   return cat;
 }
 
-const DEP_FIELDS = ['date', 'categorie_id', 'description', 'montant', 'equipe_id', 'zone_id', 'vehicule_id', 'beneficiaire', 'mode_paiement', 'reference_piece', 'sans_piece', 'kilometrage', 'litres', 'station', 'partagee'];
+const DEP_FIELDS = ['date', 'categorie_id', 'description', 'montant', 'equipe_id', 'zone_id', 'vehicule_id', 'beneficiaire', 'mode_paiement', 'reference_piece', 'sans_piece', 'kilometrage', 'litres', 'station', 'partagee', 'validite_debut', 'validite_fin'];
 
 A['dep.save'] = async ({ t, user, perms, payload, ip }) => saveDepense(t, user, perms, payload, { ip });
 
@@ -562,6 +562,8 @@ async function saveDepense(t, user, perms, payload, opts = {}) {
   if (d.equipe_id) await one(t, 'equipes', d.equipe_id, 'Équipe');
   if (d.vehicule_id) await one(t, 'vehicules', d.vehicule_id, 'Véhicule');
   d.sans_piece = !!d.sans_piece; d.partagee = !!d.partagee;
+  for (const k of ['validite_debut', 'validite_fin']) { if (!d[k]) d[k] = null; else if (!isDate(d[k])) fail('Date de validité invalide.'); }
+  if (d.validite_debut && d.validite_fin && d.validite_fin < d.validite_debut) fail('La fin de validité précède le début.');
   let mois = moisDe(d.date);
   if (inp.mois && inp.mois !== mois) {
     if (!can(perms, 'cloture', 'modifier') || !clean(payload.motif)) fail('Le mois de rattachement ne peut être corrigé que par la DAF, avec motif.');

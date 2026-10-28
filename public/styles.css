@@ -257,3 +257,17 @@ img.piece { max-width: 100%; border-radius: 6px; }
   .repl { grid-template-columns: minmax(0, 1fr) 110px auto; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* Terrain : cartes de zones */
+.zgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.zcard { text-align: left; font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; box-shadow: var(--shadow); }
+.zcard:hover { border-color: var(--brand); }
+.zc-h { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+.zc-h b { font-family: var(--f-display); font-size: 1.05rem; }
+.zc-ca { font: 650 1.15rem var(--f-mono); font-variant-numeric: tabular-nums; }
+.zcard .bar i { background: var(--brand); }
+.zc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; font-size: .8rem; }
+.zc-grid span { display: flex; justify-content: space-between; gap: 6px; border-bottom: 1px dashed var(--line); padding-bottom: 3px; }
+.zc-grid small { color: var(--ink-2); } .zc-grid b { font-family: var(--f-mono); font-weight: 500; }
+.back { align-self: flex-start; }
+#th { display: flex; flex-direction: column; gap: 10px; }

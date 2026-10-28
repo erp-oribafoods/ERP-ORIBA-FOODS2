@@ -319,3 +319,6 @@ insert into compteurs(cle, valeur) values ('DP', 0);
 insert into compteurs(cle, valeur) values ('SK', 0);
 
 create table fichiers (cle text primary key, type text, nom text, base64 text not null, created_at timestamptz not null default now());
+
+alter table depenses add column if not exists validite_debut date;
+alter table depenses add column if not exists validite_fin date;

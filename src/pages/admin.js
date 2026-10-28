@@ -21,6 +21,7 @@ export function renderReferentiels(root) {
   draw();
 }
 
+export const refFormPublic = (table) => refForm(table, null);
 function refForm(table, row) {
   const R = REFS[table];
   const F = R.f.map((f) => (f.t?.startsWith('ref:') ? { ...f, t: 'options', options: opts(f.t.slice(4), 'nom', { all: true }) } : f));

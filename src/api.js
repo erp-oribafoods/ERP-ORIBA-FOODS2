@@ -31,7 +31,7 @@ export function serverApi() {
   };
 }
 
-const LS_KEY = 'oriba_erp_demo_v1';
+const LS_KEY = 'oriba_erp_demo_v2';
 function lsGet() { try { return JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch { return null; } }
 function lsSet(v) { try { localStorage.setItem(LS_KEY, JSON.stringify(v)); return true; } catch { return false; } }
 

@@ -11,14 +11,21 @@ import { renderDepenses, renderPilotage, renderBudgets, renderCloture } from './
 import { renderReferentiels, renderParametres, renderUtilisateurs, renderRoles, renderCompte, passwordForm, bindPasswordForm } from './pages/admin.js';
 import { renderAudit } from './pages/audit.js';
 import { renderReprise } from './pages/reprise.js';
+import { renderTerrain, renderAgents, renderClients } from './pages/terrain.js';
+import { renderLogistique } from './pages/logistique.js';
 import { DEMO_USERS, DEMO_PASSWORD } from './demo-seed.js';
 
-const DEMO = !!window.ERP_DEMO;
+const DEMO = !!window.ERP_DEMO || (() => { try { return new URLSearchParams(location.search).has('demo'); } catch { return false; } })();
 
 const NAV = [
   ['Pilotage', [
     ['tableau-de-bord', 'Tableau de bord', () => App.can('dashboard'), renderDashboard],
     ['analyses', 'Cumuls et analyses', () => App.can('ventes') || App.can('dashboard'), renderAnalyses],
+  ]],
+  ['Terrain', [
+    ['terrain', 'Zones et équipes', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderTerrain],
+    ['agents', 'Agents commerciaux', () => App.can('ventes') || App.can('dashboard'), renderAgents],
+    ['clients', 'Clients et grossistes', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderClients],
   ]],
   ['Ventes et créances', [
     ['ventes-comptant', 'Ventes au comptant', () => App.can('ventes'), (r) => renderVentes(r, 'comptant')],
@@ -27,8 +34,9 @@ const NAV = [
     ['creances', 'Créances et alertes', () => App.can('creances'), renderCreances],
     ['stock', 'Stock confié', () => App.can('stock'), renderStock],
   ]],
-  ['Dépenses force de vente', [
+  ['Dépenses et logistique', [
     ['depenses', 'Saisie et validation', () => App.can('depenses'), renderDepenses],
+    ['logistique', 'Logistique et véhicules', () => App.can('depenses'), renderLogistique],
     ['pilotage-depenses', 'Pilotage des dépenses', () => App.can('depenses'), renderPilotage],
     ['budgets', 'Budgets', () => App.can('budgets'), renderBudgets],
     ['cloture', 'Clôture mensuelle', () => App.can('cloture'), renderCloture],
@@ -84,7 +92,7 @@ function shell() {
   const u = App.user;
   const initials = [u.prenom, u.nom].filter(Boolean).map((s) => s[0]).join('').toUpperCase();
   root.innerHTML = `
-  ${DEMO ? `<div class="demo-band">Démonstration — données fictives enregistrées dans ce navigateur uniquement. <button class="link" id="demo-reset">Réinitialiser la démo</button></div>` : ''}
+  ${DEMO ? `<div class="demo-band">Illustration avec des données fictives, enregistrées dans ce navigateur uniquement. <button class="link" id="demo-reset">Réinitialiser</button>${window.ERP_DEMO ? '' : ' · <a class="link" href="./">Revenir à la plateforme réelle</a>'}</div>` : ''}
   <div class="layout">
     <aside class="side" aria-label="Navigation">
       <div class="brand"><span class="mark" aria-hidden="true">OF</span><div><b>ORIBA FOODS</b><small>Gestion commerciale & force de vente</small></div></div>
@@ -145,6 +153,7 @@ async function loginScreen() {
     ${field({ k: 'password', l: 'Mot de passe', t: 'password', auto: 'current-password' }, '')}
     <p class="err" hidden></p><button class="btn primary block" type="submit">Se connecter</button>
     <p class="muted small">Mot de passe oublié : demandez à l’administrateur ERP de le réinitialiser.</p></form>
+    ${!DEMO ? `<div class="demo-acc"><b>Découvrir la plateforme avec des chiffres</b><p class="muted small">Ouvrez l’illustration : toutes les zones, agents, clients, ventes, créances, dépenses et véhicules avec des données d’exemple, sans toucher à vos vraies données.</p><a class="btn sm" href="?demo=1">Ouvrir l’illustration chiffrée</a></div>` : ''}
     ${DEMO ? `<div class="demo-acc"><b>Comptes de démonstration</b> (mot de passe <code>${DEMO_PASSWORD}</code>)<div class="chips">${DEMO_USERS.map(([u, , l]) => `<button class="btn sm ghost" data-u="${u}">${esc(l)}</button>`).join('')}</div></div>` : ''}`);
   const form = $('#lf');
   form.addEventListener('submit', (e) => {

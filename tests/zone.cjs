@@ -1,0 +1,20 @@
+const { chromium } = require('playwright'); const fs = require('fs'); const path = require('path');
+const CDN = process.env.CDN_DIR, OUT = process.env.OUT_DIR;
+const map = { 'chart.umd.min.js': 'chart.js/dist/chart.umd.js', 'xlsx.full.min.js': 'xlsx/dist/xlsx.full.min.js', 'jspdf.umd.min.js': 'jspdf/dist/jspdf.umd.min.js', 'jspdf.plugin.autotable.min.js': 'jspdf-autotable/dist/jspdf.plugin.autotable.min.js' };
+(async () => {
+  const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' + fs.readFileSync(path.join(__dirname, '../dist/demo.html'), 'utf8') + '</body></html>';
+  const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
+  await ctx.route('**/*', (r) => { const u = r.request().url(); if (u.startsWith('http://erp.test/')) return r.fulfill({ contentType: 'text/html', body: html }); const f = Object.keys(map).find((k) => u.endsWith(k)); if (f) return r.fulfill({ contentType: 'application/javascript', body: fs.readFileSync(path.join(CDN, 'node_modules', map[f])) }); return r.abort(); });
+  const p = await ctx.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+  await p.goto('http://erp.test/'); await p.waitForSelector('#lf', { timeout: 120000 });
+  await p.fill('[name=identifiant]', 'dg'); await p.fill('[name=password]', 'Demo2026'); await p.click('#lf button[type=submit]'); await p.waitForSelector('.layout');
+  await p.evaluate(() => { location.hash = 'terrain'; }); await p.waitForTimeout(600);
+  await p.screenshot({ path: OUT + '/z-overview.png', fullPage: true });
+  await p.click('.zcard >> nth=5'); await p.waitForTimeout(600);
+  await p.screenshot({ path: OUT + '/z-detail.png', fullPage: true });
+  await p.click('[data-tab=clients]'); await p.waitForTimeout(300); await p.click('[data-tab=depenses]'); await p.waitForTimeout(300);
+  await p.screenshot({ path: OUT + '/z-dep.png', fullPage: true });
+  await p.evaluate(() => { location.hash = 'logistique'; }); await p.waitForTimeout(600);
+  await p.screenshot({ path: OUT + '/logistique.png', fullPage: true });
+  console.log(errs.length ? errs.join('\n') : 'ok'); await b.close();
+})();

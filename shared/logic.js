@@ -1,5 +1,5 @@
 // Règles de calcul partagées entre le serveur et le navigateur.
-import { DEFAULT_PARAMS } from './schema.js';
+import { DEFAULT_PARAMS, DOCS_VEHICULE } from './schema.js';
 
 export const TZ = 'Africa/Niamey';
 
@@ -174,6 +174,23 @@ export function doublonsDepenses(deps) {
   return s;
 }
 
+// Documents des véhicules (assurance, vignette, visite technique) : dernière validité connue
+export function documentsVehicule(vehiculeId, I, asOf = today()) {
+  const out = [];
+  for (const [code, label] of DOCS_VEHICULE) {
+    const cat = [...I.categories.values()].find((c) => c.code === code);
+    const deps = (I.D.depenses || []).filter((d) => d.vehicule_id === vehiculeId && d.categorie_id === cat?.id && d.validite_fin && !['annulee', 'rejetee'].includes(d.statut));
+    const last = deps.sort((a, b) => String(b.validite_fin).localeCompare(String(a.validite_fin)))[0];
+    let etat = 'absent', jours = null;
+    if (last) {
+      jours = daysBetween(asOf, last.validite_fin);
+      etat = jours < 0 ? 'expire' : jours <= 30 ? 'bientot' : 'ok';
+    }
+    out.push({ code, label, fin: last?.validite_fin || null, jours, etat, depense: last || null });
+  }
+  return out;
+}
+
 export function moisClos(D, mois) {
   return (D.clotures || []).some((c) => c.mois === mois && c.statut === 'cloture');
 }
@@ -214,6 +231,15 @@ export function alertes(I, asOf = today(), perms = null) {
       if (l.negatif) A.push({ sev: 'crit', type: 'Stock négatif', page: 'stock', id: l.id, msg: `${lib} : stock théorique ${fmtQ(l.restant)} ctn` });
       if (l.ecartInventaire) A.push({ sev: 'warn', type: 'Écart d’inventaire', page: 'stock', id: l.id, msg: `${lib} : écart ${fmtQ(l.dernierInv.ecart)} ctn au ${fmtD(l.dernierInv.date)}` });
       if (l.dormant) A.push({ sev: 'info', type: 'Stock dormant', page: 'stock', id: l.id, msg: `${lib} : ${fmtQ(l.restant)} ctn sans vente depuis ${daysBetween(l.derniereVente || l.date, asOf)} j` });
+    }
+  }
+  if (can('depenses')) {
+    for (const v of I.D.vehicules || []) {
+      if (v.actif === false) continue;
+      for (const doc of documentsVehicule(v.id, I, asOf)) {
+        if (doc.etat === 'expire') A.push({ sev: 'crit', type: `${doc.label} expirée`, page: 'logistique', id: v.id, msg: `${v.immatriculation} : expirée depuis le ${fmtD(doc.fin)}` });
+        else if (doc.etat === 'bientot') A.push({ sev: 'warn', type: `${doc.label} à renouveler`, page: 'logistique', id: v.id, msg: `${v.immatriculation} : valable jusqu’au ${fmtD(doc.fin)} (${doc.jours} j)` });
+      }
     }
   }
   return A;

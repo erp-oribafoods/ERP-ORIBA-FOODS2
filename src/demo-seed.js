@@ -56,13 +56,28 @@ export async function seedDemo(db, crypto, state) {
     await ref('produits', { code: 'P-EPI', nom: 'Épices en sachet (démo)', gamme: 'DADI', packs_par_carton: 12, prix_ref: 11500 }),
     await ref('produits', { code: 'P-MAY', nom: 'Mayonnaise 500 ml (démo)', gamme: 'Oriba', packs_par_carton: 12, prix_ref: 18000 }),
   ];
+  // Marchés fictifs hors Niamey, un agent par marché, clients répartis dans toutes les zones
+  const AUTRES = { BAL: ['Marché de Balleyara', 'Marché de Tagazar'], DOS: ['Grand marché de Dosso', 'Marché de Gaya'], ZIN: ['Grand marché de Zinder', 'Marché de Mirriah'],
+    TAH: ['Grand marché de Tahoua', 'Marché de Madaoua'], KON: ['Marché de Birni N’Konni', 'Marché de Malbaza'], MAR: ['Grand marché de Maradi', 'Marché de Tessaoua'] };
+  for (const [code, list] of Object.entries(AUTRES)) {
+    const e = eq(code);
+    for (const n of list) await ref('marches', { nom: `${n} (démo)`, commune: n.replace(/^(Grand )?[Mm]arché (de |d’)?/, ''), zone_id: e.zone_id, equipe_id: e.id });
+  }
   const agents = [];
   let i = 1;
-  for (const m of state.marches) agents.push(await ref('agents', { code: `AG${String(i++).padStart(2, '0')}`, nom: `Agent ${m.nom} (démo)`, equipe_id: m.equipe_id, zone_id: m.zone_id, date_affectation: '2026-04-01' }));
+  for (const m of state.marches) agents.push(await ref('agents', { code: `AG${String(i++).padStart(2, '0')}`, nom: `Agent ${m.nom.replace(' (démo)', '')} (démo)`, equipe_id: m.equipe_id, zone_id: m.zone_id, date_affectation: '2026-04-01' }));
+  agents.push(await ref('agents', { code: `AG${String(i++).padStart(2, '0')}`, nom: 'Agent Mayonnaise (démo)', equipe_id: eq('MAY').id, zone_id: null, date_affectation: '2026-05-01' }));
   const clients = [];
-  const noms = ['Ets Moussa & Fils', 'Boutique Al Barka', 'Grossiste Hamani', 'Ets Issoufou Commerce', 'Alimentation Nafissa', 'Dépôt Garba', 'Ets Salifou', 'Supérette Yacouba', 'Ets Mariama Négoce', 'Boutique Zeinabou'];
-  for (const [k, n] of noms.entries()) clients.push(await ref('clients', { code: `CL${String(k + 1).padStart(3, '0')}`, nom: `${n} (démo)`, type: k < 4 ? 'Grossiste' : k < 7 ? 'Demi-grossiste' : 'Boutique', marche_id: state.marches[k % state.marches.length].id }));
+  const noms = ['Ets Moussa & Fils', 'Boutique Al Barka', 'Grossiste Hamani', 'Ets Issoufou Commerce', 'Alimentation Nafissa', 'Dépôt Garba', 'Ets Salifou', 'Supérette Yacouba', 'Ets Mariama Négoce', 'Boutique Zeinabou',
+    'Ets Abdou Commerce', 'Grossiste Ibrahim', 'Dépôt Souley', 'Boutique Hadiza', 'Ets Oumarou', 'Grossiste Kader', 'Alimentation Rabi', 'Ets Boubacar', 'Dépôt Amadou', 'Boutique Fati',
+    'Ets Seyni', 'Grossiste Moctar', 'Alimentation Balkissa', 'Ets Adamou', 'Dépôt Lawali', 'Boutique Ramatou', 'Ets Chaibou', 'Grossiste Tanko'];
+  for (const [k, n] of noms.entries()) {
+    const m = state.marches[(k * 7) % state.marches.length];
+    clients.push(await ref('clients', { code: `CL${String(k + 1).padStart(3, '0')}`, nom: `${n} (démo)`, type: /Grossiste|Dépôt/.test(n) ? 'Grossiste' : k % 3 === 0 ? 'Demi-grossiste' : n.startsWith('Boutique') ? 'Boutique' : 'Détaillant', marche_id: m.id }));
+  }
   const depot = await ref('clients', { code: 'CL900', nom: 'Grand dépôt Katako (démo)', type: 'Grossiste', marche_id: state.marches.find((m) => m.nom === 'Katako').id, depositaire: true });
+  const depot2 = await ref('clients', { code: 'CL901', nom: 'Grand dépôt Zinder (démo)', type: 'Grossiste', marche_id: state.marches.find((m) => m.nom.startsWith('Grand marché de Zinder')).id, depositaire: true });
+  const clientsDuMarche = (mid) => clients.filter((c) => c.marche_id === mid);
   await handle(db, 'param.save', { cle: 'plafond_cartons_client', valeur: 1000, motif: 'Valeur de référence du fichier (1 000 cartons par client)' }, ctx(U.daf));
 
   // Ventes de mai à aujourd'hui
@@ -72,9 +87,10 @@ export async function seedDemo(db, crypto, state) {
   while (d <= end) {
     const n = 1 + Math.floor(r() * 3);
     for (let k = 0; k < n; k++) {
-      const ai = Math.floor(r() * agents.length); const ag = agents[ai]; const m = state.marches[ai];
+      const ai = Math.floor(r() * agents.length); const ag = agents[ai]; const m = state.marches[ai] || pick(state.marches);
       const credit = r() < 0.35;
-      const cl = credit ? clients[Math.floor(r() * 6)] : pick(clients);
+      const local = clientsDuMarche(m.id).concat(clients.filter((c) => state.marches.find((x) => x.id === c.marche_id)?.equipe_id === m.equipe_id));
+      const cl = local.length && r() < 0.8 ? pick(local) : pick(clients);
       const nbl = r() < 0.25 ? 2 : 1;
       const lignes = [];
       for (let l = 0; l < nbl; l++) {
@@ -104,24 +120,54 @@ export async function seedDemo(db, crypto, state) {
   for (const [dt, q] of [['2026-06-20', 80], ['2026-07-15', 120], ['2026-08-21', 95], ['2026-09-18', 60]]) await handle(db, 'stock.create', { type: 'vente', lot_id: lot1.id, date: dt, quantite: q, document: 'Relevé dépositaire', vente: { mode: 'comptant', prix_unitaire: 13000, agent_id: agents[6].id, marche_id: depot.marche_id } }, C);
   await handle(db, 'stock.create', { type: 'vente', lot_id: lot2.id, date: '2026-08-30', quantite: 40, vente: { mode: 'credit', prix_unitaire: 18000, agent_id: agents[6].id, marche_id: depot.marche_id } }, C);
   await handle(db, 'stock.create', { type: 'inventaire', lot_id: lot1.id, date: '2026-10-01', quantite: 140 }, C);
+  const lot3 = (await handle(db, 'stock.create', { type: 'remise', client_id: depot2.id, produit_id: produits[1].id, date: '2026-07-05', quantite: 300, valeur_unitaire: 11000, document: 'BL-2026-0187' }, C)).mouvement;
+  const agZ = agents.find((a) => a.nom.includes('Grand marché de Zinder'));
+  for (const [dt, q] of [['2026-07-25', 70], ['2026-08-28', 55]]) await handle(db, 'stock.create', { type: 'vente', lot_id: lot3.id, date: dt, quantite: q, vente: { mode: 'credit', prix_unitaire: 12000, agent_id: agZ.id, marche_id: depot2.marche_id } }, C);
 
   // Dépenses mensuelles par équipe
   const cat = (c) => state.categories_depense.find((x) => x.code === c);
   const veh = state.vehicules[0];
+  await handle(db, 'ref.save', { table: 'vehicules', row: { id: veh.id, immatriculation: 'Véhicule commercial Zinder (immatriculation à compléter)', modele: 'Toyota Hilux (démo)', equipe_id: eq('ZIN').id, conducteur: 'Chauffeur Zinder (démo)' } }, C);
+  const flotte = [veh];
+  for (const [code, immat, modele] of [['NY1', '8A-1452-RN (démo)', 'Toyota Hilux'], ['NY2', '8B-2210-RN (démo)', 'Nissan NP300'], ['DOS', '3C-0874-RN (démo)', 'Tricycle cargo'], ['TAH', '5A-3317-RN (démo)', 'Toyota Hilux'], ['MAR', '4B-6620-RN (démo)', 'Mitsubishi L200'], ['MAY', '8C-9031-RN (démo)', 'Camionnette Isuzu']])
+    flotte.push(await ref('vehicules', { immatriculation: immat, modele: `${modele} (démo)`, equipe_id: eq(code).id, conducteur: `Chauffeur ${eq(code).nom} (démo)` }));
+  const vehDe = (tcode) => flotte.find((v) => v.equipe_id === eq(tcode).id);
+  // Documents et entretien des véhicules
+  const docs = async (v, cc, date, montant, debut, fin, extra = {}) => {
+    const c = cat(cc); const e = state.equipes.find((x) => x.id === v.equipe_id);
+    let res = await handle(db, 'dep.save', { depense: { date, categorie_id: c.id, montant, equipe_id: e.id, zone_id: e.zone_id, vehicule_id: v.id, beneficiaire: { ASSU: 'Assureur (démo)', VIGN: 'Trésor public (démo)', VTEC: 'Centre de contrôle technique (démo)', VIDA: 'Garage (démo)', REPA: 'Garage (démo)', FILT: 'Garage (démo)' }[cc], mode_paiement: 'Espèces', reference_piece: `${cc}-${v.immatriculation.slice(0, 9)}-${date}`, description: c.description_obligatoire ? (extra.description || `${c.libelle} ${v.immatriculation}`) : null, validite_debut: debut, validite_fin: fin, ...extra } }, C);
+    await handle(db, 'dep.upload', { depense_id: res.depense.id, nom: `piece-${cc.toLowerCase()}.png`, type: 'image/png', base64: recu }, C);
+    res = await handle(db, 'dep.save', { depense: { id: res.depense.id }, soumettre: true }, C);
+    if (date < addDays(end, -10)) await handle(db, 'dep.decision', { id: res.depense.id, decision: 'valider' }, ctx(U.daf));
+  };
+  const plans = [ // [assurance début, vignette fin, visite technique fin]
+    ['2026-01-10', '2026-12-31', '2026-12-05'], ['2025-11-08', '2026-12-31', '2026-11-12'], ['2026-03-01', '2026-12-31', '2026-10-20'],
+    ['2026-06-15', '2026-12-31', '2027-01-30'], ['2025-12-02', '2026-12-31', '2026-11-03'], ['2026-02-20', '2026-12-31', '2027-02-14'], ['2026-04-01', '2026-12-31', '2026-12-20'],
+  ];
+  for (const [k, v] of flotte.entries()) {
+    const [a0, vfin, tfin] = plans[k];
+    await docs(v, 'ASSU', a0 < start ? start : a0, 185000 + k * 15000, a0, addDays(a0, 364));
+    await docs(v, 'VIGN', '2026-05-05', 45000, '2026-01-01', vfin);
+    await docs(v, 'VTEC', addDays(tfin, -183) < start ? start : addDays(tfin, -183), 25000, addDays(tfin, -183), tfin);
+    let km = 41000 + k * 9000;
+    for (const mo of ['2026-05-18', '2026-07-16', '2026-09-14']) { km += 4800 + Math.round(r() * 1500); if (mo <= end) await docs(v, 'VIDA', mo, 35000, null, null, { kilometrage: km }); }
+    if (k % 2 === 0) await docs(v, 'REPA', `2026-0${6 + k % 3}-22`, 95000 + k * 20000, null, null, { description: ['Remplacement plaquettes de frein', 'Réparation embrayage', 'Changement pneus avant', 'Batterie et alternateur'][k % 4] + ' (démo)' });
+  }
   const months = []; for (let m = 5; m <= Number(end.slice(5, 7)); m++) months.push(`2026-${String(m).padStart(2, '0')}`);
   const teams = ['NY1', 'NY2', 'BAL', 'DOS', 'ZIN', 'TAH', 'KON', 'MAR', 'MAY', 'CTR'];
   for (const mo of months) {
     for (const tcode of teams) {
       const e = eq(tcode);
       const items = [['CARB', 30000 + Math.round(r() * 40) * 1000], ['SALA', 150000], ['GADG', r() < 0.4 ? 25000 : 0]];
-      if (tcode === 'ZIN') items.push(['VIDA', r() < 0.5 ? 35000 : 0], ['REPA', r() < 0.3 ? 85000 : 0]);
+      if (tcode === 'ZIN') items.push(['INSA', r() < 0.4 ? 15000 : 0]);
       for (const [cc, mt] of items) {
         if (!mt) continue;
         const day = `${mo}-${String(3 + Math.floor(r() * 24)).padStart(2, '0')}`;
         if (day > end) continue;
         const c = cat(cc);
-        const isVeh = c.vehicule_obligatoire || (tcode === 'ZIN' && cc === 'CARB');
-        let res = await handle(db, 'dep.save', { depense: { date: day, categorie_id: c.id, montant: mt, equipe_id: e.id, zone_id: e.zone_id, vehicule_id: isVeh ? veh.id : null, beneficiaire: cc === 'CARB' ? 'Station (démo)' : cc === 'SALA' ? 'Agents de terrain' : 'Fournisseur (démo)', mode_paiement: 'Espèces', reference_piece: `PC-${mo}-${tcode}-${cc}`, description: c.description_obligatoire ? `${c.libelle} ${e.nom}` : null }, soumettre: !c.justif_obligatoire }, C);
+        const vt = vehDe(tcode);
+        const isVeh = c.vehicule_obligatoire || (cc === 'CARB' && vt);
+        let res = await handle(db, 'dep.save', { depense: { date: day, categorie_id: c.id, montant: mt, equipe_id: e.id, zone_id: e.zone_id, vehicule_id: isVeh ? (vt || veh).id : null, litres: cc === 'CARB' && vt ? Math.round(mt / 700) : null, beneficiaire: cc === 'CARB' ? 'Station (démo)' : cc === 'SALA' ? 'Agents de terrain' : 'Fournisseur (démo)', mode_paiement: 'Espèces', reference_piece: `PC-${mo}-${tcode}-${cc}`, description: c.description_obligatoire ? `${c.libelle} ${e.nom}` : null }, soumettre: !c.justif_obligatoire }, C);
         if (c.justif_obligatoire) {
           await handle(db, 'dep.upload', { depense_id: res.depense.id, nom: `recu-${cc.toLowerCase()}-${mo}.png`, type: 'image/png', base64: recu }, C);
           res = await handle(db, 'dep.save', { depense: { id: res.depense.id }, soumettre: true }, C);

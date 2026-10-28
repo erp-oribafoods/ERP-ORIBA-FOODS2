@@ -885,19 +885,21 @@ A['role.save'] = async ({ t, user, perms, payload, ip }) => {
 
 // Reprise de données historiques
 A['import.run'] = async ({ t, user, perms, payload, ip }) => {
-  if (!can(perms, 'import', 'creer')) fail('Droit insuffisant pour la reprise de données.', 403);
+  // mode « historique » (Reprise de données) ou « courant » (import Excel depuis chaque rubrique, règles normales)
+  const courant = payload.mode === 'courant';
+  if (!courant && !can(perms, 'import', 'creer')) fail('Droit insuffisant pour la reprise de données.', 403);
   const type = payload.type;
   const rows = payload.rows || [];
   if (rows.length > 2000) fail('Maximum 2 000 lignes par import : découpez le fichier.');
   const importId = uid();
-  const ok = [], ko = [];
-  const opts = { historique: true, import_id: importId, ip };
+  const ok = [], ko = [], brouillons = [];
+  const opts = { historique: !courant, import_id: importId, ip };
   for (const [i, r] of rows.entries()) {
     try {
       await t.sp(async () => {
       if (REFS[type]) {
         if (!can(perms, 'referentiels', 'modifier')) fail('Droit référentiels manquant.', 403);
-        await A['ref.save']({ t, user, perms, payload: { table: type, row: r.data }, ip });
+        await A['ref.save']({ t, user, perms, payload: { table: type, row: r.data, motif: 'Import Excel' }, ip });
       } else if (type === 'ventes_comptant' || type === 'ventes_credit') {
         if (!can(perms, 'ventes', 'creer')) fail('Droit ventes manquant.', 403);
         await createVente(t, user, { ...r.data, mode: type === 'ventes_credit' ? 'credit' : 'comptant' }, r.lignes, opts);
@@ -907,9 +909,24 @@ A['import.run'] = async ({ t, user, perms, payload, ip }) => {
         if (!can(perms, 'depenses', 'creer')) fail('Droit dépenses manquant.', 403);
         const dd = r.data;
         await saveDepense(t, user, perms, { depense: { ...dd, date: `${dd.mois}-01`, reference_piece: 'Reprise historique (agrégé)', description: dd.description || `Total historique ${dd.mois}` }, soumettre: false }, opts)
-          .then(async (res) => { await t.update('depenses', res.depense.id, { statut: 'soumise', historique: true }); });
+          .then(async (res) => { await t.update('depenses', res.depense.id, { statut: 'soumise', historique: !courant }); });
+      } else if (type === 'depenses') {
+        // Dépense détaillée : soumise si elle est complète, sinon gardée en brouillon (pièce à joindre)
+        const res = await saveDepense(t, user, perms, { depense: r.data, soumettre: false }, opts);
+        try { await t.sp(async () => { await requireComplete(t, res.depense); await t.update('depenses', res.depense.id, { statut: 'soumise' }); }); }
+        catch (e) { if (!(e instanceof AppError)) throw e; brouillons.push({ ligne: r.ligne ?? i + 1, motif: e.message }); }
       } else if (type === 'stock_remises') {
         await createStock(t, user, perms, { ...r.data, type: 'remise' }, opts);
+      } else if (type === 'objectifs') {
+        const o = r.data;
+        await A['objectif.bulk']({ t, user, perms, payload: { mois: o.mois, axe: o.axe, produit_id: o.produit_id || null, lignes: [{ cible_id: o.cible_id, objectif_cartons: o.objectif_cartons, objectif_ca: o.objectif_ca }], motif: 'Import Excel' }, ip });
+      } else if (type === 'suivi_agents') {
+        const { mois, ...ligne } = r.data;
+        await A['suivi.bulk']({ t, user, perms, payload: { mois, lignes: [ligne], motif: 'Import Excel' }, ip });
+      } else if (type === 'budgets') {
+        const b = r.data;
+        const ex = (await t.select('budgets', { mois: b.mois })).find((x) => x.actif !== false && (x.equipe_id || null) === (b.equipe_id || null) && (x.categorie_id || null) === (b.categorie_id || null) && (x.vehicule_id || null) === (b.vehicule_id || null));
+        await A['budget.save']({ t, user, perms, payload: { budget: { ...b, ...(ex ? { id: ex.id } : {}) }, motif: 'Import Excel' }, ip });
       } else fail('Type d’import inconnu.');
       });
       ok.push(r.ligne ?? i + 1);
@@ -918,10 +935,10 @@ A['import.run'] = async ({ t, user, perms, payload, ip }) => {
       ko.push({ ligne: r.ligne ?? i + 1, erreur: e.message });
     }
   }
-  const stats = { recues: rows.length, integrees: ok.length, rejetees_serveur: ko.length, ...(payload.stats || {}) };
-  const imp = await t.insert('imports', { id: importId, type, fichier: clean(payload.fichier), stats, rapport: { refusesServeur: ko, controleClient: payload.rapport || null }, created_by: user.id, created_at: nowISO() });
+  const stats = { recues: rows.length, integrees: ok.length, rejetees_serveur: ko.length, brouillons: brouillons.length, mode: courant ? 'courant' : 'historique', ...(payload.stats || {}) };
+  const imp = await t.insert('imports', { id: importId, type, fichier: clean(payload.fichier), stats, rapport: { refusesServeur: ko, brouillons, controleClient: payload.rapport || null }, created_by: user.id, created_at: nowISO() });
   await audit(t, user, 'IMPORT', 'imports', importId, null, { type, stats }, null, ip);
-  return { import: imp, integrees: ok, refuses: ko };
+  return { import: imp, integrees: ok, refuses: ko, brouillons };
 };
 
 A['audit.list'] = async ({ t, perms, payload }) => {

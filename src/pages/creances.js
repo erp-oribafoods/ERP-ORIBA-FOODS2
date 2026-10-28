@@ -1,6 +1,7 @@
 // Suivi des créances, plafond par client, centre d'alertes et fiche client.
 import { App, nm, filterBar, describeFilters, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, pill, statutCreditPill, icon } from '../lib/ui.js';
+import { boutonImport, lierImport } from '../lib/importer.js';
 import { openCredits } from '../lib/facts.js';
 import { plafondsClients, alertes, creditInfo, venteTotals, encoursClient, plafondClient, niveauPlafond, today } from '../../shared/logic.js';
 import { openVente, rembForm } from './ventes.js';
@@ -9,11 +10,12 @@ const tranche = (j) => (j <= 0 ? '0' : j <= 30 ? '1-30' : j <= 60 ? '31-60' : j 
 
 export function renderCreances(root) {
   root.innerHTML = pageHead('Créances et alertes', `État au ${fmtD(today())}. Plafond de référence : ${fmtQ(App.I.p.plafond_cartons_client)} cartons par client, seuils ${(App.I.p.seuils_plafond || []).join(' % · ')} %.`,
-    App.can('remboursements', 'creer') ? `<button class="btn primary" id="new">${icon('plus')} Enregistrer un remboursement</button>` : '') +
+    `${boutonImport('remboursements')}${App.can('remboursements', 'creer') ? `<button class="btn primary" id="new">${icon('plus')} Enregistrer un remboursement</button>` : ''}`) +
     `<div id="flt"></div><section class="kpis" id="k"></section>
      <section class="grid g2"><article class="card"><header><h3>Plafond par client</h3></header><div id="pl"></div></article>
      <article class="card"><header><h3>Centre d’alertes</h3></header><div id="al"></div></article></section>
      <article class="card"><header><h3>Créances</h3><div class="seg" role="group"><button data-show="open" class="on">Ouvertes</button><button data-show="all">Toutes</button></div></header><div id="tb"></div></article>`;
+  lierImport(root);
   let show = 'open';
   const draw = () => {
     const f = App.filters.ventes;

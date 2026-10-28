@@ -1,6 +1,7 @@
 // Journaux des ventes au comptant et à crédit, remboursements, relances.
 import { App, nm, opts, filterBar, describeFilters, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, confirmBox, field, readForm, showErr, busy, toast, icon, pill, statutCreditPill } from '../lib/ui.js';
+import { boutonImport, lierImport } from '../lib/importer.js';
 import { venteMatches, periodRange } from '../lib/facts.js';
 import { creditInfo, venteTotals, encoursClient, plafondClient, niveauPlafond, lineCalc, today, addDays, num } from '../../shared/logic.js';
 import { MODES_PAIEMENT_REMB, CANAUX_RELANCE } from '../../shared/schema.js';
@@ -19,8 +20,9 @@ export function renderVentes(root, mode) {
   const canCreate = App.can('ventes', 'creer');
   root.innerHTML = pageHead(credit ? 'Ventes à crédit' : 'Ventes au comptant',
     credit ? 'Échéances, remboursements, soldes et statuts calculés automatiquement.' : 'Montant = quantité × prix unitaire, calculé automatiquement.',
-    canCreate ? `<button class="btn primary" id="new">${icon('plus')} Nouvelle vente ${credit ? 'à crédit' : 'au comptant'}</button>` : '') +
+    `${boutonImport(credit ? 'ventes_credit' : 'ventes_comptant')}${canCreate ? `<button class="btn primary" id="new">${icon('plus')} Nouvelle vente ${credit ? 'à crédit' : 'au comptant'}</button>` : ''}`) +
     `<div id="flt"></div><div class="card" id="tb"></div>`;
+  lierImport(root);
   const draw = () => {
     const f = App.filters.ventes;
     const show = f.statut_v === 'annulee' ? 'annulee' : 'validee';
@@ -259,7 +261,8 @@ export function relanceForm(venteId) {
 
 export function renderRemboursements(root) {
   root.innerHTML = pageHead('Remboursements', 'Chaque encaissement est une transaction distincte ; les remboursements partiels restent visibles.',
-    App.can('remboursements', 'creer') ? `<button class="btn primary" id="new">${icon('plus')} Nouveau remboursement</button>` : '') + '<div id="flt"></div><div class="card" id="tb"></div>';
+    `${boutonImport('remboursements')}${App.can('remboursements', 'creer') ? `<button class="btn primary" id="new">${icon('plus')} Nouveau remboursement</button>` : ''}`) + '<div id="flt"></div><div class="card" id="tb"></div>';
+  lierImport(root);
   const draw = () => {
     const f = App.filters.ventes;
     const [du, au] = periodRange(f);

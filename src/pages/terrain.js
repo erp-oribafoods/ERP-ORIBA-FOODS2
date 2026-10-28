@@ -1,6 +1,8 @@
 // Vue terrain : zones et équipes, agents commerciaux, clients et grossistes.
 import { App, nm, filterBar, describeFilters, pageHead } from '../app.js';
-import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, pill, statutCreditPill, chart, palette, alpha } from '../lib/ui.js';
+import { boutonImport, lierImport } from '../lib/importer.js';
+import { refFormPublic } from './admin.js';
+import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, pill, statutCreditPill, chart, palette, alpha, icon } from '../lib/ui.js';
 import { salesFacts, openCredits, groupSum, monthsBetween, moisLabel, periodRange } from '../lib/facts.js';
 import { plafondsClients, lots, depenseAllocations, documentsVehicule, today, num } from '../../shared/logic.js';
 import { openVente } from './ventes.js';
@@ -198,7 +200,9 @@ export function openAgent(id) {
 }
 
 export function renderAgents(root) {
-  root.innerHTML = pageHead('Agents commerciaux', 'Performance de chaque agent sur la période : ventes, clients servis, créances générées.') + '<div id="flt"></div><div class="card" id="tb"></div>';
+  root.innerHTML = pageHead('Agents commerciaux', 'Performance de chaque agent sur la période : ventes, clients servis, créances générées.',
+    `${boutonImport('agents')}${App.can('referentiels', 'modifier') ? `<button class="btn primary" id="add">${icon('plus')} Nouvel agent</button>` : ''}`) + '<div id="flt"></div><div class="card" id="tb"></div>';
+  lierImport(root); $('#add', root)?.addEventListener('click', () => refFormPublic('agents'));
   const draw = () => {
     const f = App.filters.ventes;
     const ag = App.D.agents.filter((a) => (!f.equipe_id || a.equipe_id === f.equipe_id) && (!f.zone_id || agentZone(a) === f.zone_id));
@@ -228,8 +232,10 @@ const CLIENT_COLS = [
 ];
 
 export function renderClients(root) {
-  root.innerHTML = pageHead('Clients et grossistes', 'Chiffre d’affaires, créances et utilisation du plafond de chaque client. Cliquez sur un client pour ouvrir sa fiche et son historique.') +
+  root.innerHTML = pageHead('Clients et grossistes', 'Chiffre d’affaires, créances et utilisation du plafond de chaque client. Cliquez sur un client pour ouvrir sa fiche et son historique.',
+    `${boutonImport('clients')}${App.can('referentiels', 'modifier') ? `<button class="btn primary" id="add">${icon('plus')} Nouveau client</button>` : ''}`) +
     '<div id="flt"></div><section class="kpis" id="k"></section><div class="card" id="tb"></div>';
+  lierImport(root); $('#add', root)?.addEventListener('click', () => refFormPublic('clients'));
   const draw = () => {
     const f = App.filters.ventes;
     const cl = App.D.clients.filter((c) => (!f.zone_id || clientZone(c) === f.zone_id) && (!f.type_client || c.type === f.type_client) && (!f.marche_id || c.marche_id === f.marche_id));

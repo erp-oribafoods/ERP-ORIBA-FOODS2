@@ -1,6 +1,7 @@
 // Administration : référentiels, paramètres, utilisateurs, rôles et compte personnel.
 import { App, nm, opts, pageHead } from '../app.js';
 import { esc, $, $$, fmtN, fmtD, Table, modal, confirmBox, field, readForm, showErr, busy, toast, icon, pill } from '../lib/ui.js';
+import { boutonImport, lierImport } from '../lib/importer.js';
 import { REFS, PARAM_DEFS, MODULES, ACTION_LABELS } from '../../shared/schema.js';
 
 // ---------- Référentiels ----------
@@ -11,11 +12,12 @@ export function renderReferentiels(root) {
     `<div class="tabs" role="tablist">${Object.entries(REFS).map(([k, r]) => `<button role="tab" data-t="${k}" class="${App.filters.ref.t === k ? 'on' : ''}">${esc(r.l)}</button>`).join('')}</div><div class="card" id="tb"></div>`;
   const draw = () => {
     const t = App.filters.ref.t, R = REFS[t];
-    $('#tb', root).innerHTML = `<div class="card-h"><h3>${esc(R.l)}</h3>${can ? `<button class="btn primary sm" id="add">${icon('plus')} Ajouter ${esc(R.one === 'équipe' || R.one === 'zone' || R.one === 'catégorie' ? 'une' : 'un')} ${esc(R.one)}</button>` : ''}</div><div id="tt"></div>`;
+    $('#tb', root).innerHTML = `<div class="card-h"><h3>${esc(R.l)}</h3><span class="grow"></span>${boutonImport(t, 'imp-ref').replace('class="btn ghost"', 'class="btn ghost sm"')}${can ? `<button class="btn primary sm" id="add">${icon('plus')} Ajouter ${esc(R.one === 'équipe' || R.one === 'zone' || R.one === 'catégorie' ? 'une' : 'un')} ${esc(R.one)}</button>` : ''}</div><div id="tt"></div>`;
     const cols = R.f.map((f) => ({ k: f.k, l: f.l.replace(/ \(.*\)$/, ''), num: f.t === 'number', v: (r) => (f.t?.startsWith('ref:') ? nm[{ zones: 'zone', equipes: 'equipe', marches: 'marche' }[f.t.slice(4)]](r[f.k]) : f.t === 'bool' ? (r[f.k] ? 'Oui' : 'Non') : r[f.k] ?? ''), f: f.t === 'date' ? (r) => fmtD(r[f.k]) : f.t === 'number' ? (r) => (r[f.k] === null || r[f.k] === undefined ? '—' : fmtN(r[f.k], 2)) : undefined }));
     cols.push({ k: 'actif', l: 'Statut', v: (r) => (r.actif !== false ? 'Actif' : 'Archivé'), f: (r) => (r.actif !== false ? pill('Actif', 'ok') : pill('Archivé', 'mute')) });
     new Table({ title: R.l, rows: App.D[t] || [], cols, pageSize: 30, sort: { k: R.f[0].k === 'code' ? R.f[1].k : R.f[0].k, dir: 1 }, onRow: can ? (r) => refForm(t, r) : null }).mount($('#tt', root));
     $('#add', root)?.addEventListener('click', () => refForm(t, null));
+    lierImport($('#tb', root));
   };
   $$('[data-t]', root).forEach((b) => b.addEventListener('click', () => { App.filters.ref.t = b.dataset.t; $$('[data-t]', root).forEach((x) => x.classList.toggle('on', x === b)); draw(); }));
   draw();

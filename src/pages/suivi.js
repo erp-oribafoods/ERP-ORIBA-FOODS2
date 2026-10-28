@@ -2,6 +2,7 @@
 // Reprend les fonctions de l'application « Suivi Terrain Dadi ».
 import { App, nm, opts, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtQ, Table, modal, field, showErr, busy, toast, icon, pill, chart, palette } from '../lib/ui.js';
+import { boutonImport, lierImport } from '../lib/importer.js';
 import { salesFacts, monthsBetween, moisLabel } from '../lib/facts.js';
 import { today, num } from '../../shared/logic.js';
 import { SUIVI_CHAMPS } from '../../shared/schema.js';
@@ -52,7 +53,7 @@ export function renderSuivi(root) {
   const F = App.filters.suivi;
   const canEdit = App.can('suivi', 'modifier');
   root.innerHTML = pageHead('Suivi des agents terrain', 'Fiche mensuelle de chaque agent : présence (08h00–16h00), ventes, déstockage des grossistes, prospection, PLV, note sur 10 et prime. Les ventes saisies dans l’ERP sont reprises automatiquement ; à défaut, les ventes déclarées sont retenues.',
-    canEdit ? `<button class="btn primary" id="saisie">${icon('edit')} Saisir le mois</button>` : '') +
+    `${boutonImport('suivi_agents')}${canEdit ? `<button class="btn primary" id="saisie">${icon('edit')} Saisir le mois</button>` : ''}`) +
     `<div class="filters">
       <label class="ff"><span>Mois</span><input type="month" id="f-mois" value="${F.mois}"></label>
       <label class="ff"><span>Équipe</span><select id="f-eq"><option value="">Toutes les équipes</option>${opts('equipes').map((o) => `<option value="${o.v}" ${F.equipe_id === o.v ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select></label>
@@ -112,6 +113,7 @@ export function renderSuivi(root) {
   $('#f-mois', root).addEventListener('change', (e) => { F.mois = e.target.value || today().slice(0, 7); draw(); });
   $('#f-eq', root).addEventListener('change', (e) => { F.equipe_id = e.target.value; draw(); });
   $('#saisie', root)?.addEventListener('click', () => saisieMois(F.mois, F.equipe_id));
+  lierImport(root, () => ({ mois: F.mois, equipe_id: F.equipe_id }));
   draw();
 }
 

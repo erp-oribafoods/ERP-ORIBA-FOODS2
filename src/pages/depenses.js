@@ -1,6 +1,7 @@
 // Dépenses commerciales et force de vente : saisie, circuit de validation, pilotage, budgets, clôture.
 import { App, nm, opts, filterBar, describeFilters, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, confirmBox, field, readForm, showErr, busy, toast, icon, pill, chart, palette, alpha, saveBlob, exportRows } from '../lib/ui.js';
+import { boutonImport, lierImport } from '../lib/importer.js';
 import { periodRange, monthsBetween, moisLabel, salesFacts } from '../lib/facts.js';
 import { depenseAllocations, doublonsDepenses, documentsVehicule, today, num, round2, daysBetween, moisDe } from '../../shared/logic.js';
 import { STATUTS_DEPENSE, MODES_PAIEMENT_DEP, CATS_VALIDITE } from '../../shared/schema.js';
@@ -49,8 +50,9 @@ export function renderDepenses(root) {
   const canNew = App.can('depenses', 'creer');
   const canVal = App.can('depenses', 'valider');
   root.innerHTML = pageHead('Dépenses commerciales', 'Chaque dépense est une transaction distincte : saisie, pièce jointe, contrôle superviseur, validation DAF.',
-    `${canVal ? `<button class="btn" id="bulk" disabled>${icon('check')} Valider la sélection</button>` : ''}${canNew ? `<button class="btn primary" id="new">${icon('plus')} Nouvelle dépense</button>` : ''}`) +
+    `${canVal ? `<button class="btn" id="bulk" disabled>${icon('check')} Valider la sélection</button>` : ''}${boutonImport('depenses')}${canNew ? `<button class="btn primary" id="new">${icon('plus')} Nouvelle dépense</button>` : ''}`) +
     '<div id="flt"></div><div class="card" id="tb"></div>';
+  lierImport(root);
   let table;
   const draw = () => {
     const f = App.filters.depenses;
@@ -348,8 +350,9 @@ export function renderBudgets(root) {
   App.filters.budget = App.filters.budget || { mois: today().slice(0, 7) };
   const can = App.can('budgets', 'modifier');
   root.innerHTML = pageHead('Budgets des dépenses', 'Budgets définis et approuvés par Oriba Foods. Aucun budget n’est déduit automatiquement de l’historique.',
-    can ? `<button class="btn primary" id="new">${icon('plus')} Nouveau budget</button>` : '') +
+    `${boutonImport('budgets')}${can ? `<button class="btn primary" id="new">${icon('plus')} Nouveau budget</button>` : ''}`) +
     `<div class="filters"><label class="ff"><span>Mois</span><input type="month" id="bm" value="${App.filters.budget.mois}"></label></div><div class="card" id="tb"></div>`;
+  lierImport(root, () => ({ mois: App.filters.budget.mois }));
   const draw = () => {
     const rows = budgetsAvecRealise(App.filters.budget.mois);
     new Table({ title: `Budgets ${App.filters.budget.mois}`, rows, sort: { k: 'pct', dir: -1 }, onRow: can ? (r) => budgetForm(r) : null, empty: 'Aucun budget défini pour ce mois.',

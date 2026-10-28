@@ -188,6 +188,25 @@ const sv3 = await call(sessions.com, 'suivi.bulk', { mois: today().slice(0, 7), 
 ok(sv3.modifies === 0, 'Aucune écriture si rien ne change');
 await expectErr(call(sessions.com, 'suivi.bulk', { mois: today().slice(0, 7), lignes: [{ agent_id: ag.id, note: 12 }] }), 'Note limitée à 10', /entre 0 et 10/);
 await expectErr(call(sessions.daf, 'suivi.bulk', { mois: today().slice(0, 7), lignes: [] }), 'La DAF consulte le suivi sans le modifier', /insuffisant/);
+console.log('Import Excel depuis les rubriques');
+const m0 = today().slice(0, 7);
+let im = await call(sessions.com, 'import.run', { type: 'objectifs', mode: 'courant', fichier: 'obj.xlsx', rows: [{ ligne: 2, data: { mois: m0, axe: 'agent', cible_id: ag.id, produit_id: null, objectif_cartons: 75, objectif_ca: null } }] });
+D = (await call(sessions.dg, 'data.bootstrap')).data;
+ok(im.integrees.length === 1 && D.objectifs.find((o) => o.cible_id === ag.id && o.mois === m0).objectif_cartons === 75, 'Objectifs mis à jour par fichier Excel');
+im = await call(sessions.com, 'import.run', { type: 'suivi_agents', mode: 'courant', rows: [{ ligne: 2, data: { mois: m0, agent_id: ag.id, jours_presents: 20, note: 9 } }] });
+D = (await call(sessions.dg, 'data.bootstrap')).data;
+ok(im.integrees.length === 1 && Number(D.suivi_agents.find((r) => r.agent_id === ag.id && r.mois === m0).jours_presents) === 20, 'Fiche agent mise à jour par fichier Excel');
+im = await call(sessions.daf, 'import.run', { type: 'budgets', mode: 'courant', rows: [{ ligne: 2, data: { mois: '2027-01', equipe_id: eq.id, montant: 300000 } }, { ligne: 3, data: { mois: '2027-01', equipe_id: eq.id, montant: 350000 } }] });
+D = (await call(sessions.daf, 'data.bootstrap')).data;
+ok(im.integrees.length === 2 && D.budgets.filter((b) => b.mois === '2027-01').length === 1 && Number(D.budgets.find((b) => b.mois === '2027-01').montant) === 350000, 'Budget créé puis mis à jour par fichier, sans doublon');
+im = await call(sessions.admin, 'import.run', { type: 'agents', mode: 'courant', rows: [{ ligne: 2, data: { id: ag.id, telephone: '90 00 00 00' } }, { ligne: 3, data: { code: 'A99', nom: 'Agent importé', equipe_id: eq.id } }] });
+D = (await call(sessions.admin, 'data.bootstrap')).data;
+ok(im.integrees.length === 2 && D.agents.find((a) => a.id === ag.id).telephone === '90 00 00 00' && D.agents.some((a) => a.code === 'A99'), 'Référentiel agents : mise à jour et ajout par fichier');
+im = await call(sessions.com, 'import.run', { type: 'depenses', mode: 'courant', rows: [{ ligne: 2, data: { date: today(), equipe_id: eq.id, categorie_id: cats.CARB.id, montant: 12000, reference_piece: 'T-1' } }, { ligne: 3, data: { date: today(), equipe_id: eq.id, categorie_id: cats.CARB.id, montant: 13000, sans_piece: true, description: 'Ticket perdu' } }] });
+ok(im.integrees.length === 2 && im.brouillons.length === 1, `Dépenses importées : 1 soumise, 1 en brouillon (${im.brouillons[0]?.motif})`);
+await expectErr(call(sessions.daf, 'import.run', { type: 'objectifs', mode: 'courant', rows: [] }).then((r) => { if (!r) throw new Error('x'); return call(sessions.daf, 'import.run', { type: 'ventes_comptant', mode: 'historique', rows: [] }); }), 'La reprise historique reste réservée', /insuffisant/);
+im = await call(sessions.daf, 'import.run', { type: 'objectifs', mode: 'courant', rows: [{ ligne: 2, data: { mois: m0, axe: 'agent', cible_id: ag.id, objectif_cartons: 1 } }] });
+ok(im.integrees.length === 0 && /insuffisant/.test(im.refuses[0]?.erreur || ''), 'Import par rubrique : les droits du module s’appliquent (DAF refusée sur les objectifs)');
 const dv = (await call(sessions.com, 'dep.save', { depense: { date: today(), categorie_id: cats.ASSU.id, montant: 150000, equipe_id: eq.id, vehicule_id: B.vehicules[0].id, reference_piece: 'POL-1', validite_debut: today(), validite_fin: '2027-10-27' } })).depense;
 ok(dv.validite_fin === '2027-10-27', 'Assurance enregistrée avec sa date de fin de validité');
 

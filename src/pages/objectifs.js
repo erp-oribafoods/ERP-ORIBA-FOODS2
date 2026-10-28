@@ -1,6 +1,7 @@
 // Objectifs commerciaux et suivi des réalisations par agent, zone, équipe, marché, produit et période.
 import { App, nm, opts, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtQ, Table, modal, field, showErr, busy, toast, icon, pill, chart, palette } from '../lib/ui.js';
+import { boutonImport, lierImport } from '../lib/importer.js';
 import { salesFacts, monthsBetween, moisLabel } from '../lib/facts.js';
 import { today, daysBetween, num } from '../../shared/logic.js';
 import { AXES_OBJECTIF } from '../../shared/schema.js';
@@ -55,7 +56,7 @@ export function renderObjectifs(root) {
   const F = App.filters.objectifs;
   const canEdit = App.can('objectifs', 'modifier');
   root.innerHTML = pageHead('Objectifs et réalisations', 'Objectifs fixés en cartons et/ou en FCFA, comparés aux ventes validées de la période. Le statut tient compte de la part de la période déjà écoulée.',
-    canEdit ? `<button class="btn primary" id="saisie">${icon('edit')} Saisir les objectifs</button>` : '') +
+    `${boutonImport('objectifs')}${canEdit ? `<button class="btn primary" id="saisie">${icon('edit')} Saisir les objectifs</button>` : ''}`) +
     `<div class="filters">
       <label class="ff"><span>Suivi par</span><select id="o-axe">${Object.entries(AXES_OBJECTIF).map(([k, l]) => `<option value="${k}" ${F.axe === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="ff"><span>Du mois</span><input type="month" id="o-du" value="${F.du}"></label><label class="ff"><span>Au mois</span><input type="month" id="o-au" value="${F.au}"></label>
@@ -91,6 +92,7 @@ export function renderObjectifs(root) {
         ...(enCours ? [{ k: 'projT', l: 'Projection fin de période', num: 1, v: (r) => r.projT ?? -1, f: (r) => (r.projT === null ? '—' : `${fmtN(r.projT, 0)} %`), x: (r) => (r.projT === null ? '' : Math.round(r.projT)) }] : []),
         { k: 'statut', l: 'Statut', f: (r) => pill(r.statut, r.sev) }] }).mount($('#ot', root));
   };
+  lierImport(root, () => ({ mois: F.au, axe: F.axe }));
   const bind = (id, k) => $(id, root).addEventListener('change', (e) => { F[k] = e.target.value; if (k === 'du' && F.au < F.du) { F.au = F.du; $('#o-au', root).value = F.au; } draw(); });
   bind('#o-axe', 'axe'); bind('#o-du', 'du'); bind('#o-au', 'au'); bind('#o-prod', 'produit_id');
   $$('[data-mes]', root).forEach((b) => b.addEventListener('click', () => { F.mesure = b.dataset.mes; $$('[data-mes]', root).forEach((x) => x.classList.toggle('on', x === b)); draw(); }));

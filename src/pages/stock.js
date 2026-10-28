@@ -1,6 +1,7 @@
 // Stock confié chez un gros client : lots, ventes imputées facturées, inventaires et écarts.
 import { App, nm, opts, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, confirmBox, field, readForm, showErr, busy, toast, icon, pill } from '../lib/ui.js';
+import { boutonImport, lierImport } from '../lib/importer.js';
 import { lots, today, num } from '../../shared/logic.js';
 import { STOCK_TYPES } from '../../shared/schema.js';
 import { openVente } from './ventes.js';
@@ -8,7 +9,8 @@ import { openVente } from './ventes.js';
 export function renderStock(root) {
   const can = App.can('stock', 'creer');
   root.innerHTML = pageHead('Stock confié', 'Un lot par remise : chaque lot garde son propre solde. Le stock confié reste distinct du stock général d’Oriba Foods.',
-    can ? `<button class="btn primary" id="new">${icon('plus')} Nouvelle remise de stock</button>` : '') + '<section class="kpis" id="k"></section><div class="card" id="tb"></div>';
+    `${boutonImport('stock_remises')}${can ? `<button class="btn primary" id="new">${icon('plus')} Nouvelle remise de stock</button>` : ''}`) + '<section class="kpis" id="k"></section><div class="card" id="tb"></div>';
+  lierImport(root);
   const L = lots(App.I);
   const actifs = L.filter((l) => l.restant > 0);
   $('#k', root).innerHTML = [

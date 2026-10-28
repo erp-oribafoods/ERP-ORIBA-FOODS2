@@ -1,6 +1,7 @@
 // Logistique : parc de véhicules, documents (assurance, vignette, visite technique), entretien, réparations, carburant.
 import { App, nm, filterBar, describeFilters, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtD, Table, pill, icon, chart, palette } from '../lib/ui.js';
+import { boutonImport, lierImport } from '../lib/importer.js';
 import { periodRange, monthsBetween, moisLabel, salesFacts } from '../lib/facts.js';
 import { documentsVehicule, depenseAllocations, today, num } from '../../shared/logic.js';
 import { CATS_LOGISTIQUE, STATUTS_DEPENSE } from '../../shared/schema.js';
@@ -12,9 +13,10 @@ export function renderLogistique(root) {
   const canNew = App.can('depenses', 'creer');
   App.filters.logTab = App.filters.logTab || 'charges';
   root.innerHTML = pageHead('Logistique et charges', 'Charges de la force de vente par nature et coût par carton vendu ; parc roulant, documents des véhicules, entretien et réparations.',
-    `${App.can('referentiels', 'modifier') ? `<button class="btn" id="newveh">${icon('plus')} Ajouter un véhicule</button>` : ''}${canNew ? `<button class="btn primary" id="newdep">${icon('plus')} Nouvelle dépense logistique</button>` : ''}`) +
+    `${boutonImport('depenses')}${App.can('referentiels', 'modifier') ? `<button class="btn" id="newveh">${icon('plus')} Ajouter un véhicule</button>` : ''}${canNew ? `<button class="btn primary" id="newdep">${icon('plus')} Nouvelle dépense logistique</button>` : ''}`) +
     `<div class="tabs" role="tablist"><button role="tab" data-lt="charges" class="${App.filters.logTab === 'charges' ? 'on' : ''}">Charges du mois et coût par carton</button><button role="tab" data-lt="parc" class="${App.filters.logTab === 'parc' ? 'on' : ''}">Parc de véhicules et entretien</button></div>
     <div id="flt"></div><div id="lg"></div>`;
+  lierImport(root);
   $$('[data-lt]', root).forEach((b) => b.addEventListener('click', () => { App.filters.logTab = b.dataset.lt; App.rerender(); }));
   if (App.filters.logTab === 'charges') {
     $('#newdep', root)?.addEventListener('click', () => depenseForm(null));

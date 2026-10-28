@@ -24,7 +24,7 @@ fs.writeFileSync('public/index.html', `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ORIBA ERP — Gestion commerciale</title>
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" href="data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#c98a1b"/><text x="16" y="21" font-family="Arial" font-weight="800" font-size="13" text-anchor="middle" fill="#1b1404">OF</text></svg>')}">
+<link rel="icon" type="image/png" href="data:image/png;base64,${fs.readFileSync('src/assets/favicon.txt', 'utf8').trim()}">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="${FONTS}">
 <link rel="stylesheet" href="/styles.css">

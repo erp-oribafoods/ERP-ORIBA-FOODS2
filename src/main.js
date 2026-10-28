@@ -15,9 +15,12 @@ import { renderTerrain, renderAgents, renderClients } from './pages/terrain.js';
 import { renderLogistique } from './pages/logistique.js';
 import { renderObjectifs } from './pages/objectifs.js';
 import { DEMO_USERS, DEMO_PASSWORD } from './demo-seed.js';
+import { LOGO } from './assets/logo.js';
+import { decorate } from './lib/ui.js';
 
 const DEMO = !!window.ERP_DEMO || (() => { try { return new URLSearchParams(location.search).has('demo'); } catch { return false; } })();
 
+const NAV_ICONS = { 'tableau-de-bord': 'home', analyses: 'chart', terrain: 'map', agents: 'users', clients: 'store', objectifs: 'target', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', audit: 'eye' };
 const NAV = [
   ['Pilotage', [
     ['tableau-de-bord', 'Tableau de bord', () => App.can('dashboard'), renderDashboard],
@@ -90,6 +93,14 @@ App.rerender = () => {
   window.scrollTo(0, y);
 };
 
+let observer = null;
+function watchMain() {
+  const main = $('#main');
+  if (!main) return;
+  observer?.disconnect();
+  observer = new MutationObserver(() => decorate(main));
+  observer.observe(main, { childList: true, subtree: true });
+}
 function shell() {
   const u = App.user;
   const initials = [u.prenom, u.nom].filter(Boolean).map((s) => s[0]).join('').toUpperCase();
@@ -97,8 +108,8 @@ function shell() {
   ${DEMO ? `<div class="demo-band">Illustration avec des données fictives, enregistrées dans ce navigateur uniquement. <button class="link" id="demo-reset">Réinitialiser</button>${window.ERP_DEMO ? '' : ' · <a class="link" href="./">Revenir à la plateforme réelle</a>'}</div>` : ''}
   <div class="layout">
     <aside class="side" aria-label="Navigation">
-      <div class="brand"><span class="mark" aria-hidden="true">OF</span><div><b>ORIBA FOODS</b><small>Gestion commerciale & force de vente</small></div></div>
-      <nav class="nav">${NAV.map(([g, items]) => { const vis = items.filter((i) => i[2]()); return vis.length ? `<div class="nav-g"><span>${g}</span>${vis.map((i) => `<a href="#${i[0]}" data-p="${i[0]}">${i[1]}</a>`).join('')}</div>` : ''; }).join('')}</nav>
+      <div class="brand-logo"><img src="${LOGO}" alt="Oriba Food"></div><p class="brand-sub">ERP Gestion commerciale & force de vente</p>
+      <nav class="nav">${NAV.map(([g, items]) => { const vis = items.filter((i) => i[2]()); return vis.length ? `<div class="nav-g"><span>${g}</span>${vis.map((i) => `<a href="#${i[0]}" data-p="${i[0]}">${icon(NAV_ICONS[i[0]] || 'spark')}<span>${i[1]}</span></a>`).join('')}</div>` : ''; }).join('')}</nav>
       <a class="me" href="#mon-compte" data-p="mon-compte"><span class="av">${esc(initials)}</span><span><b>${esc([u.prenom, u.nom].filter(Boolean).join(' '))}</b><small>${esc(u.role_nom || '')}</small></span></a>
     </aside>
     <div class="body">
@@ -114,6 +125,7 @@ function shell() {
   $('#demo-reset')?.addEventListener('click', () => { App.api.reset(); location.reload(); });
   setExportContext(() => ({ user: [u.prenom, u.nom].filter(Boolean).join(' ') + ` (${u.role_nom || ''})`, filtres: ['tableau-de-bord', 'analyses', 'ventes-comptant', 'ventes-credit', 'remboursements', 'creances'].includes(current) ? describeFilters('ventes') : ['depenses', 'pilotage-depenses'].includes(current) ? describeFilters('depenses') : '' }));
   window.addEventListener('hashchange', route);
+  watchMain();
   route();
 }
 
@@ -142,7 +154,7 @@ setInterval(() => {
 
 function authFrame(inner) {
   root.innerHTML = `<div class="auth"><div class="auth-card">
-    <div class="brand big"><span class="mark" aria-hidden="true">OF</span><div><b>ORIBA FOODS</b><small>ERP Gestion commerciale & force de vente</small></div></div>${inner}</div>
+    <div class="auth-logo"><img src="${LOGO}" alt="Oriba Food"></div><p class="muted small" style="text-align:center;margin:-6px 0 0">ERP Gestion commerciale & force de vente</p>${inner}</div>
     <p class="auth-foot">Accès réservé au personnel autorisé. Toutes les actions sont journalisées.</p></div>`;
 }
 

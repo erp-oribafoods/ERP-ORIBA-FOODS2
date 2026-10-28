@@ -12,7 +12,18 @@ export function icon(name) {
     download: 'M12 4v11m0 0l-4-4m4 4l4-4M5 19h14', refresh: 'M20 11a8 8 0 0 0-14.9-3.9M4 4v4h4M4 13a8 8 0 0 0 14.9 3.9M20 20v-4h-4',
     menu: 'M4 7h16M4 12h16M4 17h16', logout: 'M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 16l-4-4 4-4M6 12h10', alert: 'M12 9v4m0 4h.01M10.3 3.9L2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
     check: 'M5 13l4 4L19 7', edit: 'M4 20h4L19 9l-4-4L4 16v4z', file: 'M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6zM14 3v6h6',
-    flag: 'M5 21V4m0 0h11l-2 4 2 4H5', eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', upload: 'M12 20V9m0 0l-4 4m4-4l4 4M5 5h14',
+    flag: 'M5 21V4m0 0h11l-2 4 2 4H5',
+    chart: 'M4 20V10m6 10V4m6 16v-7m4 7H2', cash: 'M3 7h18v10H3zM12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM6 10v4m12-4v4', credit: 'M3 6h18v12H3zM3 10h18M7 15h4',
+    box: 'M3 8l9-5 9 5v8l-9 5-9-5V8zm0 0l9 5 9-5M12 13v8', wallet: 'M3 7a2 2 0 0 1 2-2h12v4M3 7v10a2 2 0 0 0 2 2h14V9H5a2 2 0 0 1-2-2zm14 7h.01',
+    receipt: 'M6 3h12v18l-3-2-3 2-3-2-3 2V3zm3 5h6m-6 4h6m-6 4h3', gauge: 'M4 15a8 8 0 1 1 16 0M12 15l4-5M5 19h14', warehouse: 'M3 10l9-6 9 6v10H3V10zm4 10v-6h10v6',
+    users: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zm-6 9a6 6 0 0 1 12 0M16 4a3.5 3.5 0 0 1 0 7m2 9a6 6 0 0 0-3-5.2', store: 'M4 9l1.5-5h13L20 9M4 9v11h16V9M4 9h16M9 20v-6h6v6',
+    coins: 'M8 8a5 2.5 0 1 0 10 0A5 2.5 0 1 0 8 8zm0 0v4c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5V8M6 12v4c0 1.4 2.2 2.5 5 2.5m-5-6.5c-1.2.4-2 1.1-2 2', calc: 'M6 3h12v18H6zM9 7h6m-6 5h.01M12 12h.01M15 12h.01M9 16h.01M12 16h.01M15 16h.01',
+    target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0-4a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0-4a1 1 0 1 0 0-2 1 1 0 0 0 0 2z', fuel: 'M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 8h5m3 2h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V9l-3-3',
+    truck: 'M2 6h11v10H2zM13 10h4l3 3v3h-7M6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm11 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4z', shield: 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3zm-3 9l2 2 4-4',
+    pie: 'M12 3v9h9A9 9 0 1 1 12 3zm3 0a6 6 0 0 1 6 6h-6V3z', spark: 'M12 3v4m0 10v4M3 12h4m10 0h4M6 6l2.5 2.5m7 7L18 18M6 18l2.5-2.5m7-7L18 6',
+    home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1v-9z', map: 'M9 4l-6 2v14l6-2 6 2 6-2V4l-6 2-6-2zm0 0v14m6-12v14', tag: 'M3 12V4h8l10 10-8 8L3 12zm4-4h.01',
+    clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0-13v5l3 2', check2: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm-4-9l3 3 5-6', lock: 'M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4',
+    settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm8-3l2-1-2-4-2 .5-1.5-1.5L16 4h-4l-.5 2L10 7.5 8 7 6 11l2 1v0l-2 1 2 4 2-.5 1.5 1.5.5 2h4l.5-2 1.5-1.5 2 .5 2-4-2-1z', db: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zm0 0v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3', eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', upload: 'M12 20V9m0 0l-4 4m4-4l4 4M5 5h14',
   };
   return `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${P[name] || ''}"/></svg>`;
 }
@@ -263,4 +274,50 @@ export function pill(text, sev) { return `<span class="pill ${sev || ''}">${esc(
 export function statutCreditPill(s) {
   const m = { 'Soldé': 'ok', 'En retard': 'crit', 'Partiellement remboursé': 'warn', 'En attente': 'info', 'Annulée': 'mute' };
   return pill(s, m[s]);
+}
+
+// ---------- Habillage dynamique des indicateurs ----------
+const TONES = ['t-violet', 't-vert', 't-sarcelle', 't-ambre', 't-bleu', 't-rose'];
+const KPI_ICONS = [
+  [/retard|expir|critique|anomal/i, 'alert', 't-rose'], [/plafond/i, 'gauge'], [/comptant/i, 'cash'], [/crédit/i, 'credit'], [/encaisse|rembours/i, 'wallet'],
+  [/créance/i, 'receipt'], [/stock|lot/i, 'warehouse'], [/coût par carton|par carton/i, 'calc', 't-ambre'], [/carburant/i, 'fuel'], [/véhicule|parc/i, 'truck'],
+  [/document|assurance|renouvel/i, 'shield'], [/budget/i, 'pie'], [/objectif/i, 'target'], [/atteint/i, 'check2', 't-vert'], [/agent/i, 'users'], [/client|grossiste/i, 'store'],
+  [/carton|quantité/i, 'box'], [/dépense|charge|engag|validé|logisti|entretien|réparation|frais/i, 'coins'], [/attente|soumis/i, 'clock'], [/sans|doublon|rejet/i, 'alert', 't-ambre'],
+  [/annul/i, 'lock'], [/vente|CA|chiffre|réalisé/i, 'chart'],
+];
+function parseNum(txt) {
+  const m = txt.replace(/\u202f|\u00a0/g, ' ').match(/^(\D*?)(-?\d(?:[\d ]*\d)?(?:,\d+)?)(.*)$/s);
+  if (!m) return null;
+  const n = Number(m[2].replace(/ /g, '').replace(',', '.'));
+  if (!isFinite(n)) return null;
+  return { pre: m[1], n, dec: (m[2].split(',')[1] || '').length, post: m[3] };
+}
+function countUp(el) {
+  const p = parseNum(el.textContent);
+  if (!p || Math.abs(p.n) < 2 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const fmt = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: p.dec, maximumFractionDigits: p.dec });
+  const t0 = performance.now(), dur = 900;
+  const step = (t) => {
+    const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = p.pre + fmt.format(p.n * e) + p.post;
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+export function decorate(root) {
+  let i = 0;
+  for (const k of root.querySelectorAll('.kpi:not([data-dec])')) {
+    k.dataset.dec = '1';
+    const label = k.querySelector('.kpi-l')?.textContent || '';
+    const hit = KPI_ICONS.find(([re]) => re.test(label)) || [null, 'spark'];
+    const tone = k.classList.contains('crit') ? 't-rose' : k.classList.contains('warn') ? 't-ambre' : k.classList.contains('ok') ? 't-vert' : hit[2] || TONES[i % TONES.length];
+    if (!TONES.some((t) => k.classList.contains(t))) k.classList.add(tone);
+    k.style.setProperty('--i', i);
+    if (!k.querySelector('.kpi-ic')) k.insertAdjacentHTML('afterbegin', `<span class="kpi-ic" aria-hidden="true">${icon(hit[1])}</span>`);
+    const v = k.querySelector('.kpi-v'); if (v) countUp(v);
+    i++;
+  }
+  let j = 0;
+  for (const c of root.querySelectorAll('.card:not([data-dec]), .zcard:not([data-dec])')) { c.dataset.dec = '1'; c.style.setProperty('--i', Math.min(j++, 12)); }
+  for (const [n, z] of [...root.querySelectorAll('.zcard')].entries()) z.style.setProperty('--zc', `var(--c${(n % 8) + 1})`);
 }

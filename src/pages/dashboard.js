@@ -4,6 +4,7 @@ import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, chart, palette, alpha, cssVar, Tabl
 import { salesFacts, rembFacts, openCredits, creancesParMois, groupSum, monthsBetween, moisLabel, periodRange, isoWeek } from '../lib/facts.js';
 import { plafondsClients, lots, alertes, today, niveauPlafond, round2 } from '../../shared/logic.js';
 import { openVente } from './ventes.js';
+import { LOGO } from '../assets/logo.js';
 
 function kpi(id, label, value, sub = '', sev = '') {
   return `<button class="kpi ${sev}" data-kpi="${id}"><span class="kpi-l">${esc(label)}</span><span class="kpi-v">${value}</span>${sub ? `<span class="kpi-s">${sub}</span>` : ''}</button>`;
@@ -43,8 +44,19 @@ function creditsTable(title, rows) {
 }
 
 export function renderDashboard(root) {
-  root.innerHTML = pageHead('Tableau de bord', `Situation au ${fmtD(today())} · montants en FCFA, quantités en cartons équivalents`) +
-    `<div id="flt"></div><div id="dash"></div>`;
+  const u = App.user;
+  const h = Number(new Intl.DateTimeFormat('fr-FR', { hour: 'numeric', hour12: false, timeZone: 'Africa/Niamey' }).format(new Date()));
+  const jour = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Niamey' }).format(new Date());
+  const t = today();
+  const duJour = salesFacts(App.I, { preset: 'jour' });
+  const nbAl = alertes(App.I, t, u.permissions);
+  const retards = openCredits(App.I, { preset: 'tout' }).filter((x) => x.v.statut === 'validee' && x.ci.statut === 'En retard').length;
+  root.innerHTML = `<section class="hero"><div><h1>${h < 13 ? 'Bonjour' : 'Bonsoir'}, ${esc(u.prenom || u.nom)}</h1>
+      <p>${esc(jour.charAt(0).toUpperCase() + jour.slice(1))} · ${esc(u.role_nom || '')} · montants en FCFA, quantités en cartons équivalents</p>
+      <div class="hero-chips"><span class="chip">Ventes du jour <b>${fmtF(duJour.reduce((s, x) => s + x.montant, 0))}</b></span><span class="chip">Cartons du jour <b>${fmtQ(duJour.reduce((s, x) => s + x.cartons, 0))}</b></span>
+      <span class="chip">Alertes <b>${nbAl.length}</b></span><span class="chip">Crédits en retard <b>${retards}</b></span></div></div>
+      <div class="hero-logo"><img src="${LOGO}" alt="Oriba Food"></div></section>
+    <div id="flt"></div><div id="dash"></div>`;
   const draw = () => drawDash($('#dash', root));
   filterBar($('#flt', root), 'ventes', ['periode', 'zone_id', 'agent_id', 'marche_id', 'client_id', 'produit_id', 'unite', 'mode'], draw);
   draw();

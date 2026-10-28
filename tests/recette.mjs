@@ -178,6 +178,16 @@ const ob2 = await call(sessions.com, 'objectif.bulk', { mois: today().slice(0, 7
 D = (await call(sessions.dg, 'data.bootstrap')).data;
 ok(ob2.modifies === 1 && D.objectifs.filter((o) => o.cible_id === ag.id).length === 1 && D.objectifs[0].objectif_cartons === 60, 'Objectif mis à jour sans doublon');
 await expectErr(call(sessions.daf, 'objectif.bulk', { mois: today().slice(0, 7), axe: 'agent', lignes: [] }), 'La DAF consulte les objectifs sans les modifier', /insuffisant/);
+console.log('Suivi des agents terrain');
+const sa = await call(sessions.com, 'suivi.bulk', { mois: today().slice(0, 7), lignes: [{ agent_id: ag.id, jours_presents: 25, retards: 1, abs_j: 0, abs_nj: 1, obj_destock: 200, destock: 150, visites: 30, nouveaux_clients: 2, plv: 3, note: 8.5, commentaire: 'RAS' }] });
+ok(sa.modifies === 1, 'Fiche mensuelle d’un agent enregistrée');
+const sv2 = await call(sessions.com, 'suivi.bulk', { mois: today().slice(0, 7), lignes: [{ agent_id: ag.id, jours_presents: 26, retards: 1, abs_j: 0, abs_nj: 1, obj_destock: 200, destock: 150, visites: 30, nouveaux_clients: 2, plv: 3, note: 8.5, commentaire: 'RAS' }] });
+D = (await call(sessions.dg, 'data.bootstrap')).data;
+ok(sv2.modifies === 1 && D.suivi_agents.length === 1 && Number(D.suivi_agents[0].jours_presents) === 26, 'Fiche corrigée sans doublon, visible par la DG');
+const sv3 = await call(sessions.com, 'suivi.bulk', { mois: today().slice(0, 7), lignes: [{ agent_id: ag.id, jours_presents: 26, retards: 1, abs_j: 0, abs_nj: 1, obj_destock: 200, destock: 150, visites: 30, nouveaux_clients: 2, plv: 3, note: 8.5, commentaire: 'RAS' }] });
+ok(sv3.modifies === 0, 'Aucune écriture si rien ne change');
+await expectErr(call(sessions.com, 'suivi.bulk', { mois: today().slice(0, 7), lignes: [{ agent_id: ag.id, note: 12 }] }), 'Note limitée à 10', /entre 0 et 10/);
+await expectErr(call(sessions.daf, 'suivi.bulk', { mois: today().slice(0, 7), lignes: [] }), 'La DAF consulte le suivi sans le modifier', /insuffisant/);
 const dv = (await call(sessions.com, 'dep.save', { depense: { date: today(), categorie_id: cats.ASSU.id, montant: 150000, equipe_id: eq.id, vehicule_id: B.vehicules[0].id, reference_piece: 'POL-1', validite_debut: today(), validite_fin: '2027-10-27' } })).depense;
 ok(dv.validite_fin === '2027-10-27', 'Assurance enregistrée avec sa date de fin de validité');
 

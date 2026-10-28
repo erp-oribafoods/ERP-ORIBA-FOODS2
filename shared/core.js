@@ -1,6 +1,6 @@
 // Cœur applicatif : toutes les opérations passent par ici, avec contrôle des droits côté serveur,
 // règles de gestion et journal d'audit. Le même code tourne dans la fonction Netlify et dans la démo.
-import { MODULES, REFS, WRITABLE, DEFAULT_PARAMS, DEFAULT_ROLES, STOCK_TYPES, AXES_OBJECTIF } from './schema.js';
+import { MODULES, REFS, WRITABLE, DEFAULT_PARAMS, DEFAULT_ROLES, STOCK_TYPES, AXES_OBJECTIF, SUIVI_CHAMPS } from './schema.js';
 import {
   buildIndex, creditInfo, encoursClient, plafondClient, niveauPlafond, lots, lineCalc, today, nowISO, moisDe,
   isDate, num, round2, addDays, moisClos, fmtF, fmtQ,
@@ -265,7 +265,8 @@ A['data.bootstrap'] = async ({ t, user, perms }) => {
     D.depense_validations = (await t.select('depense_validations')).filter((r) => ids.has(r.depense_id));
   } else { D.depenses = []; D.depense_repartitions = []; D.depense_validations = []; D.depenses_agregats = []; }
   D.budgets = P('budgets') || P('depenses') ? await t.select('budgets') : [];
-  D.objectifs = P('objectifs') || P('dashboard') ? (await t.select('objectifs')).filter((o) => o.actif !== false) : [];
+  D.objectifs = P('objectifs') || P('dashboard') || P('suivi') ? (await t.select('objectifs')).filter((o) => o.actif !== false) : [];
+  D.suivi_agents = P('suivi') ? (await t.select('suivi_agents')).filter((r) => { const a = agents.get(r.agent_id); return a && inScope(user, a.equipe_id, a.zone_id); }) : [];
   D.anomalies = P('audit') ? await t.select('anomalies') : (await t.select('anomalies', { created_by: user.id }));
   D.imports = P('import', 'creer') || P('audit') ? await t.select('imports') : [];
   return { data: D, user: publicUser(user, D.roles), serverDate: today() };
@@ -737,6 +738,49 @@ A['objectif.bulk'] = async ({ t, user, perms, payload, ip }) => {
     }
   }
   if (changes.length) await audit(t, user, 'OBJECTIFS', 'objectifs', `${mois}/${axe}`, null, { mois, axe, produit_id: produitId, changements: changes }, payload.motif, ip);
+  return { modifies: changes.length };
+};
+
+// Suivi mensuel des agents terrain : présence, activité, évaluation (saisie groupée d'un mois)
+A['suivi.bulk'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'suivi', 'modifier')) fail('Droit insuffisant pour le suivi des agents terrain.', 403);
+  const { mois } = payload;
+  if (!/^\d{4}-\d{2}$/.test(mois || '')) fail('Mois invalide (AAAA-MM).');
+  const existants = await t.select('suivi_agents', { mois });
+  const changes = [];
+  for (const l of payload.lignes || []) {
+    const ag = await one(t, 'agents', l.agent_id, 'Agent');
+    if (!inScope(user, ag.equipe_id, ag.zone_id)) fail(`${ag.nom} est hors de votre périmètre.`, 403);
+    const row = {};
+    for (const [k, lib, ty] of SUIVI_CHAMPS) {
+      const v = l[k];
+      if (v === '' || v === null || v === undefined) { row[k] = null; continue; }
+      const n = Number(v);
+      if (isNaN(n) || n < 0) fail(`${ag.nom} : « ${lib} » doit être un nombre positif.`);
+      if (ty === 'int' && !Number.isInteger(n)) fail(`${ag.nom} : « ${lib} » doit être un nombre entier.`);
+      if (ty === 'note' && n > 10) fail(`${ag.nom} : la note doit être comprise entre 0 et 10.`);
+      if (k === 'jours_presents' && n > 31) fail(`${ag.nom} : 31 jours de présence au maximum.`);
+      row[k] = n;
+    }
+    row.commentaire = clean(l.commentaire);
+    const vide = SUIVI_CHAMPS.every(([k]) => row[k] === null) && !row.commentaire;
+    const ex = existants.find((r) => r.agent_id === ag.id);
+    if (!ex) {
+      if (vide) continue;
+      await t.insert('suivi_agents', { id: uid(), mois, agent_id: ag.id, ...row, created_by: user.id, created_at: nowISO() });
+      changes.push({ agent: ag.nom, apres: row });
+      continue;
+    }
+    const avant = {}; const apres = {};
+    for (const k of [...SUIVI_CHAMPS.map((c) => c[0]), 'commentaire']) {
+      const a = ex[k] === null || ex[k] === undefined ? null : k === 'commentaire' ? ex[k] : Number(ex[k]);
+      if (a !== row[k]) { avant[k] = a; apres[k] = row[k]; }
+    }
+    if (!Object.keys(apres).length) continue;
+    await t.update('suivi_agents', ex.id, { ...row, updated_by: user.id, updated_at: nowISO() });
+    changes.push({ agent: ag.nom, avant, apres });
+  }
+  if (changes.length) await audit(t, user, 'SUIVI_AGENTS', 'suivi_agents', mois, null, { mois, changements: changes }, payload.motif, ip);
   return { modifies: changes.length };
 };
 

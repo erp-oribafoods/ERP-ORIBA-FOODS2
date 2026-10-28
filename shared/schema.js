@@ -7,6 +7,7 @@ export const MODULES = [
   { k: 'creances', l: 'Créances & relances', a: ['lire', 'creer', 'exporter'] },
   { k: 'stock', l: 'Stock confié', a: ['lire', 'creer', 'annuler', 'exporter'] },
   { k: 'objectifs', l: 'Objectifs commerciaux', a: ['lire', 'modifier'] },
+  { k: 'suivi', l: 'Suivi des agents terrain (présence, déstockage, évaluation)', a: ['lire', 'modifier'] },
   { k: 'depenses', l: 'Dépenses commerciales', a: ['lire', 'creer', 'modifier', 'controler', 'valider', 'annuler', 'exporter'] },
   { k: 'salaires', l: 'Détail des dépenses sensibles (salaires)', a: ['lire'] },
   { k: 'budgets', l: 'Budgets de dépenses', a: ['lire', 'modifier'] },
@@ -31,7 +32,7 @@ export const DEFAULT_ROLES = [
     description: 'Lecture globale, alertes, rapports. Validation exceptionnelle des dépenses.',
     permissions: {
       dashboard: ['lire'], ventes: ['lire', 'exporter'], remboursements: ['lire', 'exporter'],
-      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], objectifs: ['lire', 'modifier'], depenses: ['lire', 'valider', 'exporter'],
+      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], objectifs: ['lire', 'modifier'], suivi: ['lire'], depenses: ['lire', 'valider', 'exporter'],
       salaires: ['lire'], budgets: ['lire', 'modifier'], cloture: ['lire'], referentiels: ['lire'],
       parametres: ['lire'], audit: ['lire', 'creer'],
     },
@@ -41,7 +42,7 @@ export const DEFAULT_ROLES = [
     description: 'Seul profil autorisé à créer, corriger et annuler les ventes et remboursements.',
     permissions: {
       dashboard: ['lire'], ventes: all('ventes'), remboursements: all('remboursements'),
-      creances: all('creances'), stock: all('stock'), objectifs: ['lire', 'modifier'],
+      creances: all('creances'), stock: all('stock'), objectifs: ['lire', 'modifier'], suivi: ['lire', 'modifier'],
       depenses: ['lire', 'creer', 'modifier', 'controler', 'exporter'], budgets: ['lire'],
       cloture: ['lire'], referentiels: ['lire', 'modifier'], parametres: ['lire'], import: ['creer'],
     },
@@ -51,7 +52,7 @@ export const DEFAULT_ROLES = [
     description: 'Analyse, rapprochements, exports, audit et signalement des anomalies.',
     permissions: {
       dashboard: ['lire'], ventes: ['lire', 'exporter'], remboursements: ['lire', 'exporter'],
-      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], objectifs: ['lire'], depenses: ['lire', 'exporter'],
+      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], objectifs: ['lire'], suivi: ['lire'], depenses: ['lire', 'exporter'],
       budgets: ['lire'], cloture: ['lire'], referentiels: ['lire'], parametres: ['lire'], audit: ['lire', 'creer'],
     },
   },
@@ -60,7 +61,7 @@ export const DEFAULT_ROLES = [
     description: 'Contrôle financier, validation des dépenses, clôture mensuelle, paramètres financiers.',
     permissions: {
       dashboard: ['lire'], ventes: ['lire', 'exporter'], remboursements: ['lire', 'exporter'],
-      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], objectifs: ['lire'],
+      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], objectifs: ['lire'], suivi: ['lire'],
       depenses: ['lire', 'valider', 'annuler', 'exporter'], salaires: ['lire'], budgets: ['lire', 'modifier'],
       cloture: ['lire', 'modifier'], referentiels: ['lire'], parametres: ['lire', 'modifier'], audit: ['lire', 'creer'],
     },
@@ -77,8 +78,13 @@ export const DEFAULT_ROLES = [
     nom: "Superviseur / Responsable d'équipe",
     description: "Saisie et contrôle des dépenses de son équipe (périmètre à définir sur le compte).",
     permissions: {
-      dashboard: ['lire'], depenses: ['lire', 'creer', 'modifier', 'controler'], referentiels: ['lire'], cloture: ['lire'],
+      dashboard: ['lire'], depenses: ['lire', 'creer', 'modifier', 'controler'], suivi: ['lire', 'modifier'], referentiels: ['lire'], cloture: ['lire'],
     },
+  },
+  {
+    nom: 'Ressources Humaines',
+    description: 'Présence, retards, absences et évaluation mensuelle des agents terrain ; primes.',
+    permissions: { suivi: ['lire', 'modifier'], objectifs: ['lire'], referentiels: ['lire'] },
   },
 ];
 
@@ -95,6 +101,8 @@ export const DEFAULT_PARAMS = {
   seuil_depense_elevee: 500000,
   jours_saisie_tardive: 15,
   delai_session_min: 30,
+  prime_note_min: 8,
+  prime_montant: 25000,
 };
 
 export const PARAM_DEFS = [
@@ -109,6 +117,8 @@ export const PARAM_DEFS = [
   { k: 'seuils_budget', l: "Seuils d'alerte budgets (%)", t: 'list', g: 'Dépenses' },
   { k: 'seuil_depense_elevee', l: 'Montant de dépense à signaler (FCFA)', t: 'number', g: 'Dépenses' },
   { k: 'jours_saisie_tardive', l: 'Saisie tardive au-delà de (jours)', t: 'number', g: 'Dépenses' },
+  { k: 'prime_note_min', l: 'Note minimale pour la prime mensuelle (sur 10)', t: 'number', g: 'Agents terrain' },
+  { k: 'prime_montant', l: 'Montant de la prime mensuelle (FCFA)', t: 'number', g: 'Agents terrain' },
   { k: 'delai_session_min', l: "Déconnexion automatique après inactivité (minutes)", t: 'number', g: 'Sécurité' },
 ];
 
@@ -127,7 +137,8 @@ export const REFS = {
     f: [
       { k: 'code', l: 'Code', t: 'text' }, { k: 'nom', l: 'Nom complet', t: 'text', req: 1 },
       { k: 'telephone', l: 'Téléphone pro.', t: 'text' }, { k: 'equipe_id', l: 'Équipe', t: 'ref:equipes' },
-      { k: 'zone_id', l: 'Zone', t: 'ref:zones' }, { k: 'date_affectation', l: "Date d'affectation", t: 'date' },
+      { k: 'zone_id', l: 'Zone', t: 'ref:zones' }, { k: 'marche_id', l: 'Marché d’affectation', t: 'ref:marches' },
+      { k: 'date_affectation', l: "Date d'affectation", t: 'date' },
     ],
   },
   marches: {
@@ -231,7 +242,7 @@ export const DEFAULT_MARCHES = [
 export const WRITABLE = {
   zones: ['nom', 'actif'],
   equipes: ['code', 'nom', 'zone_id', 'responsable', 'actif'],
-  agents: ['code', 'nom', 'telephone', 'equipe_id', 'zone_id', 'date_affectation', 'actif'],
+  agents: ['code', 'nom', 'telephone', 'equipe_id', 'zone_id', 'marche_id', 'date_affectation', 'actif'],
   marches: ['nom', 'commune', 'zone_id', 'equipe_id', 'actif'],
   clients: ['code', 'nom', 'type', 'marche_id', 'telephone', 'plafond_cartons', 'depositaire', 'actif'],
   produits: ['code', 'nom', 'gamme', 'packs_par_carton', 'prix_ref', 'actif'],
@@ -243,7 +254,14 @@ export const TABLES = [
   'zones', 'equipes', 'agents', 'marches', 'clients', 'produits', 'vehicules', 'categories_depense',
   'parametres', 'roles', 'utilisateurs', 'compteurs', 'ventes', 'vente_lignes', 'remboursements', 'relances',
   'stock_mouvements', 'depenses', 'depense_repartitions', 'depense_validations', 'budgets', 'clotures',
-  'anomalies', 'imports', 'audit_log',
+  'anomalies', 'imports', 'audit_log', 'objectifs', 'suivi_agents',
+];
+
+// Fiche mensuelle d'un agent terrain (présence, activité, évaluation)
+export const SUIVI_CHAMPS = [
+  ['jours_presents', 'Jours présents', 'int'], ['retards', 'Retards', 'int'], ['abs_j', 'Absences justifiées', 'int'], ['abs_nj', 'Absences non justifiées', 'int'],
+  ['ventes_declarees', 'Ventes déclarées (ctn)', 'num'], ['obj_destock', 'Objectif déstockage (ctn)', 'num'], ['destock', 'Déstockage réalisé (ctn)', 'num'],
+  ['visites', 'Visites', 'int'], ['nouveaux_clients', 'Nouveaux clients', 'int'], ['plv', 'PLV posées', 'int'], ['note', 'Note /10', 'note'],
 ];
 
 // Catégories dont la pièce a une période de validité (documents du véhicule)

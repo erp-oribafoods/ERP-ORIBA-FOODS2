@@ -3,7 +3,7 @@ import { App, nm, pageHead } from '../app.js';
 import { esc, $, $$, fmtD, Table, modal, field, readForm, showErr, busy, toast, icon, pill } from '../lib/ui.js';
 import { today, addDays } from '../../shared/logic.js';
 
-const TABLES_LBL = { ventes: 'Ventes', remboursements: 'Remboursements', relances: 'Relances', stock_mouvements: 'Stock confié', depenses: 'Dépenses', budgets: 'Budgets', clotures: 'Clôtures', parametres: 'Paramètres', utilisateurs: 'Utilisateurs', roles: 'Rôles', anomalies: 'Anomalies', imports: 'Reprises de données', produits: 'Produits', agents: 'Agents', clients: 'Clients', marches: 'Marchés', zones: 'Zones', equipes: 'Équipes', vehicules: 'Véhicules', categories_depense: 'Catégories de dépenses' };
+const TABLES_LBL = { ventes: 'Ventes', remboursements: 'Remboursements', relances: 'Relances', stock_mouvements: 'Stock confié', depenses: 'Dépenses', budgets: 'Budgets', clotures: 'Clôtures', parametres: 'Paramètres', utilisateurs: 'Utilisateurs', roles: 'Rôles', anomalies: 'Anomalies', imports: 'Reprises de données', produits: 'Produits', agents: 'Agents', clients: 'Clients', marches: 'Marchés', zones: 'Zones', equipes: 'Équipes', vehicules: 'Véhicules', categories_depense: 'Catégories de dépenses', objectifs: 'Objectifs', suivi_agents: 'Suivi des agents terrain' };
 
 export function signalAnomalie(type, id, label) {
   modal({ title: `Signaler une anomalie — ${label}`,

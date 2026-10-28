@@ -346,3 +346,9 @@ img.piece { max-width: 100%; border-radius: 6px; }
 @media (prefers-reduced-motion: reduce) { .kpi, .card, .zcard, .hero, .kpi-ic, .hero-logo, .auth-logo img { animation: none !important; } }
 
 @media (max-width: 560px) { .hero-logo { display: none; } .hero { padding: 18px; } .hero h1 { font-size: 1.35rem; } .kpi { padding-left: 58px; } .kpi-ic { left: 10px; width: 36px; height: 36px; margin-top: -18px; } }
+
+/* Saisie groupée des fiches agents */
+.modal.xl { width: min(1400px, 100%); }
+.grid-in input[type=number] { width: 78px; padding: 5px 6px; text-align: right; }
+.grid-in input.w-txt { width: 200px; padding: 5px 6px; }
+.grid-in td { vertical-align: middle; }

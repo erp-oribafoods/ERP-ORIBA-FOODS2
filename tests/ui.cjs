@@ -73,9 +73,9 @@ const map = {
     await page.screenshot({ path: `${OUT}/${viewport.width}-${scheme}-form-depense.png` });
     await ctx.close();
   };
-  const all = ['objectifs', 'terrain', 'agents', 'clients', 'logistique', 'tableau-de-bord', 'analyses', 'ventes-comptant', 'ventes-credit', 'remboursements', 'creances', 'stock', 'depenses', 'pilotage-depenses', 'budgets', 'cloture', 'referentiels', 'parametres', 'audit', 'mon-compte'];
-  await run({ width: 1440, height: 900 }, 'light', { dg: all, admin: ['utilisateurs', 'roles', 'reprise', 'referentiels'], cdg: ['depenses'], superviseur: ['tableau-de-bord', 'depenses'] });
-  await run({ width: 390, height: 844 }, 'dark', { dg: ['terrain', 'logistique', 'tableau-de-bord', 'ventes-credit', 'creances', 'pilotage-depenses'] });
+  const all = ['suivi-agents', 'objectifs', 'terrain', 'agents', 'clients', 'logistique', 'tableau-de-bord', 'analyses', 'ventes-comptant', 'ventes-credit', 'remboursements', 'creances', 'stock', 'depenses', 'pilotage-depenses', 'budgets', 'cloture', 'referentiels', 'parametres', 'audit', 'mon-compte'];
+  await run({ width: 1440, height: 900 }, 'light', { dg: all, admin: ['utilisateurs', 'roles', 'reprise', 'referentiels'], cdg: ['depenses'], superviseur: ['tableau-de-bord', 'depenses', 'suivi-agents'], rh: ['suivi-agents', 'objectifs'] });
+  await run({ width: 390, height: 844 }, 'dark', { dg: ['suivi-agents', 'terrain', 'logistique', 'tableau-de-bord', 'ventes-credit', 'creances', 'pilotage-depenses'] });
   await browser.close();
   console.log(errors.length ? 'ERREURS:\n' + [...new Set(errors)].join('\n') : 'Aucune erreur');
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -361,3 +361,8 @@ img.piece { max-width: 100%; border-radius: 6px; }
 .saisie-c p { margin: 0 0 6px; }
 .saisie-a { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
 .steps-imp { margin: 0 0 12px; padding-left: 20px; line-height: 1.7; }
+
+/* Demandes carburant / vidange */
+.form-t { margin: 14px 0 6px; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); border-bottom: 2px solid var(--c1, #45307a); padding-bottom: 4px; }
+.dl-wrap { margin-bottom: 8px; }
+#dem-card > header .page-act { display: flex; flex-wrap: wrap; gap: 6px; }

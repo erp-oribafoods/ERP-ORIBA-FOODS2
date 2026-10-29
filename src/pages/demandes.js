@@ -68,7 +68,8 @@ export function demandeForm(type, d = null) {
       <div class="grid2">${field({ k: 'date', l: 'Date', t: 'date', req: 1 }, v.date)}
       ${field({ k: 'equipe_id', l: 'Équipe', t: 'options', options: opts('equipes'), req: 1 }, v.equipe_id)}
       <label class="fld"><span>Région</span><input id="dm-region" type="text" disabled value="${esc(v.zone_id ? nm.zone(v.zone_id) : '')}"></label>
-      ${field({ k: 'vehicule_id', l: 'Immatriculation', t: 'options', options: veh.map((x) => ({ v: x.id, l: `${x.immatriculation}${x.modele ? ' — ' + x.modele : ''}` })), req: 1, help: veh.length ? '' : 'Aucun véhicule : ajoutez-le dans Référentiels > Véhicules.' }, v.vehicule_id)}
+      ${field({ k: 'immatriculation', l: 'Immatriculation', t: 'text', req: 1, placeholder: 'Ex. 8A-1452-RN', help: 'Saisissez la plaque. Un véhicule déjà connu est retrouvé ; un nouveau est enregistré automatiquement pour l’équipe.' }, v.vehicule_id ? nm.vehicule(v.vehicule_id) : '')}
+      <datalist id="dm-veh">${veh.map((x) => `<option value="${esc(x.immatriculation)}">${esc(x.modele || nm.equipe(x.equipe_id))}</option>`).join('')}</datalist>
       ${field({ k: 'chef_equipe', l: 'Chef d’équipe / Coordinateur', t: 'text' }, v.chef_equipe)}</div>
       <h4 class="form-t">Détail de la demande ${type === 'carburant' ? 'carburant' : 'vidange'}</h4>
       <div class="grid2">${field({ k: 'km_actuel', l: 'Kilométrage actuel (obligatoire, km)', t: 'number', req: 1, min: 0 }, v.km_actuel)}
@@ -79,15 +80,18 @@ export function demandeForm(type, d = null) {
       <p class="err" hidden></p></form>`,
     footer: `<button class="btn ghost" data-close>Annuler</button><button class="btn primary" id="dm-save">${icon('check')} Enregistrer et transmettre</button>`,
     onMount: (m, close) => {
-      const eqSel = $('[name=equipe_id]', m), vSel = $('[name=vehicule_id]', m);
+      const eqSel = $('[name=equipe_id]', m), vSel = $('[name=immatriculation]', m);
+      vSel.setAttribute('list', 'dm-veh'); vSel.setAttribute('autocomplete', 'off');
+      const cleI = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const vehId = () => veh.find((x) => cleI(x.immatriculation) === cleI(vSel.value))?.id || '';
       const majEq = () => {
         const e = (App.D.equipes || []).find((x) => x.id === eqSel.value);
         $('#dm-region', m).value = e?.zone_id ? nm.zone(e.zone_id) : '';
         if (e?.responsable && !$('[name=chef_equipe]', m).value) $('[name=chef_equipe]', m).value = e.responsable;
-        if (e && !vSel.value) { const vv = veh.find((x) => x.equipe_id === e.id); if (vv) { vSel.value = vv.id; majVeh(); } }
+        if (e && !vSel.value) { const vv = veh.filter((x) => x.equipe_id === e.id); if (vv.length === 1) { vSel.value = vv[0].immatriculation; majVeh(); } }
       };
       const majVeh = () => {
-        const id = vSel.value; if (!id) { $('#dm-info', m).textContent = ''; return; }
+        const id = vehId(); if (!id) { $('#dm-info', m).textContent = vSel.value.trim() ? 'Nouveau véhicule : il sera enregistré pour l’équipe à l’envoi de la demande.' : ''; verifKm(); return; }
         const k = dernierKm(id), kv = dernierKmVidange(id, d?.id);
         if (type === 'vidange' && kv && !$('[name=km_derniere_vidange]', m).value) $('[name=km_derniere_vidange]', m).value = kv;
         const x = veh.find((y) => y.id === id);
@@ -96,13 +100,13 @@ export function demandeForm(type, d = null) {
         verifKm();
       };
       const verifKm = () => {
-        const k = vSel.value ? dernierKm(vSel.value) : null, val = Number($('[name=km_actuel]', m).value || 0);
+        const k = vehId() ? dernierKm(vehId()) : null, val = Number($('[name=km_actuel]', m).value || 0);
         const w = $('#dm-warn', m);
         w.hidden = !(k && val && val < k);
         if (!w.hidden) w.textContent = `Attention : ${fmtN(val)} km est inférieur au dernier kilométrage connu (${fmtN(k)} km). Vérifiez le compteur.`;
       };
       $('[name=km_actuel]', m).addEventListener('input', verifKm);
-      eqSel.addEventListener('change', majEq); vSel.addEventListener('change', majVeh);
+      eqSel.addEventListener('change', majEq); vSel.addEventListener('change', majVeh); vSel.addEventListener('input', majVeh);
       if (v.vehicule_id) majVeh();
       $('#dm-save', m.parentElement).addEventListener('click', (ev) => busy(ev.currentTarget, async () => {
         const f = readForm($('#dmf', m));

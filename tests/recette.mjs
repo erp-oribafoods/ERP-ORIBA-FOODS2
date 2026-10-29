@@ -238,6 +238,11 @@ await expectErr(call(sessions.daf, 'demande.decision', { id: dvi.id, decision: '
 await expectErr(call(sessions.daf, 'demande.decision', { id: dvi.id, decision: 'accordee', direction: { prochaine_vidange_km: 45000 } }), 'Prochaine vidange au-delà du kilométrage actuel', /au-delà/);
 const dvd = (await call(sessions.daf, 'demande.decision', { id: dvi.id, decision: 'accordee', direction: { cout_pris_en_charge: 35000, prochaine_vidange_km: 50300 } })).demande;
 ok(dvd.statut === 'accordee' && !dvd.depense_id && Number(dvd.prochaine_vidange_km) === 50300, 'Vidange accordée par la DAF, sans dépense automatique');
+{ const n1 = (await call(sessions.com, 'demande.save', { demande: { type: 'carburant', date: today(), equipe_id: eq.id, immatriculation: ' 8b-9999-rn ', km_actuel: 1200, montant_demande: 20000, motif: 'Essai immatriculation libre' } })).demande;
+  const n2 = (await call(sessions.com, 'demande.save', { demande: { type: 'carburant', date: today(), equipe_id: eq.id, immatriculation: '8B 9999 RN', km_actuel: 1300, montant_demande: 20000, motif: 'Même véhicule' } })).demande;
+  const vv = (await call(sessions.com, 'data.bootstrap')).data.vehicules.filter((v) => v.immatriculation.replace(/[^A-Z0-9]/g, '') === '8B9999RN');
+  ok(n1.vehicule_id && n1.vehicule_id === n2.vehicule_id && vv.length === 1 && vv[0].equipe_id === eq.id, 'Immatriculation saisie librement : véhicule créé une fois puis retrouvé');
+  await expectErr(call(sessions.com, 'demande.save', { demande: { type: 'carburant', date: today(), equipe_id: eq.id, km_actuel: 10, montant_demande: 1000, motif: 'x' } }), 'Immatriculation obligatoire', /immatriculation/); }
 await expectErr(call(sessions.com, 'demande.cancel', { id: dvi.id, motif: 'x' }), 'Demande décidée non annulable', /en attente/);
 const dv = (await call(sessions.com, 'dep.save', { depense: { date: today(), categorie_id: cats.ASSU.id, montant: 150000, equipe_id: eq.id, vehicule_id: B.vehicules[0].id, reference_piece: 'POL-1', validite_debut: today(), validite_fin: '2027-10-27' } })).depense;
 ok(dv.validite_fin === '2027-10-27', 'Assurance enregistrée avec sa date de fin de validité');

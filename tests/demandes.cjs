@@ -16,7 +16,7 @@ const map = { 'chart.umd.min.js': 'chart.js/dist/chart.umd.js', 'xlsx.full.min.j
   // nouvelle demande de carburant
   await page.click('#dem-c'); await page.waitForSelector('#dmf');
   await page.selectOption('[name=equipe_id]', { index: 1 }); await page.waitForTimeout(200);
-  const vs = await page.$$eval('[name=vehicule_id] option', (o) => o.map((x) => x.value).filter(Boolean)); await page.selectOption('[name=vehicule_id]', vs[vs.length - 1]);
+  await page.fill('[name=immatriculation]', '8C-9031-RN (démo)');
   await page.fill('[name=km_actuel]', '88000'); await page.fill('[name=montant_demande]', '65000'); await page.fill('[name=motif]', 'Trajet Niamey – Dosso – Gaya pour livraisons grossistes');
   await page.screenshot({ path: path.join(OUT, 'form-carb.png') });
   await page.click('#dm-save'); await page.waitForTimeout(900);

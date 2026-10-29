@@ -761,7 +761,19 @@ A['demande.save'] = async ({ t, user, perms, payload, ip }) => {
   if (!d.equipe_id) fail('Choisissez l’équipe.');
   const eq = await one(t, 'equipes', d.equipe_id, 'Équipe');
   if (!inScope(user, eq.id, eq.zone_id)) fail('Cette équipe est hors de votre périmètre.', 403);
-  if (!d.vehicule_id) fail('Choisissez le véhicule (immatriculation).');
+  // Immatriculation saisie librement : véhicule existant retrouvé, sinon créé et rattaché à l'équipe
+  const immat = clean(i.immatriculation)?.toUpperCase().replace(/\s+/g, ' ');
+  if (immat) {
+    const cle = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const ex = (await t.select('vehicules')).find((v) => cle(v.immatriculation) === cle(immat));
+    if (ex) d.vehicule_id = ex.id;
+    else {
+      const v = await t.insert('vehicules', { id: uid(), immatriculation: immat, equipe_id: eq.id, actif: true, created_at: nowISO() });
+      await audit(t, user, 'CREATION', 'vehicules', v.id, null, v, 'Créé depuis une demande de ' + (avant?.type || i.type), ip);
+      d.vehicule_id = v.id;
+    }
+  }
+  if (!d.vehicule_id) fail('Saisissez l’immatriculation du véhicule.');
   await one(t, 'vehicules', d.vehicule_id, 'Véhicule');
   d.km_actuel = num(d.km_actuel);
   if (!(d.km_actuel > 0)) fail('Le kilométrage actuel est obligatoire.');

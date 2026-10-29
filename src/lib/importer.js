@@ -4,6 +4,7 @@ import { App, nm } from '../app.js';
 import { esc, $, fmtN, fmtD, Table, toast, busy, pill, exportRows, saveBlob, icon, modal } from './ui.js';
 import { venteTotals, isDate, num, round2, lineCalc, today } from '../../shared/logic.js';
 import { REFS, SUIVI_CHAMPS, AXES_OBJECTIF, MODES_PAIEMENT_DEP } from '../../shared/schema.js';
+import { estListeObjectifs, controleListe, modeleListe } from './importObjectifs.js';
 import { estTB, TYPES_TB, analyseTB, detecterEquipe, creerManquants, payloadPropre, modeleTB } from './importTB.js';
 
 export const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -20,7 +21,7 @@ export const TYPES = {
   stock_remises: { l: 'Remises de stock confié', cols: ['date', 'depositaire', 'produit', 'quantite', 'valeur_unitaire', 'document'], ex: ['03/06/2026', 'C900', 'P-001', 500, 12500, 'BL-0141'], perm: ['stock', 'creer'], onglet: 'remises_stock' },
   depenses: { l: 'Dépenses (détail)', cols: ['date', 'equipe', 'categorie', 'vehicule', 'montant', 'mode_paiement', 'reference_piece', 'sans_piece', 'beneficiaire', 'description', 'validite_debut', 'validite_fin'], ex: ['05/11/2026', 'Niamey 1', 'Carburant', 'AB-1234-RN', 25000, 'Espèces', 'Ticket 0012', 'non', 'Station Total', '', '', ''], perm: ['depenses', 'creer'], onglet: 'depenses', aide: 'Les dépenses complètes sont soumises au circuit de validation ; celles qui demandent une photo du justificatif restent en brouillon pour qu’on y joigne la pièce.' },
   depenses_agregees: { l: 'Dépenses mensuelles agrégées', cols: ['mois', 'equipe', 'vehicule', 'categorie', 'montant', 'commentaire'], ex: ['2026-05', 'Zinder', '', 'Carburant', 250000, 'Total mai'], perm: ['depenses', 'creer'], onglet: 'depenses_mensuelles', aide: 'Un total par mois, équipe et catégorie (reprise des anciens tableaux).' },
-  objectifs: { l: 'Objectifs commerciaux', cols: ['mois', 'axe', 'cible', 'produit', 'objectif_cartons', 'objectif_ca'], ex: ['2026-11', 'agent', 'Nom de l’agent', '', 300, ''], perm: ['objectifs', 'modifier'], maj: true, onglet: 'objectifs', aide: '« axe » : agent, zone, equipe, marche, produit ou global. Videz les deux objectifs d’une ligne pour retirer l’objectif.' },
+  objectifs: { l: 'Objectifs commerciaux', cols: ['mois', 'axe', 'cible', 'produit', 'objectif_cartons', 'objectif_ca'], colsListe: ['Agent', 'Equipe', 'Fonction', 'Objectif (cartons / mois)'], ex: ['2026-11', 'agent', 'Nom de l’agent', '', 300, ''], perm: ['objectifs', 'modifier'], maj: true, onglet: 'objectifs', aide: '« axe » : agent, zone, equipe, marche, produit ou global. Videz les deux objectifs d’une ligne pour retirer l’objectif.' },
   suivi_agents: { l: 'Fiches des agents terrain', cols: ['mois', 'agent', ...SUIVI_CHAMPS.map((c) => c[0]), 'commentaire'], ex: ['2026-11', 'Nom de l’agent', 26, 1, 0, 0, '', 200, 180, 30, 2, 3, 8, ''], perm: ['suivi', 'modifier'], maj: true, onglet: 'suivi_agents', aide: 'Une ligne par agent et par mois. La ligne remplace toute la fiche du mois : une case vide efface la valeur.' },
   budgets: { l: 'Budgets de dépenses', cols: ['mois', 'equipe', 'categorie', 'vehicule', 'montant', 'commentaire'], ex: ['2026-11', 'Niamey 1', '', '', 250000, ''], perm: ['budgets', 'modifier'], maj: true, onglet: 'budgets', aide: 'Laissez « categorie » vide pour un budget global de l’équipe.' },
 };
@@ -267,6 +268,7 @@ function lignesActuelles(type, ctx = {}) {
 }
 
 export function telechargerModele(type, ctx = {}) {
+  if (type === 'objectifs') return window.XLSX ? modeleListe(ctx.mois) : toast('Module Excel non chargé.', 'err');
   const t = TYPES[type];
   if (!window.XLSX) return toast('Module Excel non chargé.', 'err');
   const X = window.XLSX;
@@ -343,7 +345,7 @@ export function ouvrirImport(type, ctx = {}) {
       <div class="filters"><label class="btn primary"><input type="file" accept=".xlsx,.xls,.csv" hidden data-file>${icon('upload')} Choisir le fichier Excel</label>
       <button class="btn ghost" type="button" data-tpl>${icon('download')} ${tbPossible ? 'Modèle vierge au format tableau de bord' : 'Télécharger le modèle'}</button></div>
       <div data-opt hidden></div>
-      <p class="muted small">${tbPossible ? 'Les fichiers « TB … ORIBA FOODS » sont lus directement. Un fichier au format simple (une feuille, colonnes <code>' + t.cols.join(' · ') + '</code>) reste accepté.' : `Colonnes : <code>${t.cols.join(' · ')}</code>`}${t.aide && !tbPossible ? `<br>${esc(t.aide)}` : ''}</p><div data-res></div><div data-res2></div>`,
+      <p class="muted small">${tbPossible ? 'Les fichiers « TB … ORIBA FOODS » sont lus directement. Un fichier au format simple (une feuille, colonnes <code>' + t.cols.join(' · ') + '</code>) reste accepté.' : t.colsListe ? `Format de la liste des agents et objectifs de vente : colonnes <code>${t.colsListe.join(' · ')}</code> (le modèle est pré-rempli avec les agents). Le format détaillé <code>${t.cols.join(' · ')}</code> reste accepté pour les objectifs par zone, équipe, marché ou produit.` : `Colonnes : <code>${t.cols.join(' · ')}</code>`}${t.aide && !tbPossible && !t.colsListe ? `<br>${esc(t.aide)}` : ''}</p><div data-res></div><div data-res2></div>`,
     onMount: (m, close) => {
       let wb = null, fname = '';
       const opt = { equipe_id: ctx.equipe_id || '', creer: true, depositaire_id: '' };
@@ -387,7 +389,10 @@ export function ouvrirImport(type, ctx = {}) {
           if (!window.XLSX) throw new Error('Module Excel non chargé.');
           const w = window.XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
           fname = file.name;
-          if (tbPossible && estTB(w)) {
+          if (type === 'objectifs' && estListeObjectifs(w)) {
+            $('[data-opt]', m).hidden = true; fname = file.name;
+            controleListe($('[data-res]', m), w, file.name, fermer);
+          } else if (tbPossible && estTB(w)) {
             wb = w; opt.equipe_id = opt.equipe_id || detecterEquipe(w);
             options(); analyserTB();
             if (!opt.equipe_id) toast('Choisissez l’équipe correspondant à ce fichier.', 'warn');

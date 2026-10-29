@@ -13,7 +13,7 @@ const moisPrec = (m) => { const [y, mm] = m.split('-').map(Number); const d = ne
 function cibles(axe) {
   if (axe === 'global') return [{ id: null, nom: 'Service commercial (tous)' }];
   const [table, label] = AXE_SRC[axe];
-  return (App.D[table] || []).filter((r) => r.actif !== false).map((r) => ({ id: r.id, nom: r[label] })).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+  return (App.D[table] || []).filter((r) => r.actif !== false).map((r) => ({ id: r.id, nom: r[label], equipe: axe === 'agent' ? nm.equipe(r.equipe_id) : '', fonction: axe === 'agent' ? r.fonction || '' : '' })).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
 }
 
 export function suivi(axe, moisDu, moisAu, produitId) {
@@ -45,7 +45,7 @@ export function suivi(axe, moisDu, moisAu, produitId) {
       else if (ref >= attendu * 0.6) { statut = 'En retard'; sev = 'warn'; }
       else { statut = 'Critique'; sev = 'crit'; }
     }
-    return { id: c.id || 'global', nom: c.nom, oQ, rQ, tQ, oCA, rCA, tCA, ecart: oCA !== null ? rCA - oCA : null, proj, projT: proj !== null && (oCA || oQ) ? (proj / (oCA || oQ)) * 100 : null, statut, sev, nb: new Set(fx.map((x) => x.v.id)).size };
+    return { id: c.id || 'global', nom: c.nom, equipe: c.equipe, fonction: c.fonction, oQ, rQ, tQ, oCA, rCA, tCA, ecart: oCA !== null ? rCA - oCA : null, proj, projT: proj !== null && (oCA || oQ) ? (proj / (oCA || oQ)) * 100 : null, statut, sev, nb: new Set(fx.map((x) => x.v.id)).size };
   });
   return { rows, enCours, fraction, mois };
 }
@@ -85,7 +85,7 @@ export function renderObjectifs(root) {
     new Table({ title: `Objectifs et réalisations par ${AXES_OBJECTIF[F.axe].toLowerCase()}`, rows, sort: { k: 'rCA', dir: -1 }, pageSize: 40,
       meta: () => `Période : ${moisLabel(F.du)} à ${moisLabel(F.au)}${F.produit_id ? ' · produit ' + nm.produit(F.produit_id) : ''}`,
       foot: (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : ['oQ', 'rQ'].includes(c.k) ? `<b>${fmtQ(rs.reduce((s, r) => s + (r[c.k] || 0), 0))}</b>` : ['oCA', 'rCA'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + (r[c.k] || 0), 0))}</b>` : ''),
-      cols: [{ k: 'nom', l: AXES_OBJECTIF[F.axe] }, { k: 'nb', l: 'Ventes', num: 1 },
+      cols: [{ k: 'nom', l: AXES_OBJECTIF[F.axe] }, ...(F.axe === 'agent' ? [{ k: 'equipe', l: 'Équipe' }, { k: 'fonction', l: 'Fonction' }] : []), { k: 'nb', l: 'Ventes', num: 1 },
         { k: 'oQ', l: 'Objectif ctn', num: 1, f: (r) => (r.oQ === null ? '—' : fmtQ(r.oQ)) }, { k: 'rQ', l: 'Réalisé ctn', num: 1, f: (r) => fmtQ(r.rQ) }, { k: 'tQ', l: 'Atteinte ctn', num: 1, v: (r) => r.tQ ?? -1, f: (r) => tx(r.tQ), x: (r) => (r.tQ === null ? '' : Math.round(r.tQ)) },
         { k: 'oCA', l: 'Objectif FCFA', num: 1, f: (r) => (r.oCA === null ? '—' : fmtN(r.oCA)) }, { k: 'rCA', l: 'Réalisé FCFA', num: 1, f: (r) => `<b>${fmtN(r.rCA)}</b>` }, { k: 'tCA', l: 'Atteinte FCFA', num: 1, v: (r) => r.tCA ?? -1, f: (r) => tx(r.tCA), x: (r) => (r.tCA === null ? '' : Math.round(r.tCA)) },
         { k: 'ecart', l: 'Écart FCFA', num: 1, v: (r) => r.ecart ?? 0, f: (r) => (r.ecart === null ? '—' : `<span class="${r.ecart < 0 ? 't-crit' : 't-ok'}">${r.ecart > 0 ? '+' : ''}${fmtN(r.ecart)}</span>`) },

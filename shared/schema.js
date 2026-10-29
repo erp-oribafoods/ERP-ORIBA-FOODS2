@@ -139,7 +139,7 @@ export const REFS = {
     l: 'Agents commerciaux', one: 'agent',
     f: [
       { k: 'code', l: 'Code', t: 'text' }, { k: 'nom', l: 'Nom complet', t: 'text', req: 1 },
-      { k: 'telephone', l: 'Téléphone pro.', t: 'text' }, { k: 'equipe_id', l: 'Équipe', t: 'ref:equipes' },
+      { k: 'fonction', l: 'Fonction', t: 'text' }, { k: 'telephone', l: 'Téléphone pro.', t: 'text' }, { k: 'equipe_id', l: 'Équipe', t: 'ref:equipes' },
       { k: 'zone_id', l: 'Zone', t: 'ref:zones' }, { k: 'marche_id', l: 'Marché d’affectation', t: 'ref:marches' },
       { k: 'date_affectation', l: "Date d'affectation", t: 'date' },
     ],
@@ -245,7 +245,7 @@ export const DEFAULT_MARCHES = [
 export const WRITABLE = {
   zones: ['nom', 'actif'],
   equipes: ['code', 'nom', 'zone_id', 'responsable', 'actif'],
-  agents: ['code', 'nom', 'telephone', 'equipe_id', 'zone_id', 'marche_id', 'date_affectation', 'actif'],
+  agents: ['code', 'nom', 'fonction', 'telephone', 'equipe_id', 'zone_id', 'marche_id', 'date_affectation', 'actif'],
   marches: ['nom', 'commune', 'zone_id', 'equipe_id', 'actif'],
   clients: ['code', 'nom', 'type', 'marche_id', 'telephone', 'plafond_cartons', 'depositaire', 'actif'],
   produits: ['code', 'nom', 'gamme', 'packs_par_carton', 'prix_ref', 'actif'],

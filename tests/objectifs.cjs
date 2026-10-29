@@ -1,0 +1,82 @@
+// Objectifs au format « Liste des agents et Objectif de vente » : import, réimport sans doublon, modèle pré-rempli
+const { chromium } = require('playwright'); const fs = require('fs'); const path = require('path');
+const CDN = process.env.CDN_DIR, OUT = process.env.OUT_DIR, SRC = process.env.LISTE;
+const XLSX = require(path.join(CDN, 'node_modules/xlsx'));
+const map = { 'chart.umd.min.js': 'chart.js/dist/chart.umd.js', 'xlsx.full.min.js': 'xlsx/dist/xlsx.full.min.js', 'jspdf.umd.min.js': 'jspdf/dist/jspdf.umd.min.js', 'jspdf.plugin.autotable.min.js': 'jspdf-autotable/dist/jspdf.plugin.autotable.min.js' };
+let echecs = 0;
+const verif = (ok, msg) => { console.log(`${ok ? '✓' : '✗'} ${msg}`); if (!ok) echecs++; };
+(async () => {
+  const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"></head><body>' + fs.readFileSync(path.join(__dirname, '../dist/demo.html'), 'utf8') + '</body></html>';
+  const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true }); const errs = [];
+  await ctx.route('**/*', (r) => { const u = r.request().url(); if (u.startsWith('http://erp.test/')) return r.fulfill({ contentType: 'text/html', body: html }); const f = Object.keys(map).find((k) => u.endsWith(k)); if (f) return r.fulfill({ contentType: 'application/javascript', body: fs.readFileSync(path.join(CDN, 'node_modules', map[f])) }); if (u.includes('fonts.g')) return r.fulfill({ contentType: 'text/css', body: '' }); return r.abort(); });
+  const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message)); p.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
+  await p.goto('http://erp.test/'); await p.waitForSelector('#lf', { timeout: 120000 });
+  await p.fill('[name=identifiant]', 'commercial'); await p.fill('[name=password]', 'Demo2026'); await p.click('#lf button[type=submit]'); await p.waitForSelector('.layout');
+  const D = () => p.evaluate(() => window.__ERP_DEBUG__());
+  const avant = await D();
+  const ouvrir = async (f) => {
+    await p.keyboard.press('Escape').catch(() => {}); await p.waitForTimeout(200);
+    await p.evaluate(() => { location.hash = 'objectifs'; }); await p.waitForTimeout(600);
+    await p.click('[data-imp="objectifs"]'); await p.waitForSelector('.modal [data-file]', { state: 'attached' });
+    await p.setInputFiles('.modal [data-file]', f); await p.waitForSelector('.modal [data-res] .note'); await p.waitForTimeout(300);
+    return (await p.textContent('.modal [data-res] .note')).replace(/\s+/g, ' ');
+  };
+  // Mois : novembre à décembre de l'année en cours
+  const periode = async (du, au) => { await p.fill('.modal [data-du]', du); await p.dispatchEvent('.modal [data-du]', 'change'); await p.fill('.modal [data-au]', au); await p.dispatchEvent('.modal [data-au]', 'change'); await p.waitForTimeout(300); };
+  let note = await ouvrir(SRC);
+  console.log('  ', note.slice(0, 400));
+  const an = new Date().getFullYear();
+  await periode(`${an}-11`, `${an}-12`);
+  note = (await p.textContent('.modal [data-res] .note')).replace(/\s+/g, ' ');
+  verif(/43 agent\(s\)/.test(note) && /16[\s  ]?650 cartons/.test(note) && /2 mois/.test(note), `Contrôle : 43 agents, 16 650 cartons par mois, 2 mois → ${note.slice(0, 160)}`);
+  await p.screenshot({ path: path.join(OUT, 'obj-controle.png') });
+  await p.click('.modal [data-res] [data-go]'); await p.waitForSelector('.modal [data-res] .note.ok', { timeout: 60000 });
+  console.log('  ', (await p.textContent('.modal [data-res] .note.ok')).replace(/\s+/g, ' '));
+  const apres = await D();
+  const objs = apres.objectifs.filter((o) => o.actif !== false && o.axe === 'agent' && o.mois >= `${an}-11` && o.mois <= `${an}-12`);
+  const tot = objs.filter((o) => o.mois === `${an}-11`).reduce((s, o) => s + Number(o.objectif_cartons), 0);
+  verif(objs.length === 86 && tot === 16650, `Objectifs enregistrés : ${objs.length} (43 agents × 2 mois), total novembre ${tot} cartons`);
+  const nouveaux = apres.agents.length - avant.agents.length;
+  console.log('   Agents créés :', nouveaux);
+  const sansDoublon = new Set(apres.agents.map((a) => `${a.equipe_id}|${a.nom.toLowerCase().trim()}`)).size === apres.agents.length;
+  verif(sansDoublon, 'Aucun agent en double');
+  const mar = apres.equipes.find((e) => e.nom === 'Maradi');
+  verif(/Assayade/.test(mar?.responsable || '') && /Balogi/.test(mar?.responsable || ''), `Chefs d’équipe Maradi : ${mar?.responsable}`);
+  const sidi = apres.agents.find((a) => a.nom === 'Sidi Mohamed Baby');
+  verif(sidi && /chef/i.test(sidi.fonction || ''), `Fonction enregistrée : Sidi Mohamed Baby → ${sidi?.fonction}`);
+  // Réimport du même fichier : rien à faire
+  note = await ouvrir(SRC); await periode(`${an}-11`, `${an}-12`);
+  note = (await p.textContent('.modal [data-res] .note')).replace(/\s+/g, ' ');
+  verif(/0 nouveau\(x\), 0 mise\(s\) à jour, 43 inchangé/.test(note) && await p.$eval('.modal [data-go]', (x) => x.disabled), `Même fichier réimporté : ${note.slice(note.indexOf('0 nouveau'), note.indexOf('0 nouveau') + 70)}`);
+  // Modèle téléchargé : même format, pré-rempli ; une modification → une seule mise à jour
+  await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+  await p.evaluate((m) => { window.__ERP_DEBUG__; }, null);
+  await p.click('[data-imp="objectifs"]'); await p.waitForSelector('.modal [data-tpl]');
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('.modal [data-tpl]')]);
+  const fm = path.join(OUT, 'modele_objectifs.xlsx'); await dl.saveAs(fm);
+  const wb = XLSX.readFile(fm); const ws = wb.Sheets[wb.SheetNames[0]]; const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  verif(/Liste des agents et Objectif de vente/.test(aoa[0][0]) && aoa[1].join('|') === 'Agent|Equipe|Fonction|Objectif (cartons / mois)', `Modèle : « ${aoa[0][0]} » / ${aoa[1].join(' | ')} / ${aoa.length - 3} agents`);
+  console.log('   Fichier modèle :', wb.SheetNames.join(', '), '· dernière ligne :', aoa[aoa.length - 1].join(' | '), '· formule', ws[`D${aoa.length}`]?.f);
+  const i = aoa.findIndex((r) => r[0] === 'Zara Amadou'); aoa[i][3] = 150;
+  const wb2 = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb2, XLSX.utils.aoa_to_sheet(aoa), 'Objectifs'); const f2 = path.join(OUT, 'modele_modifie.xlsx'); XLSX.writeFile(wb2, f2);
+  await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+  note = await ouvrir(f2); await periode(`${an}-11`, `${an}-11`);
+  note = (await p.textContent('.modal [data-res] .note')).replace(/\s+/g, ' ');
+  const nb = aoa.length - 3;
+  verif(/ 1 mise\(s\) à jour, /.test(note) && / 0 rejeté/.test(note), `Modèle modifié (Zara Amadou 100 → 150) : ${note}`);
+  await p.click('.modal [data-res] [data-go]'); await p.waitForSelector('.modal [data-res] .note.ok', { timeout: 60000 });
+  const z = (await D()); const za = z.agents.find((a) => a.nom === 'Zara Amadou');
+  const zo = z.objectifs.filter((o) => o.cible_id === za.id && o.actif !== false).map((o) => `${o.mois}:${o.objectif_cartons}`).sort();
+  verif(zo.join(',') === `${an}-11:150,${an}-12:100`, `Zara Amadou : ${zo.join(', ')} (novembre modifié seul)`);
+  // Page Objectifs : colonnes Équipe et Fonction
+  await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+  await p.evaluate((m) => { location.hash = 'objectifs'; }, null); await p.waitForTimeout(400);
+  await p.fill('#o-du', `${an}-11`); await p.dispatchEvent('#o-du', 'change'); await p.fill('#o-au', `${an}-11`); await p.dispatchEvent('#o-au', 'change'); await p.waitForTimeout(500);
+  const th = await p.$$eval('#ot th', (t) => t.map((x) => x.textContent.trim()));
+  verif(th.includes('Fonction') && th.includes('Équipe'), `Tableau des objectifs : ${th.slice(0, 5).join(' | ')}…`);
+  await p.screenshot({ path: path.join(OUT, 'obj-page.png') });
+  verif(!errs.length, errs.length ? 'Erreurs : ' + errs.slice(0, 3).join(' | ') : 'Aucune erreur dans la page');
+  await b.close();
+  console.log(echecs ? `${echecs} échec(s)` : 'Tous les contrôles sont réussis');
+  process.exit(echecs ? 1 : 0);
+})();

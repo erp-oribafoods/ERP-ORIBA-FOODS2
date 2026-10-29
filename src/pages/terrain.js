@@ -171,14 +171,14 @@ function agentStats(agents, facts) {
     const fx = facts.filter((x) => x.agent_id === a.id);
     const credits = (App.D.ventes || []).filter((v) => v.agent_id === a.id && v.mode === 'credit' && v.statut === 'validee');
     const oc = openCredits(App.I, { preset: 'tout', agent_id: a.id }).filter((x) => x.ci.solde > 0);
-    return { id: a.id, nom: a.nom, code: a.code, telephone: a.telephone, equipe: nm.equipe(a.equipe_id), zone: nm.zone(a.zone_id || App.I.equipes.get(a.equipe_id)?.zone_id), actif: a.actif !== false,
+    return { id: a.id, nom: a.nom, code: a.code, fonction: a.fonction || '', telephone: a.telephone, equipe: nm.equipe(a.equipe_id), zone: nm.zone(a.zone_id || App.I.equipes.get(a.equipe_id)?.zone_id), actif: a.actif !== false,
       ca: fx.reduce((s, x) => s + x.montant, 0), ctn: fx.reduce((s, x) => s + x.cartons, 0), nb: new Set(fx.map((x) => x.v.id)).size, clients: new Set(fx.filter((x) => x.client_id).map((x) => x.client_id)).size,
       marches: [...new Set(fx.map((x) => nm.marche(x.marche_id)))].join(', '), creances: oc.reduce((s, x) => s + x.ci.solde, 0), retards: oc.filter((x) => x.ci.statut === 'En retard').length,
       derniere: fx.map((x) => x.date).sort().pop() || '', nbCredits: credits.length };
   });
 }
 const AGENT_COLS = [
-  { k: 'nom', l: 'Agent' }, { k: 'equipe', l: 'Équipe' }, { k: 'zone', l: 'Zone' }, { k: 'marches', l: 'Marchés couverts', cls: 'wrap' },
+  { k: 'nom', l: 'Agent' }, { k: 'fonction', l: 'Fonction' }, { k: 'equipe', l: 'Équipe' }, { k: 'zone', l: 'Zone' }, { k: 'marches', l: 'Marchés couverts', cls: 'wrap' },
   { k: 'nb', l: 'Ventes', num: 1 }, { k: 'ctn', l: 'Cartons', num: 1, f: (r) => fmtQ(r.ctn) }, { k: 'ca', l: 'CA FCFA', num: 1, f: (r) => `<b>${fmtN(r.ca)}</b>` },
   { k: 'clients', l: 'Clients servis', num: 1 }, { k: 'creances', l: 'Créances ouvertes', num: 1, f: (r) => fmtN(r.creances) },
   { k: 'retards', l: 'Retards', num: 1, f: (r) => (r.retards ? `<span class="t-crit">${r.retards}</span>` : '0') },

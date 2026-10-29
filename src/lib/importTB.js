@@ -3,6 +3,7 @@
 // les remboursements sont déduits des colonnes « Montant remboursé » / « Date remboursement » du Journal Crédit.
 import { App, nm } from '../app.js';
 import { fmtN, fmtD } from './ui.js';
+import { trouverAgent } from './noms.js';
 import { venteTotals, creditInfo, isDate, num, round2, lineCalc, today } from '../../shared/logic.js';
 
 const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -95,7 +96,7 @@ function referentiels(eqId) {
   const produits = (App.D.produits || []).filter((p) => p.actif !== false);
   return {
     eq, code,
-    agent(nom) { const n = norm(nom); if (!n) return null; const l = agents.filter((a) => norm(a.nom) === n); return (l.find((a) => a.equipe_id === eqId) || (l.length === 1 ? l[0] : null))?.id || undefined; },
+    agent(nom) { if (!norm(nom)) return null; return trouverAgent(nom, agents, eqId)?.id || undefined; },
     marche(nom) { const n = sansMarche(nom); if (!n) return null; const k = ALIAS[n] || n; const l = marches.filter((m) => (ALIAS[sansMarche(m.nom)] || sansMarche(m.nom)) === k); return (l.find((m) => m.equipe_id === eqId) || l.find((m) => m.zone_id === eq?.zone_id) || l[0])?.id || undefined; },
     client(lib) {
       const s = t(lib); if (!s) return null;

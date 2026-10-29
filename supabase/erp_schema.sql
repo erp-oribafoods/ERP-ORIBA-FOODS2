@@ -374,3 +374,6 @@ begin
   raise exception 'Suppression interdite : utilisez l''annulation avec motif';
 end $f$;
 update roles set permissions = permissions || '{"suppression":["supprimer"]}'::jsonb where nom = 'Responsable Commercial & Force de Vente';
+
+-- 20261029160000_agents_fonction
+alter table agents add column if not exists fonction text;

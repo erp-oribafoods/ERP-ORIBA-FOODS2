@@ -297,6 +297,14 @@ A['ref.save'] = async ({ t, user, perms, payload, ip }) => {
     const dup = existing.find((r) => r.id !== id && low(r[labelKey]) === low(row[labelKey]));
     if (dup) fail(`« ${row[labelKey]} » existe déjà.`);
   }
+  // Pas de doublon d'agent ou de marché dans une même équipe, ni de client portant le même nom
+  if (row.nom && ['agents', 'marches', 'clients'].includes(table)) {
+    const cleNom = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/^march[e]\s+/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    const avant = id ? existing.find((r) => r.id === id) : null;
+    const eq = row.equipe_id !== undefined ? row.equipe_id : avant?.equipe_id;
+    const dup = existing.find((r) => r.id !== id && cleNom(r.nom) === cleNom(row.nom) && (table === 'clients' || (r.equipe_id || null) === (eq || null)));
+    if (dup) fail(`« ${row.nom} » existe déjà${table === 'clients' ? (dup.code ? ` (code ${dup.code})` : '') : ' dans cette équipe'} : doublon refusé.`);
+  }
   if (id) {
     const avant = existing.find((r) => r.id === id);
     if (!avant) fail('Élément introuvable.', 404);

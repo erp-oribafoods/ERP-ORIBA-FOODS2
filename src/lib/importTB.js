@@ -80,6 +80,9 @@ export function chefFichier(wb) {
   return null;
 }
 
+// Deux noms sont proches s'ils partagent un mot significatif (hors « Elh », « El Hadj »…)
+const motsNom = (s) => norm(s).split('_').filter((w) => w.length > 2 && !['elh', 'hadj', 'hadji', 'alh'].includes(w));
+const procheNom = (a, b) => { const A = new Set(motsNom(a)); return motsNom(b).some((w) => A.has(w)); };
 // Correspondances avec les référentiels, en privilégiant l'équipe du fichier
 const ALIAS = { petit_marche: 'petit_marche', nouveaux_marche: 'nouveau_marche', nouveau_marche: 'nouveau_marche', gamkale: 'gamkalle', aeroport: 'aeroport', grand_marche: 'grand_marche' };
 const sansMarche = (s) => norm(t(s).replace(/^march[eé]\s+/i, ''));
@@ -97,10 +100,12 @@ function referentiels(eqId) {
     client(lib) {
       const s = t(lib); if (!s) return null;
       const m = s.match(/^Clien?t?\s*([A-Z0-9]+)\s*-\s*(.*)$/i);
-      if (m) { const c = clients.find((x) => norm(x.code) === norm(`${code}-${m[1]}`)); if (c) return c.id; }
       const nom = m ? t(m[2]) : s;
-      const l = clients.filter((c) => norm(c.nom) === norm(nom));
-      return (l.length === 1 ? l[0] : null)?.id || undefined;
+      // Le nom prime sur la lettre : un même fichier peut donner la même lettre à deux clients différents
+      const l = nom && !/^d[ée]taillants?$/i.test(nom) ? clients.filter((c) => norm(c.nom) === norm(nom)) : [];
+      if (l.length === 1) return l[0].id;
+      if (m) { const c = clients.find((x) => norm(x.code) === norm(`${code}-${m[1]}`) && (!nom || /^d[ée]taillants?$/i.test(nom) || /nom à compléter/.test(x.nom) || /^d[ée]taillants divers/i.test(x.nom) || procheNom(x.nom, nom))); if (c) return c.id; }
+      return l.length > 1 ? l[0].id : undefined;
     },
     produit(nom) { const n = norm(nom); return produits.find((p) => norm(p.nom) === n || norm(p.code) === n)?.id || (n ? undefined : null); },
   };
@@ -130,7 +135,7 @@ export async function creerManquants(manq) {
     const pris = new Set((App.D.clients || []).map((c) => c.code));
     await App.act('import.run', { type: 'clients', mode: 'courant', fichier: 'Import TB — nouveaux clients', rows: manq.clients.map((lib, i) => {
       const m = lib.match(/^Clien?t?\s*([A-Z0-9]+)\s*-\s*(.*)$/i);
-      let code = m ? `${eq.code}-${m[1].toUpperCase()}` : null; if (code && pris.has(code)) code = null; if (code) pris.add(code);
+      let code = m ? `${eq.code}-${m[1].toUpperCase()}` : null; if (code && pris.has(code)) { let n = 2; while (pris.has(`${code}${n}`)) n++; code = `${code}${n}`; } if (code) pris.add(code);
       const det = /d[ée]taillant/i.test(lib);
       const nom = det ? `Détaillants divers (${eq.nom})` : m && t(m[2]) ? t(m[2]) : `${m ? 'Client ' + m[1] : lib} — ${eq.nom} (nom à compléter)`;
       return { ligne: i + 1, data: { code, nom, type: det ? 'Détaillant' : null } };

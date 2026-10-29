@@ -4,6 +4,7 @@ import { App, nm } from '../app.js';
 import { esc, $, fmtN, fmtD, Table, toast, busy, pill, exportRows, saveBlob, icon, modal } from './ui.js';
 import { venteTotals, isDate, num, round2, lineCalc, today } from '../../shared/logic.js';
 import { REFS, SUIVI_CHAMPS, AXES_OBJECTIF, MODES_PAIEMENT_DEP } from '../../shared/schema.js';
+import { estTB, TYPES_TB, analyseTB, detecterEquipe, creerManquants, payloadPropre, modeleTB } from './importTB.js';
 
 export const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 
@@ -27,7 +28,7 @@ export const peutImporter = (type) => { const t = TYPES[type]; return !!t && App
 
 export function toISO(v) {
   if (v === null || v === undefined || v === '') return null;
-  if (v instanceof Date && !isNaN(v)) return new Date(Date.UTC(v.getFullYear(), v.getMonth(), v.getDate())).toISOString().slice(0, 10);
+  if (v instanceof Date && !isNaN(v)) { const j = new Date(v.getTime() + 12 * 3600 * 1000); return new Date(Date.UTC(j.getFullYear(), j.getMonth(), j.getDate())).toISOString().slice(0, 10); } // arrondi au jour le plus proche (dates Excel décalées de quelques secondes)
   if (typeof v === 'number') return new Date(Math.round((v - 25569) * 86400000)).toISOString().slice(0, 10);
   const s = String(v).trim();
   let m = s.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$/);
@@ -303,7 +304,7 @@ export async function lireFichier(type, file) {
 const LIB = { ok: ['Nouvelle', 'ok'], maj: ['Mise à jour', 'info'], identique: ['Inchangée', 'mute'], doublon: ['Doublon potentiel', 'warn'], rejet: ['Rejetée', 'crit'] };
 
 // Affiche le contrôle et envoie au serveur ; mode « courant » (rubriques) ou « historique » (reprise)
-export function rapportControle(host, type, fname, res, { mode = 'courant', onDone } = {}) {
+export function rapportControle(host, type, fname, res, { mode = 'courant', onDone, preparer } = {}) {
   const c = Object.fromEntries(Object.keys(LIB).map((k) => [k, res.filter((r) => r.statut === k).length]));
   const RANG = { rejet: 0, doublon: 1, maj: 2, ok: 3, identique: 4 };
   res.sort((a, b) => RANG[a.statut] - RANG[b.statut]);
@@ -320,7 +321,8 @@ export function rapportControle(host, type, fname, res, { mode = 'courant', onDo
   go.addEventListener('click', (ev) => busy(ev.currentTarget, async () => {
     const chosen = res.filter((r) => r.statut === 'ok' || r.statut === 'maj' || (r.statut === 'doublon' && tbl.sel.has(r.id)));
     try {
-      const out = await App.act('import.run', { type, mode, fichier: fname, rows: chosen.map((r) => r.payload), stats: { nouvelles: c.ok, mises_a_jour: c.maj, inchangees: c.identique, doublons: c.doublon, doublons_retenus: tbl.sel.size, rejets_controle: c.rejet }, rapport: res.filter((r) => !['ok', 'maj'].includes(r.statut)).map((r) => ({ ligne: r.ligne, statut: r.statut, msg: r.msg })) }, null);
+      const rows = (preparer ? await preparer(chosen) : chosen.map((r) => r.payload)).map(payloadPropre);
+      const out = await App.act('import.run', { type, mode, fichier: fname, rows, stats: { nouvelles: c.ok, mises_a_jour: c.maj, inchangees: c.identique, doublons: c.doublon, doublons_retenus: tbl.sel.size, rejets_controle: c.rejet }, rapport: res.filter((r) => !['ok', 'maj'].includes(r.statut)).map((r) => ({ ligne: r.ligne, statut: r.statut, msg: r.msg })) }, null);
       const b = out.brouillons?.length || 0;
       toast(`${out.integrees.length} ligne(s) intégrée(s)${out.refuses.length ? `, ${out.refuses.length} refusée(s)` : ''}${b ? `, dont ${b} dépense(s) en brouillon (pièce à joindre)` : ''}.`, out.refuses.length ? 'warn' : 'ok');
       const notes = [];
@@ -335,20 +337,67 @@ export function rapportControle(host, type, fname, res, { mode = 'courant', onDo
 // Fenêtre « Importer Excel » d'une rubrique
 export function ouvrirImport(type, ctx = {}) {
   const t = TYPES[type];
+  const tbPossible = TYPES_TB.includes(type);
   modal({ title: `Importer depuis Excel — ${t.l}`, wide: true,
-    body: `<ol class="steps-imp"><li><b>Téléchargez le modèle</b>${t.maj ? ' (il contient déjà les données actuelles, à compléter ou corriger)' : ''}.</li><li><b>Remplissez-le</b> dans Excel, puis enregistrez.</li><li><b>Choisissez le fichier</b> : la plateforme contrôle chaque ligne avant d’enregistrer.</li></ol>
-      <div class="filters"><button class="btn ghost" type="button" data-tpl>${icon('download')} Télécharger le modèle</button>
-      <label class="btn primary"><input type="file" accept=".xlsx,.xls,.csv" hidden data-file>${icon('upload')} Choisir le fichier Excel</label></div>
-      <p class="muted small">Colonnes : <code>${t.cols.join(' · ')}</code>${t.aide ? `<br>${esc(t.aide)}` : ''}</p><div data-res></div>`,
+    body: `<ol class="steps-imp"><li><b>${tbPossible ? 'Utilisez votre tableau de bord habituel (TB … ORIBA FOODS)' : 'Téléchargez le modèle'}</b>${tbPossible ? ' : feuilles « Journal Comptant », « Journal Crédit » et « Stock », telles quelles' : t.maj ? ' (il contient déjà les données actuelles, à compléter ou corriger)' : ''}.</li><li><b>Choisissez le fichier</b> : la plateforme contrôle chaque ligne et reconnaît celles qu’elle connaît déjà.</li><li><b>Confirmez</b> : seules les nouvelles lignes sont enregistrées.</li></ol>
+      <div class="filters"><label class="btn primary"><input type="file" accept=".xlsx,.xls,.csv" hidden data-file>${icon('upload')} Choisir le fichier Excel</label>
+      <button class="btn ghost" type="button" data-tpl>${icon('download')} ${tbPossible ? 'Modèle vierge au format tableau de bord' : 'Télécharger le modèle'}</button></div>
+      <div data-opt hidden></div>
+      <p class="muted small">${tbPossible ? 'Les fichiers « TB … ORIBA FOODS » sont lus directement. Un fichier au format simple (une feuille, colonnes <code>' + t.cols.join(' · ') + '</code>) reste accepté.' : `Colonnes : <code>${t.cols.join(' · ')}</code>`}${t.aide && !tbPossible ? `<br>${esc(t.aide)}` : ''}</p><div data-res></div><div data-res2></div>`,
     onMount: (m, close) => {
-      $('[data-tpl]', m).addEventListener('click', () => telechargerModele(type, ctx));
+      let wb = null, fname = '';
+      const opt = { equipe_id: ctx.equipe_id || '', creer: true, depositaire_id: '' };
+      const fermer = () => setTimeout(() => { if (!document.body.contains(m) || $('[data-fermer]', m)) return; const b = document.createElement('button'); b.className = 'btn'; b.dataset.fermer = '1'; b.textContent = 'Fermer'; b.addEventListener('click', close); m.querySelector('.modal-b')?.append(b) || $('[data-res]', m).append(b); }, 0);
+      $('[data-tpl]', m).addEventListener('click', () => (tbPossible ? saveBlob(`TB_ORIBA_FOODS_modele${opt.equipe_id ? '_' + (App.D.equipes.find((e) => e.id === opt.equipe_id)?.code || '') : ''}.xlsx`, modeleTB(opt.equipe_id)) : telechargerModele(type, ctx)));
+      const analyserTB = () => {
+        const { res, nomOnglet, manquants } = analyseTB(type, wb, opt);
+        $('[data-res2]', m).innerHTML = '';
+        if (!nomOnglet) { $('[data-res]', m).innerHTML = `<div class="note warn">La feuille attendue (${type === 'stock_remises' ? '« Stock »' : type === 'ventes_comptant' ? '« Journal Comptant »' : '« Journal Crédit »'}) est absente du fichier.</div>`; return; }
+        if (!res.length) { $('[data-res]', m).innerHTML = `<div class="note">Aucune ligne à traiter dans la feuille « ${esc(nomOnglet)} »${type === 'remboursements' ? ' (aucun montant remboursé)' : ''}.</div>`; return; }
+        const nb = manquants ? manquants.agents.length + manquants.marches.length + manquants.clients.length : 0;
+        rapportControle($('[data-res]', m), type, `${fname} — ${nomOnglet}`, res, { mode: 'courant',
+          preparer: nb ? async (chosen) => {
+            await creerManquants(manquants);
+            const lignes = new Set(chosen.map((r) => r.payload.ligne));
+            return analyseTB(type, wb, opt).res.filter((r) => lignes.has(r.payload.ligne) && r.statut !== 'rejet' && r.statut !== 'identique').map((r) => r.payload);
+          } : null,
+          onDone: () => {
+            if (type === 'ventes_credit') {
+              const r2 = analyseTB('remboursements', wb, opt).res;
+              if (r2.some((r) => r.statut === 'ok')) { $('[data-res2]', m).innerHTML = '<h4 class="form-t">Remboursements contenus dans le même fichier</h4><div></div>'; rapportControle($('[data-res2]', m).lastChild, 'remboursements', `${fname} — remboursements`, r2, { mode: 'courant', onDone: fermer }); return; }
+            }
+            fermer();
+          } });
+        if (nb) $('[data-res]', m).insertAdjacentHTML('afterbegin', `<div class="note">${nb} élément(s) nouveau(x) seront créés dans les référentiels de l’équipe à la confirmation : ${esc([...manquants.agents.map((x) => 'agent ' + x), ...manquants.marches.map((x) => 'marché ' + x), ...manquants.clients.map((x) => 'client ' + x)].slice(0, 12).join(', '))}${nb > 12 ? '…' : ''}.</div>`);
+      };
+      const options = () => {
+        const o = $('[data-opt]', m); o.hidden = false;
+        const deps = (App.D.clients || []).filter((c) => c.actif !== false && c.depositaire);
+        o.innerHTML = `<div class="filters"><label class="ff"><span>Équipe du fichier</span><select data-eq><option value="">— choisir —</option>${(App.D.equipes || []).filter((e) => e.actif !== false).map((e) => `<option value="${e.id}" ${e.id === opt.equipe_id ? 'selected' : ''}>${esc(e.nom)}</option>`).join('')}</select></label>
+          ${type === 'stock_remises' ? `<label class="ff"><span>Dépositaire (gros client)</span><select data-dep><option value="">— choisir —</option>${deps.map((c) => `<option value="${c.id}" ${c.id === opt.depositaire_id ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}</select></label>` : ''}
+          ${type.startsWith('ventes') ? `<label class="chk" style="align-self:end"><input type="checkbox" data-creer ${opt.creer ? 'checked' : ''}> <span>Créer automatiquement les agents, marchés et clients absents</span></label>` : ''}</div>
+          ${type === 'stock_remises' && !deps.length ? '<p class="note warn">Aucun client n’est déclaré « gros client dépositaire » : ouvrez Référentiels > Clients et cochez la case pour le gros client concerné.</p>' : ''}`;
+        $('[data-eq]', o).addEventListener('change', (e) => { opt.equipe_id = e.target.value; analyserTB(); });
+        $('[data-dep]', o)?.addEventListener('change', (e) => { opt.depositaire_id = e.target.value; analyserTB(); });
+        $('[data-creer]', o)?.addEventListener('change', (e) => { opt.creer = e.target.checked; analyserTB(); });
+      };
       $('[data-file]', m).addEventListener('change', async (e) => {
         const file = e.target.files[0]; if (!file) return;
         try {
-          const { nomOnglet, multi, res } = await lireFichier(type, file);
-          if (multi) toast(`Onglet lu : « ${nomOnglet} »`);
-          if (!res.length) { $('[data-res]', m).innerHTML = '<div class="note warn">Aucune ligne de données trouvée dans le fichier.</div>'; return; }
-          rapportControle($('[data-res]', m), type, file.name, res, { mode: 'courant', onDone: () => { setTimeout(() => { if (!document.body.contains(m)) return; const b = document.createElement('button'); b.className = 'btn'; b.textContent = 'Fermer'; b.addEventListener('click', close); $('[data-res]', m).append(b); }, 0); } });
+          if (!window.XLSX) throw new Error('Module Excel non chargé.');
+          const w = window.XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+          fname = file.name;
+          if (tbPossible && estTB(w)) {
+            wb = w; opt.equipe_id = opt.equipe_id || detecterEquipe(w);
+            options(); analyserTB();
+            if (!opt.equipe_id) toast('Choisissez l’équipe correspondant à ce fichier.', 'warn');
+          } else {
+            $('[data-opt]', m).hidden = true;
+            const { nomOnglet, multi, res } = await lireFichier(type, file);
+            if (multi) toast(`Onglet lu : « ${nomOnglet} »`);
+            if (!res.length) { $('[data-res]', m).innerHTML = '<div class="note warn">Aucune ligne de données trouvée dans le fichier.</div>'; return; }
+            rapportControle($('[data-res]', m), type, file.name, res, { mode: 'courant', onDone: fermer });
+          }
         } catch (er) { toast('Lecture du fichier impossible : ' + er.message, 'err'); }
         e.target.value = '';
       });

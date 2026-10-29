@@ -32,7 +32,6 @@ const map = { 'chart.umd.min.js': 'chart.js/dist/chart.umd.js', 'xlsx.full.min.j
   };
   await cycle('suivi-agents', (rows) => { rows[1][2] = 27; rows[1][12] = 9; rows[2][12] = 8.5; }, 'suivi');
   await cycle('objectifs', (rows) => { rows[1][4] = 123; }, 'objectifs');
-  await cycle('ventes-comptant', (rows) => { const d = new Date(); rows[1] = ['', `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`, 'Agent Katako (démo)', 'Katako', '', 'Arôme en sachet 10 g (démo)', 'carton', 3, 13000, 'test import']; }, 'ventes');
   await cycle('referentiels', (rows) => { rows[1][4] = 13500; }, 'produits');
   console.log(errors.length ? 'ERREURS:\n' + errors.join('\n') : 'Aucune erreur');
   await browser.close();

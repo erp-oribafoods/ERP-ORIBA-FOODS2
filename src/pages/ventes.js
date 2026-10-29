@@ -1,4 +1,5 @@
 // Journaux des ventes au comptant et à crédit, remboursements, relances.
+import { ouvrirMiseAJour, peutMettreAJour } from '../lib/majTB.js';
 import { App, nm, opts, filterBar, describeFilters, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, confirmBox, field, readForm, showErr, busy, toast, icon, pill, statutCreditPill } from '../lib/ui.js';
 import { boutonImport, lierImport } from '../lib/importer.js';
@@ -20,9 +21,10 @@ export function renderVentes(root, mode) {
   const canCreate = App.can('ventes', 'creer');
   root.innerHTML = pageHead(credit ? 'Ventes à crédit' : 'Ventes au comptant',
     credit ? 'Échéances, remboursements, soldes et statuts calculés automatiquement.' : 'Montant = quantité × prix unitaire, calculé automatiquement.',
-    `${boutonImport(credit ? 'ventes_credit' : 'ventes_comptant')}${canCreate ? `<button class="btn primary" id="new">${icon('plus')} Nouvelle vente ${credit ? 'à crédit' : 'au comptant'}</button>` : ''}`) +
+    `${peutMettreAJour() ? `<button class="btn" id="maj">${icon('refresh')} Mise à jour quotidienne</button>` : ''}${boutonImport(credit ? 'ventes_credit' : 'ventes_comptant')}${canCreate ? `<button class="btn primary" id="new">${icon('plus')} Nouvelle vente ${credit ? 'à crédit' : 'au comptant'}</button>` : ''}`) +
     `<div id="flt"></div><div class="card" id="tb"></div>`;
   lierImport(root);
+  $('#maj', root)?.addEventListener('click', ouvrirMiseAJour);
   const draw = () => {
     const f = App.filters.ventes;
     const show = f.statut_v === 'annulee' ? 'annulee' : 'validee';

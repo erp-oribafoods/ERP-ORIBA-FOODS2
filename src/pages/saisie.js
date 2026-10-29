@@ -1,6 +1,7 @@
 // Point d'entrée unique : pour chaque rubrique, saisir à l'écran ou importer un fichier Excel.
 import { App, pageHead } from '../app.js';
-import { esc, $$, icon } from '../lib/ui.js';
+import { esc, $, $$, icon } from '../lib/ui.js';
+import { ouvrirMiseAJour, peutMettreAJour } from '../lib/majTB.js';
 import { TYPES, peutImporter, ouvrirImport, telechargerModele } from '../lib/importer.js';
 import { today } from '../../shared/logic.js';
 
@@ -56,6 +57,7 @@ function saisir(page, sel, prep) {
 export function renderSaisie(root) {
   const mois = today().slice(0, 7);
   root.innerHTML = pageHead('Saisie et import des données', 'Pour chaque rubrique, deux possibilités : saisir directement à l’écran, ou remplir le modèle Excel puis l’importer. Les deux suivent les mêmes règles et le même journal d’audit. Les modèles des objectifs, fiches agents, budgets et référentiels contiennent déjà les données actuelles : il suffit de les corriger pour mettre la plateforme à jour.') +
+    (peutMettreAJour() ? `<article class="card maj-c"><div class="grow"><h3>Mise à jour quotidienne des tableaux de bord</h3><p class="muted small">Importez chaque jour les mêmes fichiers « TB … ORIBA FOODS » (un ou plusieurs à la fois) : la plateforme n’ajoute que les nouvelles ventes, les nouveaux crédits et les remboursements à compléter. Aucune ligne n’est jamais enregistrée deux fois.</p></div><button class="btn primary" id="maj">${icon('refresh')} Lancer la mise à jour du jour</button></article>` : '') +
     RUBRIQUES.map(([titre, items]) => {
       const vis = items.filter(([type, , , perm]) => App.can(perm[0], perm[1]) || peutImporter(type));
       if (!vis.length) return '';
@@ -71,6 +73,7 @@ export function renderSaisie(root) {
     const [titre, k] = b.dataset.s.split('|'); const it = RUBRIQUES.find((r) => r[0] === titre)[1][Number(k)];
     saisir(it[1], it[2], it[5]);
   }));
+  $('#maj', root)?.addEventListener('click', ouvrirMiseAJour);
   $$('[data-i]', root).forEach((b) => b.addEventListener('click', () => ouvrirImport(b.dataset.i, { mois })));
   $$('[data-m]', root).forEach((b) => b.addEventListener('click', () => telechargerModele(b.dataset.m, { mois })));
 }

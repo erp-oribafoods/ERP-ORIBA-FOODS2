@@ -324,7 +324,7 @@ export function rapportControle(host, type, fname, res, { mode = 'courant', onDo
       const rows = (preparer ? await preparer(chosen) : chosen.map((r) => r.payload)).map(payloadPropre);
       const out = await App.act('import.run', { type, mode, fichier: fname, rows, stats: { nouvelles: c.ok, mises_a_jour: c.maj, inchangees: c.identique, doublons: c.doublon, doublons_retenus: tbl.sel.size, rejets_controle: c.rejet }, rapport: res.filter((r) => !['ok', 'maj'].includes(r.statut)).map((r) => ({ ligne: r.ligne, statut: r.statut, msg: r.msg })) }, null);
       const b = out.brouillons?.length || 0;
-      toast(`${out.integrees.length} ligne(s) intégrée(s)${out.refuses.length ? `, ${out.refuses.length} refusée(s)` : ''}${b ? `, dont ${b} dépense(s) en brouillon (pièce à joindre)` : ''}.`, out.refuses.length ? 'warn' : 'ok');
+      toast(`${out.integrees.length} ligne(s) intégrée(s)${out.deja?.length ? `, ${out.deja.length} déjà présente(s) ignorée(s)` : ''}${out.refuses.length ? `, ${out.refuses.length} refusée(s)` : ''}${b ? `, dont ${b} dépense(s) en brouillon (pièce à joindre)` : ''}.`, out.refuses.length ? 'warn' : 'ok');
       const notes = [];
       if (out.refuses.length) notes.push(`<div class="note warn"><b>Lignes refusées par les règles de gestion :</b><br>${out.refuses.slice(0, 30).map((r) => `Ligne ${r.ligne} : ${esc(r.erreur)}`).join('<br>')}</div>`);
       if (b) notes.push(`<div class="note"><b>Dépenses gardées en brouillon :</b><br>${out.brouillons.slice(0, 30).map((r) => `Ligne ${r.ligne} : ${esc(r.motif)}`).join('<br>')}</div>`);

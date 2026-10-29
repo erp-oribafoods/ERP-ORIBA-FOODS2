@@ -146,14 +146,30 @@ export async function creerManquants(manq) {
 
 // Clés de comparaison avec ce qui existe déjà
 const cle = (date, agent, client, produit, cartons, montant) => [date, agent || '', client || '', produit || '', round2(cartons), Math.round(montant)].join('|');
-function stockVentes(mode) {
+function stockVentes(mode, { annulees = false } = {}) {
   const m = new Map();
-  for (const v of App.D.ventes || []) {
-    if (v.statut !== 'validee' || v.mode !== mode) continue;
+  // Les ventes validées passent avant les ventes annulées (une ligne annulée sur la plateforme n'est pas réimportée)
+  const vs = (App.D.ventes || []).filter((v) => v.mode === mode && (v.statut === 'validee' || (annulees && v.statut === 'annulee'))).sort((a, b) => (a.statut === 'validee' ? 0 : 1) - (b.statut === 'validee' ? 0 : 1));
+  for (const v of vs) {
     const tt = venteTotals(v, App.I);
     for (const l of tt.lignes) { const k = cle(v.date, v.agent_id, v.client_id, l.produit_id, num(l.cartons), num(l.montant)); if (!m.has(k)) m.set(k, []); m.get(k).push(v); }
   }
   return m;
+}
+
+// Identifiant stable de chaque ligne de journal : même contenu = même identifiant d'un jour à l'autre
+// (le n° d'occurrence distingue deux lignes strictement identiques du même fichier)
+function refsDuFichier(rows, R, mode) {
+  const occ = new Map(), out = new Map();
+  for (const r of rows) {
+    const q = toNum(r.quantite), p = toNum(r.prix);
+    if (!(q > 0) || !(p > 0)) continue;
+    const unite = /pack/i.test(r.unite) ? 'pack' : 'carton';
+    const base = ['TB', R.code, mode === 'credit' ? 'K' : 'C', dateSure(r.date, [], 'Date'), norm(r.agent), sansMarche(r.marche), norm(r.client), norm(r.produit), unite, q, p].join('|');
+    const n = (occ.get(base) || 0) + 1; occ.set(base, n);
+    out.set(r._ligne, `${base}#${n}`);
+  }
+  return out;
 }
 
 // Analyse d'une feuille TB pour un type d'import ; même format de résultat que l'import standard
@@ -166,8 +182,10 @@ export function analyseTB(type, wb, opts = {}) {
   const push = (r, msgs, payload, apercu, extra = {}) => out.push({ ligne: r._ligne, statut: msgs.length ? 'rejet' : extra.statut || 'ok', msg: msgs.join(' ; ') || extra.msg || '', payload: { ligne: r._ligne, ...payload }, apercu });
   if (type === 'ventes_comptant' || type === 'ventes_credit') {
     const mode = type === 'ventes_credit' ? 'credit' : 'comptant';
-    const existants = stockVentes(mode);
+    const existants = stockVentes(mode, { annulees: true });
+    const refs = new Map((App.D.ventes || []).filter((v) => v.ref_externe).map((v) => [v.ref_externe, v]));
     const manq = aCreer(rows, R, R.eq);
+    const refL = refsDuFichier(rows, R, mode), vus = new Set();
     for (const r of rows) {
       const msgs = [], notes = [];
       const date = dateSure(r.date, notes, 'Date');
@@ -184,7 +202,9 @@ export function analyseTB(type, wb, opts = {}) {
       const unite = /pack/i.test(r.unite) ? 'pack' : 'carton';
       const prod = App.I.produits.get(pr);
       const lc = prod ? lineCalc(prod, unite, q, p) : { cartons: q, montant: q * p };
-      const data = { date, agent_id: ag || null, marche_id: ma || null, client_id: cl || null, observation: t(r.observation) || null, ref_externe: null, _a: t(r.agent), _m: t(r.marche), _c: t(r.client) };
+      // Identifiant stable de la ligne du fichier (même contenu = même identifiant, d'un jour à l'autre)
+      const ref = refL.get(r._ligne);
+      const data = { date, agent_id: ag || null, marche_id: ma || null, client_id: cl || null, observation: t(r.observation) || null, ref_externe: ref, _a: t(r.agent), _m: t(r.marche), _c: t(r.client) };
       if (mode === 'credit') {
         let ech = dateSure(r.promesse, notes, 'Date de promesse', true);
         if (ech && date && ech < date) { notes.push(`promesse antérieure à la vente : échéance par défaut`); ech = null; }
@@ -193,15 +213,26 @@ export function analyseTB(type, wb, opts = {}) {
       let extra = {};
       const k = cle(date, ag, cl, pr, lc.cartons, lc.montant);
       const ex = existants.get(k);
-      if (ex && ex.length) { ex.shift(); extra = { statut: 'identique', msg: 'Déjà dans la plateforme' }; }
+      const parRef = refs.get(ref);
+      if (parRef || (ex && ex.length)) {
+        const v = parRef || ex[0];
+        if (ex?.length) { const i = ex.indexOf(v); ex.splice(i >= 0 ? i : 0, 1); }
+        vus.add(v.id);
+        extra = { statut: 'identique', msg: v.statut === 'annulee' ? `Annulée sur la plateforme (${v.numero}) : non réimportée` : `Déjà dans la plateforme (${v.numero})` };
+      }
       else if (notes.length) extra = { msg: notes.join(' ; ') };
       if (!ex?.length && (ag === undefined || ma === undefined || cl === undefined) && !msgs.length) extra.msg = [extra.msg, 'Agent, marché ou client nouveau : créé automatiquement à l’import'].filter(Boolean).join(' ; ');
       push(r, msgs, { data, lignes: [{ produit_id: pr, unite, quantite: q, prix_unitaire: p }] }, `${date ? fmtD(date) : '?'} · ${t(r.agent) || '—'} · ${t(r.client) || '—'} · ${fmtN(q)} ${unite} · ${fmtN(lc.montant)} FCFA`, extra);
     }
-    return { res: out, nomOnglet: f, manquants: opts.creer ? manq : null };
+    // Lignes importées d'un tableau de bord de cette équipe qui ne figurent plus dans le fichier (ligne supprimée ou corrigée)
+    const impTB = new Set((App.D.imports || []).filter((i) => /journal\s+(comptant|cr[ée]dit)/i.test(i.fichier || '')).map((i) => i.id));
+    const absentes = R.eq ? (App.D.ventes || []).filter((v) => v.mode === mode && v.statut === 'validee' && !vus.has(v.id) && impTB.has(v.import_id) && App.I.agents.get(v.agent_id)?.equipe_id === R.eq.id) : [];
+    return { res: out, nomOnglet: f, manquants: opts.creer ? manq : null, absentes };
   }
   if (type === 'remboursements') {
     const existants = stockVentes('credit');
+    const refL = refsDuFichier(rows, R, 'credit');
+    const parRef = new Map((App.D.ventes || []).filter((v) => v.ref_externe && v.mode === 'credit' && v.statut === 'validee').map((v) => [v.ref_externe, v]));
     for (const r of rows) {
       const fichier = toNum(r.rembourse);
       if (!(fichier > 0)) continue;
@@ -211,7 +242,9 @@ export function analyseTB(type, wb, opts = {}) {
       const pr = R.produit(r.produit), ag = R.agent(r.agent), cl = R.client(r.client);
       const prod = App.I.produits.get(pr);
       const lc = prod && q > 0 && p > 0 ? lineCalc(prod, /pack/i.test(r.unite) ? 'pack' : 'carton', q, p) : null;
-      const v = lc ? existants.get(cle(date, ag, cl, pr, lc.cartons, lc.montant))?.shift() : null;
+      let v = parRef.get(refL.get(r._ligne));
+      if (v) { const l = existants.get(cle(date, ag, cl, pr, lc?.cartons, lc?.montant)); const i = l ? l.indexOf(v) : -1; if (i >= 0) l.splice(i, 1); }
+      else v = lc ? existants.get(cle(date, ag, cl, pr, lc.cartons, lc.montant))?.shift() : null;
       if (!v) { push(r, ['Vente à crédit correspondante introuvable : importez d’abord les ventes à crédit de ce fichier'], { data: {} }, `${t(r.client)} · ${fmtN(fichier)} FCFA`); continue; }
       const ci = creditInfo(v, App.I, today());
       const deja = ci.rembourse;
@@ -221,7 +254,7 @@ export function analyseTB(type, wb, opts = {}) {
       let d = dateSure(r.date_remb, notes, 'Date de remboursement');
       if (!d) { const pm = dateSure(r.promesse, [], 'Promesse', true); d = pm && pm <= today() ? pm : today(); notes.push(`date de remboursement absente : ${pm && pm <= today() ? 'date de promesse' : 'date du jour'} retenue`); }
       if (d < v.date) { notes.push('remboursement daté avant la vente : date de la vente retenue'); d = v.date; }
-      push(r, msgs, { data: { vente_id: v.id, date: d, montant: delta, mode: null, reference: null, commentaire: `Import tableau de bord (cumul du fichier : ${fmtN(fichier)} FCFA)` } }, `${v.numero} · ${t(r.client)} · +${fmtN(delta)} FCFA (cumul ${fmtN(fichier)})`, { msg: notes.join(' ; ') || (deja ? `Complément : ${fmtN(deja)} FCFA déjà enregistrés` : '') });
+      push(r, msgs, { data: { vente_id: v.id, date: d, cumul: fichier, mode: null, reference: null, commentaire: `Import tableau de bord (cumul du fichier : ${fmtN(fichier)} FCFA)` } }, `${v.numero} · ${t(r.client)} · +${fmtN(delta)} FCFA (cumul ${fmtN(fichier)})`, { msg: notes.join(' ; ') || (deja ? `Complément : ${fmtN(deja)} FCFA déjà enregistrés` : '') });
     }
     return { res: out, nomOnglet: f, manquants: null };
   }

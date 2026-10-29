@@ -1008,9 +1008,19 @@ A['import.run'] = async ({ t, user, perms, payload, ip }) => {
   const rows = payload.rows || [];
   if (rows.length > 2000) fail('Maximum 2 000 lignes par import : découpez le fichier.');
   const importId = uid();
-  const ok = [], ko = [], brouillons = [];
+  const ok = [], ko = [], brouillons = [], deja = [];
   const opts = { historique: !courant, import_id: importId, ip };
+  // Identifiants des lignes de fichier déjà enregistrées : une même ligne n'est jamais importée deux fois
+  const refsVentes = type.startsWith('ventes_') ? new Set((await t.select('ventes')).map((v) => v.ref_externe).filter(Boolean)) : null;
   for (const [i, r] of rows.entries()) {
+    if (refsVentes && r.data?.ref_externe && refsVentes.has(r.data.ref_externe)) { deja.push(r.ligne ?? i + 1); continue; }
+    if (type === 'remboursements' && r.data?.cumul !== undefined && r.data?.cumul !== null) {
+      // Remboursement exprimé en cumul (tableau de bord) : le serveur n'ajoute que la différence avec ce qui est déjà enregistré
+      const enr = (await t.select('remboursements', { vente_id: r.data.vente_id })).filter((x) => x.statut === 'valide').reduce((s, x) => s + num(x.montant), 0);
+      const delta = round2(num(r.data.cumul) - enr);
+      if (delta < 1) { if (delta <= -1) ko.push({ ligne: r.ligne ?? i + 1, erreur: `Le fichier indique ${fmtF(r.data.cumul)} remboursés, la plateforme en a déjà ${fmtF(enr)} : à vérifier.` }); else deja.push(r.ligne ?? i + 1); continue; }
+      const { cumul, ...d } = r.data; r.data = { ...d, montant: delta };
+    }
     try {
       await t.sp(async () => {
       if (REFS[type]) {
@@ -1046,15 +1056,16 @@ A['import.run'] = async ({ t, user, perms, payload, ip }) => {
       } else fail('Type d’import inconnu.');
       });
       ok.push(r.ligne ?? i + 1);
+      if (refsVentes && r.data?.ref_externe) refsVentes.add(r.data.ref_externe);
     } catch (e) {
       if (!(e instanceof AppError)) throw e;
       ko.push({ ligne: r.ligne ?? i + 1, erreur: e.message });
     }
   }
-  const stats = { recues: rows.length, integrees: ok.length, rejetees_serveur: ko.length, brouillons: brouillons.length, mode: courant ? 'courant' : 'historique', ...(payload.stats || {}) };
+  const stats = { recues: rows.length, integrees: ok.length, rejetees_serveur: ko.length, deja_presentes: deja.length, brouillons: brouillons.length, mode: courant ? 'courant' : 'historique', ...(payload.stats || {}) };
   const imp = await t.insert('imports', { id: importId, type, fichier: clean(payload.fichier), stats, rapport: { refusesServeur: ko, brouillons, controleClient: payload.rapport || null }, created_by: user.id, created_at: nowISO() });
   await audit(t, user, 'IMPORT', 'imports', importId, null, { type, stats }, null, ip);
-  return { import: imp, integrees: ok, refuses: ko, brouillons };
+  return { import: imp, integrees: ok, refuses: ko, brouillons, deja };
 };
 
 

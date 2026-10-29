@@ -44,6 +44,15 @@ export function memoryAdapter(state, onChange = () => {}) {
       onChange();
       return last ? clone(last) : null;
     },
+    async remove(table, w) {
+      if (!w || !Object.keys(w).length) throw new Error('Suppression sans critère refusée');
+      if (table === 'audit_log') throw new AppError('Le journal d’audit ne peut pas être modifié.', 403);
+      const arr = T(table); const gone = [];
+      for (let i = arr.length - 1; i >= 0; i--) if (match(arr[i], w)) gone.push([i, arr.splice(i, 1)[0]]);
+      undo.push(() => { for (const [i, r] of gone.slice().reverse()) arr.splice(i, 0, r); });
+      if (gone.length) onChange();
+      return gone.length;
+    },
     async nextSeq(cle) {
       let c = T('compteurs').find((x) => x.cle === cle);
       if (!c) { c = { cle, valeur: 0 }; T('compteurs').push(c); }

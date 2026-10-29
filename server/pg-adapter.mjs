@@ -46,6 +46,13 @@ function ops(q) {
       const r = await q(`update ${id(table)} set ${set}${where(w, params)} returning *`, params);
       return r.rows[0];
     },
+    async remove(table, w) {
+      if (!w || !Object.keys(w).length) throw new Error('Suppression sans critère refusée');
+      const params = [];
+      await q("select set_config('erp.suppression_autorisee', 'on', true)");
+      const r = await q(`delete from ${id(table)}${where(w, params)}`, params);
+      return r.rowCount;
+    },
     async nextSeq(cle) {
       const r = await q('insert into compteurs (cle, valeur) values ($1, 1) on conflict (cle) do update set valeur = compteurs.valeur + 1 returning valeur', [cle]);
       return Number(r.rows[0].valeur);

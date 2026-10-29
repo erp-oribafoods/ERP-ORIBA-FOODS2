@@ -1037,6 +1037,94 @@ A['import.run'] = async ({ t, user, perms, payload, ip }) => {
   return { import: imp, integrees: ok, refuses: ko, brouillons };
 };
 
+
+// Suppression définitive (réservée au droit « suppression ») : calcul de l'impact puis suppression en cascade, tracée dans l'audit
+export const CIBLES_SUPPRESSION = {
+  ventes_comptant: 'Ventes au comptant (et lignes)', ventes_credit: 'Ventes à crédit (avec remboursements et relances)', remboursements: 'Remboursements',
+  stock: 'Stock confié (lots et mouvements)', depenses: 'Dépenses (avec validations et répartitions)', demandes: 'Demandes carburant et vidange',
+  objectifs: 'Objectifs', suivi_agents: 'Fiches des agents terrain', budgets: 'Budgets', import: 'Tout ce qu’un import a créé', tout: 'Toutes les données (opérations et référentiels agents, clients, marchés, véhicules)',
+};
+async function planSuppression(t, user, p) {
+  const { cible } = p;
+  if (!CIBLES_SUPPRESSION[cible]) fail('Choisissez ce qu’il faut supprimer.');
+  const du = p.du || '0000-01-01', au = p.au || '9999-12-31';
+  if ((p.du && !isDate(p.du)) || (p.au && !isDate(p.au)) || du > au) fail('Période invalide.');
+  if (cible === 'import' && !p.import_id) fail('Choisissez l’import à défaire.');
+  const enPeriode = (d) => d >= du && d <= au;
+  const agents = new Map((await t.select('agents')).map((a) => [a.id, a])), marches = new Map((await t.select('marches')).map((m) => [m.id, m]));
+  const eqVente = (v) => agents.get(v.agent_id)?.equipe_id || marches.get(v.marche_id)?.equipe_id || null;
+  const okEq = (e) => !p.equipe_id || e === p.equipe_id;
+  const P = {};
+  const add = (tb, ids) => { P[tb] = [...new Set([...(P[tb] || []), ...ids])]; };
+  const tout = cible === 'tout', imp = cible === 'import' ? p.import_id : null;
+  const ventes = await t.select('ventes');
+  const choisirVentes = (mode) => ventes.filter((v) => (imp ? v.import_id === imp : (!mode || v.mode === mode) && enPeriode(v.date) && okEq(eqVente(v))));
+  let vs = [];
+  if (tout) vs = ventes; else if (cible === 'ventes_comptant') vs = choisirVentes('comptant'); else if (cible === 'ventes_credit') vs = choisirVentes('credit'); else if (imp) vs = choisirVentes(null);
+  if (vs.length) {
+    const ids = new Set(vs.map((v) => v.id));
+    add('ventes', [...ids]);
+    add('vente_lignes', (await t.select('vente_lignes')).filter((l) => ids.has(l.vente_id)).map((l) => l.id));
+    add('remboursements', (await t.select('remboursements')).filter((r) => ids.has(r.vente_id)).map((r) => r.id));
+    add('relances', (await t.select('relances')).filter((r) => ids.has(r.vente_id)).map((r) => r.id));
+    add('stock_mouvements', (await t.select('stock_mouvements')).filter((m) => m.vente_id && ids.has(m.vente_id)).map((m) => m.id));
+  }
+  if (tout || cible === 'remboursements' || imp) {
+    const vmap = new Map(ventes.map((v) => [v.id, v]));
+    add('remboursements', (await t.select('remboursements')).filter((r) => tout || (imp ? r.import_id === imp : enPeriode(r.date) && okEq(eqVente(vmap.get(r.vente_id) || {})))).map((r) => r.id));
+  }
+  if (tout || cible === 'stock' || imp) {
+    const mv = await t.select('stock_mouvements');
+    const lots = new Set(mv.filter((m) => m.type === 'remise' && (tout || (imp ? m.import_id === imp : enPeriode(m.date)))).map((m) => m.id));
+    add('stock_mouvements', mv.filter((m) => lots.has(m.id) || lots.has(m.lot_id) || (!imp && !tout && m.type !== 'remise' && enPeriode(m.date))).map((m) => m.id));
+  }
+  if (tout || cible === 'depenses' || imp) {
+    const ds = (await t.select('depenses')).filter((d) => tout || (imp ? d.import_id === imp : enPeriode(d.date) && okEq(d.equipe_id)));
+    const ids = new Set(ds.map((d) => d.id));
+    add('depenses', [...ids]);
+    add('depense_validations', (await t.select('depense_validations')).filter((x) => ids.has(x.depense_id)).map((x) => x.id));
+    add('depense_repartitions', (await t.select('depense_repartitions')).filter((x) => ids.has(x.depense_id)).map((x) => x.id));
+  }
+  if (tout || cible === 'demandes') add('demandes', (await t.select('demandes')).filter((d) => tout || (enPeriode(d.date) && okEq(d.equipe_id))).map((d) => d.id));
+  const moisOk = (m) => (!p.du || m >= du.slice(0, 7)) && (!p.au || m <= au.slice(0, 7));
+  if (tout || cible === 'objectifs') add('objectifs', (await t.select('objectifs')).filter((o) => tout || moisOk(o.mois)).map((o) => o.id));
+  if (tout || cible === 'suivi_agents') add('suivi_agents', (await t.select('suivi_agents')).filter((o) => tout || (moisOk(o.mois) && okEq(agents.get(o.agent_id)?.equipe_id))).map((o) => o.id));
+  if (tout || cible === 'budgets') add('budgets', (await t.select('budgets')).filter((b) => tout || (moisOk(b.mois) && okEq(b.equipe_id))).map((b) => b.id));
+  if (imp) add('imports', [imp]);
+  if (tout) {
+    for (const tb of ['clotures', 'anomalies', 'imports', 'agents', 'clients', 'marches', 'vehicules']) add(tb, (await t.select(tb)).map((r) => r.id));
+  }
+  // Une dépense supprimée ne doit plus être liée à une demande
+  return P;
+}
+const ORDRE_SUPPRESSION = ['depense_validations', 'depense_repartitions', 'demandes', 'depenses', 'relances', 'remboursements', 'stock_mouvements', 'vente_lignes', 'ventes', 'suivi_agents', 'objectifs', 'budgets', 'clotures', 'anomalies', 'imports', 'agents', 'clients', 'marches', 'vehicules'];
+A['purge.preview'] = async ({ t, perms, user, payload }) => {
+  if (!can(perms, 'suppression', 'supprimer')) fail('Seul le Responsable Commercial & Force de Vente peut supprimer des données.', 403);
+  const P = await planSuppression(t, user, payload);
+  return { compte: Object.fromEntries(ORDRE_SUPPRESSION.filter((k) => P[k]?.length).map((k) => [k, P[k].length])) };
+};
+A['purge.run'] = async ({ t, perms, user, payload, ip }) => {
+  if (!can(perms, 'suppression', 'supprimer')) fail('Seul le Responsable Commercial & Force de Vente peut supprimer des données.', 403);
+  if (payload.confirmation !== 'SUPPRIMER') fail('Tapez SUPPRIMER pour confirmer.');
+  if (!clean(payload.motif)) fail('Le motif de la suppression est obligatoire.');
+  const P = await planSuppression(t, user, payload);
+  const compte = {};
+  if (P.ventes?.length) await t.updateWhere('ventes', { id: P.ventes }, { lot_id: null });
+  if (P.depenses?.length) { const dem = (await t.select('demandes')).filter((d) => d.depense_id && P.depenses.includes(d.depense_id) && !(P.demandes || []).includes(d.id)); for (const d of dem) await t.update('demandes', d.id, { depense_id: null }); }
+  if (P.stock_mouvements?.length) { const vl = (await t.select('ventes')).filter((v) => v.lot_id && P.stock_mouvements.includes(v.lot_id)); for (const v of vl) await t.update('ventes', v.id, { lot_id: null }); }
+  if (payload.cible === 'tout') { for (const tb of ['agents']) if (P[tb]?.length) await t.updateWhere(tb, { id: P[tb] }, { marche_id: null }); }
+  for (const tb of ORDRE_SUPPRESSION) {
+    let ids = P[tb]; if (!ids?.length) continue;
+    if (tb === 'stock_mouvements') { const mv = new Map((await t.select('stock_mouvements', { id: ids })).map((m) => [m.id, m])); ids = [...ids].sort((x, y) => (mv.get(x)?.type === 'remise' ? 1 : 0) - (mv.get(y)?.type === 'remise' ? 1 : 0)); }
+    let n = 0;
+    for (let i = 0; i < ids.length; i += 500) n += await t.remove(tb, { id: ids.slice(i, i + 500) });
+    compte[tb] = n;
+  }
+  if (payload.cible === 'tout') for (const c of await t.select('compteurs')) await t.remove('compteurs', { cle: c.cle });
+  await audit(t, user, 'SUPPRESSION', payload.cible === 'import' ? 'imports' : payload.cible, payload.import_id || payload.cible, { filtres: { du: payload.du || null, au: payload.au || null, equipe_id: payload.equipe_id || null }, supprime: compte }, null, payload.motif, ip);
+  return { compte };
+};
+
 A['audit.list'] = async ({ t, perms, payload }) => {
   if (!can(perms, 'audit', 'lire')) fail('Accès au journal d’audit réservé.', 403);
   const rows = await t.auditList({ du: payload.du, au: payload.au, table: payload.table, user_id: payload.user_id, limit: Math.min(num(payload.limit) || 500, 2000) });
@@ -1045,7 +1133,7 @@ A['audit.list'] = async ({ t, perms, payload }) => {
 
 // Point d'entrée
 const PUBLIC = new Set(['auth.status', 'auth.init_admin', 'auth.login']);
-const READ_ONLY = new Set(['auth.status', 'auth.me', 'data.bootstrap', 'dep.file', 'audit.list']);
+const READ_ONLY = new Set(['auth.status', 'auth.me', 'data.bootstrap', 'dep.file', 'audit.list', 'purge.preview']);
 
 export async function handle(db, action, payload, ctx = {}) {
   const fn = A[action];

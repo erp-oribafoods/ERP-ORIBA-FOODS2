@@ -16,6 +16,7 @@ export const MODULES = [
   { k: 'parametres', l: 'Paramètres', a: ['lire', 'modifier'] },
   { k: 'utilisateurs', l: 'Utilisateurs & rôles', a: ['lire', 'modifier'] },
   { k: 'import', l: 'Reprise de données', a: ['creer'] },
+  { k: 'suppression', l: 'Suppression définitive de données', a: ['supprimer'] },
   { k: 'audit', l: "Journal d'audit & anomalies", a: ['lire', 'creer'] },
 ];
 
@@ -44,7 +45,7 @@ export const DEFAULT_ROLES = [
       dashboard: ['lire'], ventes: all('ventes'), remboursements: all('remboursements'),
       creances: all('creances'), stock: all('stock'), objectifs: ['lire', 'modifier'], suivi: ['lire', 'modifier'],
       depenses: ['lire', 'creer', 'modifier', 'controler', 'exporter'], budgets: ['lire'],
-      cloture: ['lire'], referentiels: ['lire', 'modifier'], parametres: ['lire'], import: ['creer'],
+      cloture: ['lire'], referentiels: ['lire', 'modifier'], parametres: ['lire'], import: ['creer'], suppression: ['supprimer'],
     },
   },
   {

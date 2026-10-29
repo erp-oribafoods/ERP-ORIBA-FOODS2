@@ -16,6 +16,7 @@ import { renderLogistique } from './pages/logistique.js';
 import { renderObjectifs } from './pages/objectifs.js';
 import { renderSuivi } from './pages/suivi.js';
 import { renderSaisie, peutSaisirOuImporter } from './pages/saisie.js';
+import { renderSuppression } from './pages/suppression.js';
 import { DEMO_USERS, DEMO_PASSWORD } from './demo-seed.js';
 import { LOGO } from './assets/logo.js';
 import { decorate } from './lib/ui.js';
@@ -23,7 +24,7 @@ import { ouvrirRapports } from './lib/rapports.js';
 
 const DEMO = !!window.ERP_DEMO || (() => { try { return new URLSearchParams(location.search).has('demo'); } catch { return false; } })();
 
-const NAV_ICONS = { 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'users', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', audit: 'eye' };
+const NAV_ICONS = { 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'users', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', suppression: 'alert', audit: 'eye' };
 const NAV = [
   ['Pilotage', [
     ['tableau-de-bord', 'Tableau de bord', () => App.can('dashboard'), renderDashboard],
@@ -57,6 +58,7 @@ const NAV = [
     ['utilisateurs', 'Utilisateurs', () => App.can('utilisateurs'), renderUtilisateurs],
     ['roles', 'Rôles et permissions', () => App.can('utilisateurs'), renderRoles],
     ['reprise', 'Reprise de données', () => App.can('import', 'creer'), renderReprise],
+    ['suppression', 'Suppression de données', () => App.can('suppression', 'supprimer'), renderSuppression],
     ['audit', 'Audit et anomalies', () => App.can('audit') || App.can('audit', 'creer'), renderAudit],
   ]],
 ];

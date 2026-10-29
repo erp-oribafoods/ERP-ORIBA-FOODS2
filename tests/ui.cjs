@@ -73,7 +73,7 @@ const map = {
     await page.screenshot({ path: `${OUT}/${viewport.width}-${scheme}-form-depense.png` });
     await ctx.close();
   };
-  const all = ['pilotage-depenses', 'suivi-agents', 'reprise', 'objectifs', 'terrain', 'agents', 'clients', 'logistique', 'tableau-de-bord', 'analyses', 'ventes-comptant', 'ventes-credit', 'remboursements', 'creances', 'stock', 'depenses', 'pilotage-depenses', 'budgets', 'cloture', 'referentiels', 'parametres', 'audit', 'mon-compte'];
+  const all = ['suppression', 'pilotage-depenses', 'suivi-agents', 'reprise', 'objectifs', 'terrain', 'agents', 'clients', 'logistique', 'tableau-de-bord', 'analyses', 'ventes-comptant', 'ventes-credit', 'remboursements', 'creances', 'stock', 'depenses', 'pilotage-depenses', 'budgets', 'cloture', 'referentiels', 'parametres', 'audit', 'mon-compte'];
   await run({ width: 1440, height: 900 }, 'light', { dg: all, admin: ['utilisateurs', 'roles', 'reprise', 'referentiels'], cdg: ['depenses'], superviseur: ['tableau-de-bord', 'depenses', 'suivi-agents'], rh: ['suivi-agents', 'objectifs'] });
   await run({ width: 390, height: 844 }, 'dark', { dg: ['suivi-agents', 'terrain', 'logistique', 'tableau-de-bord', 'ventes-credit', 'creances', 'pilotage-depenses'] });
   await browser.close();

@@ -250,6 +250,23 @@ if (mode === 'pg') {
   await expectErr(globalThis.__pool.query('delete from ventes'), 'Suppression de vente interdite en base', /Suppression interdite/);
   await expectErr(globalThis.__pool.query(`update remboursements set montant = 999999 where vente_id = '${vr.vente.id}'`), 'Trigger base : trop-perçu bloqué', /supérieur/);
 }
+console.log('Suppression définitive (Responsable commercial seul)');
+{
+  await expectErr(call(sessions.daf, 'purge.preview', { cible: 'ventes_credit' }), 'La DAF ne peut pas supprimer', /Responsable Commercial/);
+  const avant = (await call(sessions.dg, 'data.bootstrap')).data;
+  const nbCredit = avant.ventes.filter((v) => v.mode === 'credit').length;
+  const pv = await call(sessions.com, 'purge.preview', { cible: 'ventes_credit' });
+  ok(pv.compte.ventes === nbCredit && pv.compte.remboursements >= 1, `Aperçu : ${pv.compte.ventes} vente(s) à crédit et ${pv.compte.remboursements} remboursement(s) liés`);
+  await expectErr(call(sessions.com, 'purge.run', { cible: 'ventes_credit', motif: 'Test' }), 'Confirmation SUPPRIMER exigée', /SUPPRIMER/);
+  await expectErr(call(sessions.com, 'purge.run', { cible: 'ventes_credit', confirmation: 'SUPPRIMER' }), 'Motif exigé', /motif/);
+  const pr = await call(sessions.com, 'purge.run', { cible: 'ventes_credit', confirmation: 'SUPPRIMER', motif: 'Recette' });
+  const apres = (await call(sessions.dg, 'data.bootstrap')).data;
+  ok(pr.compte.ventes === nbCredit && !apres.ventes.some((v) => v.mode === 'credit') && !apres.remboursements.length && apres.ventes.some((v) => v.mode === 'comptant'), 'Ventes à crédit et remboursements supprimés, ventes au comptant conservées');
+  const imp = apres.imports.find((i) => i.type === 'ventes_comptant');
+  if (imp) { const pi = await call(sessions.com, 'purge.run', { cible: 'import', import_id: imp.id, confirmation: 'SUPPRIMER', motif: 'Défaire un import' }); ok(pi.compte.imports === 1, `Un import est défait (${pi.compte.ventes || 0} vente(s) retirée(s))`); }
+  const au = (await call(sessions.admin, 'audit.list', {})).rows;
+  ok(au.some((r) => r.action === 'SUPPRESSION'), 'La suppression est tracée dans le journal d’audit');
+}
 for (let i = 0; i < 5; i++) { try { await call(null, 'auth.login', { identifiant: 'dg', password: 'mauvais' }); } catch {} }
 await expectErr(call(null, 'auth.login', { identifiant: 'dg', password: 'Nouveau2026' }), 'Verrouillage après 5 échecs', /verrouillé/);
 

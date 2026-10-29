@@ -41,7 +41,7 @@ export function carteDemandes(host) {
   const att = (App.D.demandes || []).filter((d) => d.statut === 'soumise').length;
   host.innerHTML = `<article class="card" id="dem-card"><header><h3>${icon('truck')} Demandes de carburant et de vidange</h3>
       <div class="page-act"><button class="btn ghost sm" data-vierge="carburant" title="Fiche à remplir à la main">${icon('download')} Fiche vierge carburant</button><button class="btn ghost sm" data-vierge="vidange">${icon('download')} Fiche vierge vidange</button></div></header>
-      <p class="muted small">La demande est saisie ici, décidée par la Direction (DG ou DAF), puis imprimée en PDF pour les visas. ${att ? `<b>${att} demande(s) en attente de décision.</b>` : ''}</p>
+      <p class="muted small">La demande est saisie ici, décidée par le profil habilité, puis imprimée en PDF pour les visas. ${att ? `<b>${att} demande(s) en attente de décision.</b>` : ''}</p>
       <div class="filters"><label class="ff"><span>Statut</span><select id="dem-st"><option value="">Toutes</option>${Object.entries(STATUT).map(([k, [l]]) => `<option value="${k}" ${F.statut === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
       <div id="dem-t"></div></article>`;
   new Table({ title: 'Demandes de carburant et de vidange', rows, sort: { k: 'created_at', dir: -1 }, pageSize: 10, empty: 'Aucune demande pour le moment.', onRow: (r) => ouvrirDemande(r.id),
@@ -120,7 +120,7 @@ export function demandeForm(type, d = null) {
 export function ouvrirDemande(id) {
   const d = (App.D.demandes || []).find((x) => x.id === id);
   if (!d) return;
-  const canDec = App.can('depenses', 'valider') && d.statut === 'soumise' && d.created_by !== App.user.id;
+  const canDec = App.can('depenses', 'valider') && d.statut === 'soumise' && (d.created_by !== App.user.id || App.I.p.double_controle === false);
   const own = d.created_by === App.user.id;
   const ligne = (l, v) => `<dt>${l}</dt><dd>${v}</dd>`;
   modal({ title: `Demande ${d.numero} — ${TYPE_L[d.type]}`, wide: true,

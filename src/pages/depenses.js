@@ -61,7 +61,7 @@ export function renderDepenses(root) {
     const dbl = doublonsDepenses(deps);
     const rows = deps.filter((d) => depMatches(d, f, dbl)).map((d) => ({ ...d, _dbl: dbl.has(d.id), _cls: d.agrege ? 'agg' : '' }));
     table = new Table({ title: 'Journal des dépenses', rows, sort: { k: 'date', dir: -1 }, onRow: (r) => !r.agrege && openDepense(r.id), meta: () => `Filtres : ${describeFilters('depenses')}`,
-      select: canVal ? (r) => !r.agrege && ['soumise', 'controlee'].includes(r.statut) && r.created_by !== App.user.id : false,
+      select: canVal ? (r) => !r.agrege && ['soumise', 'controlee'].includes(r.statut) && (r.created_by !== App.user.id || App.I.p.double_controle === false) : false,
       foot: (c, rs) => (c.k === 'montant' ? `<b>${fmtN(rs.filter((r) => r.statut === 'validee').reduce((s, r) => s + montantPour(r, f.equipe_id), 0))}</b>` : c.k === 'numero' ? '<b>Total validé</b>' : ''),
       cols: [
         { k: 'numero', l: 'N°' }, { k: 'date', l: 'Date', f: (r) => (r.historique || r.agrege ? `${moisLabel(r.mois)} <small>(agrégé)</small>` : fmtD(r.date)) },

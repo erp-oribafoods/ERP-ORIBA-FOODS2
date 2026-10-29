@@ -1,0 +1,21 @@
+const { chromium } = require('playwright'); const fs = require('fs'); const path = require('path');
+const CDN = process.env.CDN_DIR, OUT = process.env.OUT_DIR;
+const map = { 'chart.umd.min.js': 'chart.js/dist/chart.umd.js', 'xlsx.full.min.js': 'xlsx/dist/xlsx.full.min.js', 'jspdf.umd.min.js': 'jspdf/dist/jspdf.umd.min.js', 'jspdf.plugin.autotable.min.js': 'jspdf-autotable/dist/jspdf.plugin.autotable.min.js' };
+(async () => {
+  const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"></head><body>' + fs.readFileSync(path.join(__dirname, '../dist/demo.html'), 'utf8') + '</body></html>';
+  const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 1280, height: 800 } }); const errs = [];
+  await ctx.route('**/*', (r) => { const u = r.request().url(); if (u.startsWith('http://erp.test/')) return r.fulfill({ contentType: 'text/html', body: html }); const f = Object.keys(map).find((k) => u.endsWith(k)); if (f) return r.fulfill({ contentType: 'application/javascript', body: fs.readFileSync(path.join(CDN, 'node_modules', map[f])) }); if (u.includes('fonts.g')) return r.fulfill({ contentType: 'text/css', body: '' }); return r.abort(); });
+  const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message));
+  const login = async (u, pw) => { await p.goto('http://erp.test/?r=' + Math.random()); await p.waitForSelector('#lf', { timeout: 120000 }); await p.fill('[name=identifiant]', u); await p.fill('[name=password]', pw); await p.click('#lf button[type=submit]'); };
+  await login('dg', 'Demo2026'); await p.waitForSelector('.layout');
+  await p.click('#mdp'); await p.waitForSelector('#pwf');
+  await p.fill('[name=ancien]', 'Demo2026'); await p.fill('[name=nouveau]', 'Direction2027'); await p.fill('[name=confirm]', 'Direction2027');
+  await p.screenshot({ path: path.join(OUT, 'mdp.png') });
+  await p.click('#pwf button[type=submit]'); await p.waitForTimeout(800);
+  console.log('toast:', (await p.textContent('#toasts')).trim());
+  await p.waitForTimeout(1000); console.log('stockage:', await p.evaluate(() => Object.keys(localStorage).map((k) => k + '=' + (localStorage.getItem(k) || '').length).join(', ')));
+  await p.click('#logout'); await p.waitForTimeout(300);
+  await login('dg', 'Direction2027'); await p.waitForTimeout(2500); await p.screenshot({ path: path.join(OUT, 'mdp2.png') }); console.log('erreur:', await p.$eval('.err', (e) => e.textContent).catch(() => 'aucune'), '| layout:', !!(await p.$('.layout')));
+  console.log('Reconnexion avec le nouveau mot de passe : OK');
+  console.log(errs.length ? errs.join('\n') : 'Aucune erreur'); await b.close();
+})().catch((e) => { console.error(e); process.exit(1); });

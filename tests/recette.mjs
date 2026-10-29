@@ -53,6 +53,8 @@ await expectErr(mk('commercial', 'DAF'), 'Identifiant dupliqué refusé', /déj�
 await expectErr(call(sessions.admin, 'user.save', { user: { nom: 'Y', username: 'yy', email: 'COMMERCIAL@oriba.test', role_id: role('DAF') }, password: 'Initial2026' }), 'E-mail dupliqué refusé', /déjà/);
 await expectErr(call(uCom.id, 'data.bootstrap'), 'Changement de mot de passe exigé à la 1re connexion', /changer/);
 for (const u of [uCom, uDG, uDAF, uCG]) await call(u.id, 'auth.change_password', { ancien: 'Initial2026', nouveau: 'Nouveau2026' });
+{ const lgc = await call(null, 'auth.login', { identifiant: 'commercial', password: 'Nouveau2026' }); ok(lgc.user && !lgc.user.must_change_password, 'Chaque utilisateur change lui-même son mot de passe et se reconnecte avec'); }
+await expectErr(call(null, 'auth.login', { identifiant: 'commercial', password: 'Initial2026' }), 'L’ancien mot de passe ne fonctionne plus');
 sessions.com = uCom.id; sessions.dg = uDG.id; sessions.daf = uDAF.id; sessions.cg = uCG.id;
 
 console.log('REC-02 Droits par profil');
@@ -188,6 +190,18 @@ const sv3 = await call(sessions.com, 'suivi.bulk', { mois: today().slice(0, 7), 
 ok(sv3.modifies === 0, 'Aucune écriture si rien ne change');
 await expectErr(call(sessions.com, 'suivi.bulk', { mois: today().slice(0, 7), lignes: [{ agent_id: ag.id, note: 12 }] }), 'Note limitée à 10', /entre 0 et 10/);
 await expectErr(call(sessions.daf, 'suivi.bulk', { mois: today().slice(0, 7), lignes: [] }), 'La DAF consulte le suivi sans le modifier', /insuffisant/);
+console.log('Responsable commercial seul habilité (double contrôle désactivable)');
+{
+  const rc = (await call(sessions.admin, 'data.bootstrap')).data.roles.find((r) => r.nom.startsWith('Responsable Commercial'));
+  await call(sessions.admin, 'role.save', { role: { ...rc, permissions: { ...rc.permissions, depenses: ['lire', 'creer', 'modifier', 'controler', 'valider', 'annuler', 'exporter'] } } });
+  const dd = (await call(sessions.com, 'dep.save', { depense: { ...carb, montant: 31000, sans_piece: true, description: 'Ticket illisible' }, soumettre: true })).depense;
+  await expectErr(call(sessions.com, 'dep.decision', { id: dd.id, decision: 'valider' }), 'Double contrôle actif : pas de validation de sa propre saisie', /Séparation/);
+  await call(sessions.daf, 'param.save', { cle: 'double_controle', valeur: false, motif: 'Responsable commercial seul habilité' });
+  const ok2 = (await call(sessions.com, 'dep.decision', { id: dd.id, decision: 'valider' })).depense;
+  ok(ok2.statut === 'validee', 'Double contrôle désactivé : le Responsable commercial valide sa propre dépense');
+  await call(sessions.daf, 'param.save', { cle: 'double_controle', valeur: true, motif: 'Retour au réglage de test' });
+  await call(sessions.admin, 'role.save', { role: rc });
+}
 console.log('Import Excel depuis les rubriques');
 const m0 = today().slice(0, 7);
 let im = await call(sessions.com, 'import.run', { type: 'objectifs', mode: 'courant', fichier: 'obj.xlsx', rows: [{ ligne: 2, data: { mois: m0, axe: 'agent', cible_id: ag.id, produit_id: null, objectif_cartons: 75, objectif_ca: null } }] });
@@ -213,7 +227,7 @@ const dc = (await call(sessions.com, 'demande.save', { demande: { type: 'carbura
 ok(/^DEM-CARB-\d{5}$/.test(dc.numero) && dc.statut === 'soumise', `Demande de carburant enregistrée (${dc.numero})`);
 await expectErr(call(sessions.com, 'demande.save', { demande: { type: 'vidange', date: today(), equipe_id: eq.id, vehicule_id: veh.id, km_actuel: 0 } }), 'Kilométrage obligatoire', /obligatoire/);
 await expectErr(call(sessions.com, 'demande.save', { demande: { type: 'vidange', date: today(), equipe_id: eq.id, vehicule_id: veh.id, km_actuel: 40000 } }), 'Kilométrage inférieur à une demande antérieure refusé', /inférieur/);
-await expectErr(call(sessions.com, 'demande.decision', { id: dc.id, decision: 'accordee' }), 'Le demandeur ne décide pas', /Direction/);
+await expectErr(call(sessions.com, 'demande.decision', { id: dc.id, decision: 'accordee' }), 'Le demandeur ne décide pas', /habilité/);
 const dcd = (await call(sessions.dg, 'demande.decision', { id: dc.id, decision: 'accordee', creer_depense: true, direction: { solde_carte_avant: 400000, montant_accorde: 45000, plafond_restant: 155000 } })).demande;
 D = (await call(sessions.com, 'data.bootstrap')).data;
 const depC = D.depenses.find((d) => d.id === dcd.depense_id);

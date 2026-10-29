@@ -101,6 +101,7 @@ export const DEFAULT_PARAMS = {
   seuil_depense_elevee: 500000,
   jours_saisie_tardive: 15,
   delai_session_min: 30,
+  double_controle: true,
   prime_note_min: 8,
   prime_montant: 25000,
 };
@@ -117,6 +118,7 @@ export const PARAM_DEFS = [
   { k: 'seuils_budget', l: "Seuils d'alerte budgets (%)", t: 'list', g: 'Dépenses' },
   { k: 'seuil_depense_elevee', l: 'Montant de dépense à signaler (FCFA)', t: 'number', g: 'Dépenses' },
   { k: 'jours_saisie_tardive', l: 'Saisie tardive au-delà de (jours)', t: 'number', g: 'Dépenses' },
+  { k: 'double_controle', l: 'Double contrôle : interdire de valider ses propres saisies (dépenses, demandes carburant/vidange)', t: 'bool', g: 'Dépenses' },
   { k: 'prime_note_min', l: 'Note minimale pour la prime mensuelle (sur 10)', t: 'number', g: 'Agents terrain' },
   { k: 'prime_montant', l: 'Montant de la prime mensuelle (FCFA)', t: 'number', g: 'Agents terrain' },
   { k: 'delai_session_min', l: "Déconnexion automatique après inactivité (minutes)", t: 'number', g: 'Sécurité' },

@@ -1,7 +1,7 @@
 // Démarrage, authentification, navigation.
 import { App } from './app.js';
 import { serverApi, demoApi } from './api.js';
-import { esc, $, $$, toast, icon, field, readForm, showErr, busy, setExportContext, setSaver, destroyCharts } from './lib/ui.js';
+import { esc, $, $$, toast, icon, modal, field, readForm, showErr, busy, setExportContext, setSaver, destroyCharts } from './lib/ui.js';
 import { describeFilters } from './app.js';
 import { renderDashboard, renderAnalyses } from './pages/dashboard.js';
 import { renderVentes, renderRemboursements } from './pages/ventes.js';
@@ -119,6 +119,7 @@ function shell() {
     </aside>
     <div class="body">
       <header class="top"><button class="btn-icon menu" aria-label="Menu">${icon('menu')}</button><span class="crumb" id="crumb"></span><span class="grow"></span>
+        <button class="btn sm ghost" id="mdp" title="Changer mon mot de passe">${icon('lock')}<span class="hide-sm">Mot de passe</span></button>
         <button class="btn sm" id="rapports" title="Rapport hebdomadaire ou mensuel, en PDF ou Excel">${icon('file')}<span class="hide-sm">Rapports</span></button>
         <button class="btn sm ghost" id="refresh" title="Actualiser les données">${icon('refresh')}<span class="hide-sm">Actualiser</span></button>
         <button class="btn sm ghost" id="logout">${icon('logout')}<span class="hide-sm">Déconnexion</span></button></header>
@@ -128,6 +129,8 @@ function shell() {
   $('.menu').addEventListener('click', () => document.body.classList.toggle('nav-open'));
   $('#logout').addEventListener('click', () => logout());
   $('#rapports').addEventListener('click', () => ouvrirRapports('hebdo'));
+  $('#mdp').addEventListener('click', () => modal({ title: 'Changer mon mot de passe', body: `<p class="muted small">Chaque utilisateur peut changer lui-même son mot de passe, sans passer par l’administrateur : saisissez l’actuel puis le nouveau (8 caractères au moins, avec lettres et chiffres).</p>${passwordForm()}`,
+    onMount: (m, close) => bindPasswordForm(m, () => { close(); toast('Mot de passe modifié. Utilisez-le à votre prochaine connexion.'); }) }));
   $('#refresh').addEventListener('click', (e) => busy(e.currentTarget, async () => { try { await App.refresh(); App.rerender(); toast('Données actualisées.'); } catch (er) { handleErr(er); } }));
   $('#demo-reset')?.addEventListener('click', () => { App.api.reset(); location.reload(); });
   setExportContext(() => ({ user: [u.prenom, u.nom].filter(Boolean).join(' ') + ` (${u.role_nom || ''})`, filtres: ['tableau-de-bord', 'analyses', 'ventes-comptant', 'ventes-credit', 'remboursements', 'creances'].includes(current) ? describeFilters('ventes') : ['depenses', 'pilotage-depenses'].includes(current) ? describeFilters('depenses') : '' }));

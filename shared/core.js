@@ -523,7 +523,7 @@ A['stock.cancel'] = async ({ t, user, perms, payload, ip }) => {
 // Dépenses
 async function checkClosed(t, perms, mois) {
   const D = { clotures: await t.select('clotures') };
-  if (moisClos(D, mois) && !can(perms, 'cloture', 'modifier')) fail(`La période ${mois} est clôturée. Seule la DAF peut y apporter une correction motivée.`, 423);
+  if (moisClos(D, mois) && !can(perms, 'cloture', 'modifier')) fail(`La période ${mois} est clôturée. Seul le profil habilité à la clôture peut y apporter une correction motivée.`, 423);
   return moisClos(D, mois);
 }
 
@@ -645,7 +645,7 @@ async function decideDepense(t, user, perms, id, decision, commentaire, ip) {
   } else if (decision === 'valider') {
     if (!can(perms, 'depenses', 'valider')) fail('Droit de validation manquant.', 403);
     if (!['soumise', 'controlee'].includes(d.statut)) fail('Seule une dépense soumise ou contrôlée peut être validée.');
-    if (d.created_by === user.id && !d.historique) fail('Séparation des tâches : vous ne pouvez pas valider une dépense que vous avez saisie.', 403);
+    if (d.created_by === user.id && !d.historique && (await getParams(t)).double_controle !== false) fail('Séparation des tâches : vous ne pouvez pas valider une dépense que vous avez saisie.', 403);
     await requireComplete(t, d);
     statut = 'validee';
   } else if (decision === 'rejeter' || decision === 'a_completer') {
@@ -678,7 +678,7 @@ A['dep.cancel'] = async ({ t, user, perms, payload, ip }) => {
   if (!motif) fail('Le motif d’annulation est obligatoire.');
   if (d.statut === 'annulee') fail('Dépense déjà annulée.');
   if (['validee', 'controlee', 'rejetee'].includes(d.statut)) {
-    if (!can(perms, 'depenses', 'annuler')) fail('Seule la DAF peut annuler (contrepasser) une dépense validée.', 403);
+    if (!can(perms, 'depenses', 'annuler')) fail('Droit insuffisant : seul le profil habilité peut annuler (contrepasser) une dépense validée.', 403);
   } else if (!(d.created_by === user.id || can(perms, 'depenses', 'annuler') || can(perms, 'depenses', 'modifier'))) fail('Droit insuffisant.', 403);
   await checkClosed(t, perms, d.mois);
   const r = await t.update('depenses', d.id, { statut: 'annulee', motif, updated_by: user.id, updated_at: nowISO() });
@@ -793,10 +793,10 @@ A['demande.save'] = async ({ t, user, perms, payload, ip }) => {
 };
 
 A['demande.decision'] = async ({ t, user, perms, payload, ip }) => {
-  if (!can(perms, 'depenses', 'valider')) fail('Seule la Direction (DG ou DAF) peut décider d’une demande.', 403);
+  if (!can(perms, 'depenses', 'valider')) fail('Droit insuffisant : seul le profil habilité à valider les dépenses peut décider d’une demande.', 403);
   const d = await one(t, 'demandes', payload.id, 'Demande');
   if (d.statut !== 'soumise') fail('Cette demande a déjà été traitée.');
-  if (d.created_by === user.id) fail('Séparation des tâches : vous ne pouvez pas décider de votre propre demande.', 403);
+  if (d.created_by === user.id && (await getParams(t)).double_controle !== false) fail('Séparation des tâches : vous ne pouvez pas décider de votre propre demande.', 403);
   const dec = payload.decision;
   if (!['accordee', 'refusee'].includes(dec)) fail('Décision inconnue.');
   const x = payload.direction || {};
@@ -881,7 +881,7 @@ A['suivi.bulk'] = async ({ t, user, perms, payload, ip }) => {
 };
 
 A['cloture.set'] = async ({ t, user, perms, payload, ip }) => {
-  if (!can(perms, 'cloture', 'modifier')) fail('Seule la DAF peut clôturer ou rouvrir une période.', 403);
+  if (!can(perms, 'cloture', 'modifier')) fail('Droit insuffisant : seul le profil habilité peut clôturer ou rouvrir une période.', 403);
   if (!/^\d{4}-\d{2}$/.test(payload.mois || '')) fail('Mois invalide.');
   if (!['cloture', 'rouvert'].includes(payload.statut)) fail('Statut invalide.');
   if (payload.statut === 'rouvert' && !clean(payload.commentaire)) fail('Le motif de réouverture est obligatoire.');

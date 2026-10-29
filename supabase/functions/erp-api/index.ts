@@ -3,7 +3,7 @@
 import pg from "npm:pg@8.13.1";
 import bcrypt from "npm:bcryptjs@3.0.3";
 import { SignJWT, jwtVerify } from "npm:jose@6.2.13";
-import { handle, AppError } from "https://raw.githubusercontent.com/erp-oribafoods/ERP-ORIBA-FOODS2/ae9da0cb3bd4d4423e7806517e602e069a273c76/shared/core.js";
+import { handle, AppError } from "https://raw.githubusercontent.com/erp-oribafoods/ERP-ORIBA-FOODS2/6001bf10c63d0a4a308c9b2b138e96338ad87f0a/shared/core.js";
 
 const SCHEMA = "erp";
 pg.types.setTypeParser(1700, (v: string) => (v === null ? null : parseFloat(v)));
@@ -41,6 +41,13 @@ function ops(q: (s: string, p?: any[]) => Promise<any>) {
       const p = keys.map((k) => val(patch[k]));
       const r = await q(`update ${tbl(table)} set ${keys.map((k, i) => `${col(k)} = $${i + 1}`).join(", ")}${where(w, p)} returning *`, p);
       return r.rows[0];
+    },
+    async remove(table: string, w: any) {
+      if (!w || !Object.keys(w).length) throw new Error("Suppression sans critère refusée");
+      const p: any[] = [];
+      await q("select set_config('erp.suppression_autorisee', 'on', true)");
+      const r = await q(`delete from ${tbl(table)}${where(w, p)}`, p);
+      return r.rowCount;
     },
     async nextSeq(cle: string) {
       const r = await q(`insert into ${SCHEMA}.compteurs (cle, valeur) values ($1, 1) on conflict (cle) do update set valeur = ${SCHEMA}.compteurs.valeur + 1 returning valeur`, [cle]);

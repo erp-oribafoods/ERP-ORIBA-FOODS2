@@ -24,6 +24,7 @@ export const App = {
 // Libellés
 export const nm = {
   agent: (id) => App.I.agents.get(id)?.nom || '—',
+  grossiste: (id) => (App.D.grossistes || []).find((g) => g.id === id)?.nom || '—',
   marche: (id) => App.I.marches.get(id)?.nom || '—',
   client: (id) => App.I.clients.get(id)?.nom || '—',
   produit: (id) => App.I.produits.get(id)?.nom || '—',

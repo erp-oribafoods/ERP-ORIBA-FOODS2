@@ -33,7 +33,9 @@ const verif = (ok, msg) => { console.log(`${ok ? '✓' : '✗'} ${msg}`); if (!o
   await p.click('.modal [data-res] [data-go]'); await p.waitForSelector('.modal [data-res] .note.ok', { timeout: 60000 });
   console.log('  ', (await p.textContent('.modal [data-res] .note.ok')).replace(/\s+/g, ' '));
   const apres = await D();
-  const objs = apres.objectifs.filter((o) => o.actif !== false && o.axe === 'agent' && o.mois >= `${an}-11` && o.mois <= `${an}-12`);
+  const nomsListe = new Set(XLSX.utils.sheet_to_json(XLSX.readFile(SRC).Sheets[XLSX.readFile(SRC).SheetNames[0]], { header: 1, defval: '' }).slice(2).map((r) => String(r[0]).trim().toLowerCase()).filter((x) => x && x !== 'total'));
+  const idsListe = new Set(apres.agents.filter((a) => nomsListe.has(a.nom.trim().toLowerCase())).map((a) => a.id));
+  const objs = apres.objectifs.filter((o) => o.actif !== false && o.axe === 'agent' && idsListe.has(o.cible_id) && o.mois >= `${an}-11` && o.mois <= `${an}-12`);
   const tot = objs.filter((o) => o.mois === `${an}-11`).reduce((s, o) => s + Number(o.objectif_cartons), 0);
   verif(objs.length === 86 && tot === 16650, `Objectifs enregistrés : ${objs.length} (43 agents × 2 mois), total novembre ${tot} cartons`);
   const nouveaux = apres.agents.length - avant.agents.length;

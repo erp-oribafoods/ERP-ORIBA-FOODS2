@@ -6,6 +6,7 @@ export const MODULES = [
   { k: 'remboursements', l: 'Remboursements', a: ['lire', 'creer', 'annuler', 'exporter'] },
   { k: 'creances', l: 'Créances & relances', a: ['lire', 'creer', 'exporter'] },
   { k: 'stock', l: 'Stock confié', a: ['lire', 'creer', 'annuler', 'exporter'] },
+  { k: 'circuit', l: 'Circuit de distribution (grossistes, dépôts, sous-agents, versements)', a: ['lire', 'creer', 'annuler', 'exporter'] },
   { k: 'objectifs', l: 'Objectifs commerciaux', a: ['lire', 'modifier'] },
   { k: 'suivi', l: 'Suivi des agents terrain (présence, déstockage, évaluation)', a: ['lire', 'modifier'] },
   { k: 'depenses', l: 'Dépenses commerciales', a: ['lire', 'creer', 'modifier', 'controler', 'valider', 'annuler', 'exporter'] },
@@ -33,7 +34,7 @@ export const DEFAULT_ROLES = [
     description: 'Lecture globale, alertes, rapports. Validation exceptionnelle des dépenses.',
     permissions: {
       dashboard: ['lire'], ventes: ['lire', 'exporter'], remboursements: ['lire', 'exporter'],
-      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], objectifs: ['lire', 'modifier'], suivi: ['lire'], depenses: ['lire', 'valider', 'exporter'],
+      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], circuit: ['lire', 'exporter'], objectifs: ['lire', 'modifier'], suivi: ['lire'], depenses: ['lire', 'valider', 'exporter'],
       salaires: ['lire'], budgets: ['lire', 'modifier'], cloture: ['lire'], referentiels: ['lire'],
       parametres: ['lire'], audit: ['lire', 'creer'],
     },
@@ -43,7 +44,7 @@ export const DEFAULT_ROLES = [
     description: 'Seul profil autorisé à créer, corriger et annuler les ventes et remboursements.',
     permissions: {
       dashboard: ['lire'], ventes: all('ventes'), remboursements: all('remboursements'),
-      creances: all('creances'), stock: all('stock'), objectifs: ['lire', 'modifier'], suivi: ['lire', 'modifier'],
+      creances: all('creances'), stock: all('stock'), circuit: all('circuit'), objectifs: ['lire', 'modifier'], suivi: ['lire', 'modifier'],
       depenses: ['lire', 'creer', 'modifier', 'controler', 'exporter'], budgets: ['lire'],
       cloture: ['lire'], referentiels: ['lire', 'modifier'], parametres: ['lire'], import: ['creer'], suppression: ['supprimer'],
     },
@@ -53,7 +54,7 @@ export const DEFAULT_ROLES = [
     description: 'Analyse, rapprochements, exports, audit et signalement des anomalies.',
     permissions: {
       dashboard: ['lire'], ventes: ['lire', 'exporter'], remboursements: ['lire', 'exporter'],
-      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], objectifs: ['lire'], suivi: ['lire'], depenses: ['lire', 'exporter'],
+      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], circuit: ['lire', 'exporter'], objectifs: ['lire'], suivi: ['lire'], depenses: ['lire', 'exporter'],
       budgets: ['lire'], cloture: ['lire'], referentiels: ['lire'], parametres: ['lire'], audit: ['lire', 'creer'],
     },
   },
@@ -62,7 +63,7 @@ export const DEFAULT_ROLES = [
     description: 'Contrôle financier, validation des dépenses, clôture mensuelle, paramètres financiers.',
     permissions: {
       dashboard: ['lire'], ventes: ['lire', 'exporter'], remboursements: ['lire', 'exporter'],
-      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], objectifs: ['lire'], suivi: ['lire'],
+      creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], circuit: ['lire', 'exporter'], objectifs: ['lire'], suivi: ['lire'],
       depenses: ['lire', 'valider', 'annuler', 'exporter'], salaires: ['lire'], budgets: ['lire', 'modifier'],
       cloture: ['lire', 'modifier'], referentiels: ['lire'], parametres: ['lire', 'modifier'], audit: ['lire', 'creer'],
     },
@@ -79,7 +80,7 @@ export const DEFAULT_ROLES = [
     nom: "Superviseur / Responsable d'équipe",
     description: "Saisie et contrôle des dépenses de son équipe (périmètre à définir sur le compte).",
     permissions: {
-      dashboard: ['lire'], depenses: ['lire', 'creer', 'modifier', 'controler'], suivi: ['lire', 'modifier'], referentiels: ['lire'], cloture: ['lire'],
+      dashboard: ['lire'], depenses: ['lire', 'creer', 'modifier', 'controler'], suivi: ['lire', 'modifier'], circuit: ['lire'], referentiels: ['lire'], cloture: ['lire'],
     },
   },
   {
@@ -105,6 +106,7 @@ export const DEFAULT_PARAMS = {
   double_controle: true,
   prime_note_min: 8,
   prime_montant: 25000,
+  circuit_date_depart: { date: null },
 };
 
 export const PARAM_DEFS = [
@@ -122,6 +124,7 @@ export const PARAM_DEFS = [
   { k: 'double_controle', l: 'Double contrôle : interdire de valider ses propres saisies (dépenses, demandes carburant/vidange)', t: 'bool', g: 'Dépenses' },
   { k: 'prime_note_min', l: 'Note minimale pour la prime mensuelle (sur 10)', t: 'number', g: 'Agents terrain' },
   { k: 'prime_montant', l: 'Montant de la prime mensuelle (FCFA)', t: 'number', g: 'Agents terrain' },
+  { k: 'circuit_date_depart', l: 'Date des stocks initiaux du circuit (grossistes, dépôts, sous-agents)', t: 'date', g: 'Circuit de distribution' },
   { k: 'delai_session_min', l: "Déconnexion automatique après inactivité (minutes)", t: 'number', g: 'Sécurité' },
 ];
 
@@ -142,6 +145,8 @@ export const REFS = {
       { k: 'fonction', l: 'Fonction', t: 'text' }, { k: 'telephone', l: 'Téléphone pro.', t: 'text' }, { k: 'equipe_id', l: 'Équipe', t: 'ref:equipes' },
       { k: 'zone_id', l: 'Zone', t: 'ref:zones' }, { k: 'marche_id', l: 'Marché d’affectation', t: 'ref:marches' },
       { k: 'date_affectation', l: "Date d'affectation", t: 'date' },
+      { k: 'role_circuit', l: 'Rôle dans le circuit', t: 'select:depot=Agent-dépôt|sous_agent=Sous-agent' }, { k: 'depot_id', l: 'Agent-dépôt (pour un sous-agent)', t: 'ref:agents' },
+      { k: 'stock_initial', l: 'Stock initial du circuit (cartons)', t: 'number' },
     ],
   },
   marches: {
@@ -159,6 +164,14 @@ export const REFS = {
       { k: 'marche_id', l: 'Marché principal', t: 'ref:marches' }, { k: 'telephone', l: 'Téléphone', t: 'text' },
       { k: 'plafond_cartons', l: 'Plafond individuel (cartons, vide = plafond général)', t: 'number' },
       { k: 'depositaire', l: 'Gros client dépositaire (stock confié)', t: 'bool' },
+    ],
+  },
+  grossistes: {
+    l: 'Grossistes', one: 'grossiste',
+    f: [
+      { k: 'code', l: 'Code', t: 'text' }, { k: 'nom', l: 'Nom', t: 'text', req: 1 }, { k: 'localite', l: 'Localité', t: 'text' },
+      { k: 'fournisseur', l: 'Fournisseur habituel', t: 'select:Usine Oriba Foods|Oriba Rice' }, { k: 'telephone', l: 'Téléphone', t: 'text' },
+      { k: 'stock_initial', l: 'Stock initial (cartons)', t: 'number' }, { k: 'solde_initial', l: 'Solde dû à Oriba au départ (FCFA)', t: 'number' },
     ],
   },
   produits: {
@@ -245,7 +258,8 @@ export const DEFAULT_MARCHES = [
 export const WRITABLE = {
   zones: ['nom', 'actif'],
   equipes: ['code', 'nom', 'zone_id', 'responsable', 'actif'],
-  agents: ['code', 'nom', 'fonction', 'telephone', 'equipe_id', 'zone_id', 'marche_id', 'date_affectation', 'actif'],
+  agents: ['code', 'nom', 'fonction', 'telephone', 'equipe_id', 'zone_id', 'marche_id', 'date_affectation', 'role_circuit', 'depot_id', 'stock_initial', 'actif'],
+  grossistes: ['code', 'nom', 'localite', 'fournisseur', 'telephone', 'stock_initial', 'solde_initial', 'actif'],
   marches: ['nom', 'commune', 'zone_id', 'equipe_id', 'actif'],
   clients: ['code', 'nom', 'type', 'marche_id', 'telephone', 'plafond_cartons', 'depositaire', 'actif'],
   produits: ['code', 'nom', 'gamme', 'packs_par_carton', 'prix_ref', 'actif'],
@@ -257,7 +271,7 @@ export const TABLES = [
   'zones', 'equipes', 'agents', 'marches', 'clients', 'produits', 'vehicules', 'categories_depense',
   'parametres', 'roles', 'utilisateurs', 'compteurs', 'ventes', 'vente_lignes', 'remboursements', 'relances',
   'stock_mouvements', 'depenses', 'depense_repartitions', 'depense_validations', 'budgets', 'clotures',
-  'anomalies', 'imports', 'audit_log', 'objectifs', 'suivi_agents', 'demandes',
+  'anomalies', 'imports', 'audit_log', 'objectifs', 'suivi_agents', 'demandes', 'grossistes', 'circuit_mvts', 'versements',
 ];
 
 // Fiche mensuelle d'un agent terrain (présence, activité, évaluation)
@@ -273,3 +287,9 @@ export const DOCS_VEHICULE = [['ASSU', 'Assurance'], ['VIGN', 'Vignette'], ['VTE
 export const CATS_LOGISTIQUE = ['CARB', 'VIDA', 'FILT', 'VIGN', 'ASSU', 'REPA', 'VTEC', 'INSA', 'AUTO'];
 
 export const AXES_OBJECTIF = { agent: 'Agent', zone: 'Zone', equipe: 'Équipe', marche: 'Marché', produit: 'Produit', global: 'Global (tout le service)' };
+
+// Circuit de distribution : usine / Oriba Rice → grossistes → agents-dépôts → sous-agents → clients
+export const CIRCUIT_TYPES = { appro: 'Approvisionnement grossiste', prise: 'Prise chez un grossiste', dispatch: 'Dispatch à un sous-agent' };
+export const FOURNISSEURS = ['Usine Oriba Foods', 'Oriba Rice'];
+export const OBJETS_VERSEMENT = { ventes_comptant: 'Ventes comptant', reglement_grossiste: 'Règlement grossiste' };
+export const LIEUX_VERSEMENT = { caisse: 'Caisse Oriba', grossiste: 'Chez le grossiste' };

@@ -83,7 +83,7 @@ export function analyse(type, raw) {
         else if (f.t === 'number') { const n = toNum(v); if (Number.isNaN(n)) msgs.push(`${f.l} : nombre attendu`); data[f.k] = n; }
         else if (f.t === 'bool') data[f.k] = oui(v);
         else if (f.t === 'date') { data[f.k] = toISO(v); if (data[f.k] && !isDate(data[f.k])) msgs.push(`${f.l} : date invalide`); }
-        else if (f.t.startsWith('select:')) { const o = f.t.slice(7).split('|').find((x) => norm(x) === norm(v)); if (!vide(v) && !o) msgs.push(`${f.l} : valeur « ${v} » non prévue (${f.t.slice(7).split('|').join(', ')})`); data[f.k] = o || null; }
+        else if (f.t.startsWith('select:')) { const opts = f.t.slice(7).split('|').map((x) => (x.includes('=') ? x.split('=') : [x, x])); const o = opts.find(([val, lib]) => norm(val) === norm(v) || norm(lib) === norm(v)); if (!vide(v) && !o) msgs.push(`${f.l} : valeur « ${v} » non prévue (${opts.map((x) => x[1]).join(', ')})`); data[f.k] = o ? o[0] : null; }
         else data[f.k] = vide(v) ? null : String(v).trim();
       }
       if (!existe && !data[label]) msgs.push(`${REFS[type].f.find((f) => f.k === label)?.l || 'Nom'} manquant`);

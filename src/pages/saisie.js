@@ -2,6 +2,7 @@
 import { App, pageHead } from '../app.js';
 import { esc, $, $$, icon } from '../lib/ui.js';
 import { ouvrirMiseAJour, peutMettreAJour } from '../lib/majTB.js';
+import { ouvrirImportCircuit, modeleCircuit } from '../lib/importCircuit.js';
 import { TYPES, peutImporter, ouvrirImport, telechargerModele } from '../lib/importer.js';
 import { today } from '../../shared/logic.js';
 
@@ -57,6 +58,7 @@ function saisir(page, sel, prep) {
 export function renderSaisie(root) {
   const mois = today().slice(0, 7);
   root.innerHTML = pageHead('Saisie et import des données', 'Pour chaque rubrique, deux possibilités : saisir directement à l’écran, ou remplir le modèle Excel puis l’importer. Les deux suivent les mêmes règles et le même journal d’audit. Les modèles des objectifs, fiches agents, budgets et référentiels contiennent déjà les données actuelles : il suffit de les corriger pour mettre la plateforme à jour.') +
+    (App.can('circuit', 'creer') ? `<article class="card maj-c"><div class="grow"><h3>Classeur du circuit de distribution</h3><p class="muted small">Grossistes, agents-dépôts, sous-agents, ventes et versements : importez chaque jour le classeur (même format que le modèle). Seules les nouvelles lignes sont ajoutées.</p></div><button class="btn primary" id="circ-imp">${icon('upload')} Importer le classeur du jour</button><button class="btn ghost" id="circ-mod">${icon('download')} Modèle</button></article>` : '') +
     (peutMettreAJour() ? `<article class="card maj-c"><div class="grow"><h3>Mise à jour quotidienne des tableaux de bord</h3><p class="muted small">Importez chaque jour les mêmes fichiers « TB … ORIBA FOODS » (un ou plusieurs à la fois) : la plateforme n’ajoute que les nouvelles ventes, les nouveaux crédits et les remboursements à compléter. Aucune ligne n’est jamais enregistrée deux fois.</p></div><button class="btn primary" id="maj">${icon('refresh')} Lancer la mise à jour du jour</button></article>` : '') +
     RUBRIQUES.map(([titre, items]) => {
       const vis = items.filter(([type, , , perm]) => App.can(perm[0], perm[1]) || peutImporter(type));
@@ -74,6 +76,8 @@ export function renderSaisie(root) {
     saisir(it[1], it[2], it[5]);
   }));
   $('#maj', root)?.addEventListener('click', ouvrirMiseAJour);
+  $('#circ-imp', root)?.addEventListener('click', () => ouvrirImportCircuit());
+  $('#circ-mod', root)?.addEventListener('click', () => modeleCircuit());
   $$('[data-i]', root).forEach((b) => b.addEventListener('click', () => ouvrirImport(b.dataset.i, { mois })));
   $$('[data-m]', root).forEach((b) => b.addEventListener('click', () => telechargerModele(b.dataset.m, { mois })));
 }

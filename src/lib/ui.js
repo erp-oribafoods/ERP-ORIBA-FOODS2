@@ -86,7 +86,7 @@ export function field(f, value, opts = {}) {
   if (f.t === 'bool') return `<label class="chk"><input type="checkbox" id="${id}" name="${f.k}" ${v ? 'checked' : ''}${dis}> <span>${esc(f.l)}</span></label>`;
   let input;
   if (f.t === 'textarea') input = `<textarea id="${id}" name="${f.k}" rows="${f.rows || 3}"${dis}>${esc(v)}</textarea>`;
-  else if (f.t?.startsWith('select:')) input = `<select id="${id}" name="${f.k}"${dis}><option value="">—</option>${f.t.slice(7).split('|').map((o) => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  else if (f.t?.startsWith('select:')) input = `<select id="${id}" name="${f.k}"${dis}><option value="">—</option>${f.t.slice(7).split('|').map((o) => { const [val, lib] = o.includes('=') ? o.split('=') : [o, o]; return `<option value="${esc(val)}" ${val === v ? 'selected' : ''}>${esc(lib)}</option>`; }).join('')}</select>`;
   else if (f.t === 'options') input = `<select id="${id}" name="${f.k}"${dis}>${f.empty === false ? '' : `<option value="">${esc(f.emptyLabel || '—')}</option>`}${(f.options || []).map((o) => `<option value="${esc(o.v)}" ${String(o.v) === String(v) ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select>`;
   else input = `<input id="${id}" name="${f.k}" type="${f.t === 'number' ? 'number' : f.t === 'date' ? 'date' : f.t === 'month' ? 'month' : f.t === 'password' ? 'password' : f.t === 'email' ? 'email' : 'text'}" ${f.t === 'number' ? `step="${f.step || 'any'}" min="${f.min ?? ''}"` : ''} value="${esc(v)}" ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ''} ${f.auto ? `autocomplete="${f.auto}"` : ''}${dis}>`;
   return `<label class="fld ${f.wide ? 'span2' : ''} ${opts.cls || ''}"><span>${esc(f.l)}${req}</span>${input}${help}</label>`;

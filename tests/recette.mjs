@@ -255,6 +255,41 @@ if (mode === 'pg') {
   await expectErr(globalThis.__pool.query('delete from ventes'), 'Suppression de vente interdite en base', /Suppression interdite/);
   await expectErr(globalThis.__pool.query(`update remboursements set montant = 999999 where vente_id = '${vr.vente.id}'`), 'Trigger base : trop-perçu bloqué', /supérieur/);
 }
+console.log('Circuit de distribution (grossistes → agents-dépôts → sous-agents)');
+{
+  const gro = await ref('grossistes', { code: 'G01', nom: 'Grossiste Katako', localite: 'Niamey', fournisseur: 'oriba rice', stock_initial: 500, solde_initial: 100000 });
+  ok(gro.fournisseur === 'Oriba Rice', 'Grossiste créé (fournisseur normalisé : Oriba Rice)');
+  await expectErr(ref('grossistes', { code: 'G02', nom: 'grossiste katako' }), 'Grossiste en double refusé', /doublon/);
+  const depA = await ref('agents', { code: 'D-NY1', nom: 'Dépôt Niamey 1', equipe_id: eq.id, zone_id: eq.zone_id, role_circuit: 'depot', stock_initial: 10 });
+  await expectErr(ref('agents', { code: 'S-1', nom: 'Sous-agent sans dépôt', equipe_id: eq.id, role_circuit: 'sous_agent' }), 'Sous-agent sans agent-dépôt refusé', /agent-dépôt/);
+  const sa = await ref('agents', { code: 'S-NY1-1', nom: 'Sous-agent Katako', equipe_id: eq.id, zone_id: eq.zone_id, role_circuit: 'sous_agent', depot_id: depA.id });
+  await expectErr(call(sessions.dg, 'circuit.save', { type: 'prise', date: today(), agent_id: depA.id, grossiste_id: gro.id, produit_id: prod.id, cartons: 5 }), 'La DG ne peut pas saisir de mouvement', /Responsable Commercial/);
+  await expectErr(call(sessions.com, 'circuit.save', { type: 'prise', date: today(), agent_id: ag.id, grossiste_id: gro.id, produit_id: prod.id, cartons: 5 }), 'Prise refusée pour un agent qui n’est pas agent-dépôt', /agent-dépôt/);
+  const ap = await call(sessions.com, 'circuit.save', { type: 'appro', date: today(), grossiste_id: gro.id, fournisseur: 'Usine Oriba Foods', produit_id: prod.id, cartons: 100, prix: 12000 });
+  ok(ap.mvt.montant === 1200000 && /^CM-/.test(ap.mvt.numero), `Approvisionnement ${ap.mvt.numero} : 100 × 12 000 = ${ap.mvt.montant}`);
+  await call(sessions.com, 'circuit.save', { type: 'prise', date: today(), agent_id: depA.id, grossiste_id: gro.id, produit_id: prod.id, cartons: 30, prix: 12500, mode: 'Crédit' });
+  await expectErr(call(sessions.com, 'circuit.save', { type: 'dispatch', date: today(), agent_id: depA.id, sous_agent_id: ag.id, produit_id: prod.id, cartons: 5 }), 'Dispatch refusé vers un agent qui n’est pas son sous-agent', /sous-agent/);
+  await call(sessions.com, 'circuit.save', { type: 'dispatch', date: today(), agent_id: depA.id, sous_agent_id: sa.id, produit_id: prod.id, cartons: 12 });
+  const vs = await call(sessions.com, 'vente.create', { vente: { date: today(), mode: 'comptant', agent_id: sa.id }, lignes: [{ produit_id: prod.id, unite: 'carton', quantite: 4, prix_unitaire: 13000 }] });
+  ok(vs.vente && !vs.vente.marche_id, 'Un sous-agent vend sans marché précisé');
+  const v1 = await call(sessions.com, 'versement.save', { date: today(), objet: 'ventes_comptant', agent_id: depA.id, lieu: 'grossiste', lieu_grossiste_id: gro.id, montant: 52000 });
+  ok(v1.versement.lieu === 'grossiste' && /^VS-/.test(v1.versement.numero), `Versement ${v1.versement.numero} chez le grossiste`);
+  await expectErr(call(sessions.com, 'versement.save', { date: today(), objet: 'ventes_comptant', agent_id: ag.id, montant: 1000 }), 'Versement refusé pour un agent hors circuit', /ni agent-dépôt/);
+  const rg = await call(sessions.com, 'versement.save', { date: today(), objet: 'reglement_grossiste', grossiste_id: gro.id, montant: 300000 });
+  ok(rg.versement.grossiste_id === gro.id && rg.versement.lieu === 'caisse', 'Règlement du grossiste à la caisse Oriba');
+  const rows = [{ ligne: 1, data: { type: 'appro', date: today(), grossiste_id: gro.id, fournisseur: 'Oriba Rice', produit_id: prod.id, cartons: 50, prix: 12000, ref_externe: 'CIRC|test#1' } }];
+  const i1 = await call(sessions.com, 'import.run', { type: 'circuit_appro', mode: 'courant', rows: [...rows, ...rows] });
+  ok(i1.integrees.length === 1 && i1.deja.length === 1, 'Import : une même ligne n’est enregistrée qu’une fois');
+  const i2 = await call(sessions.com, 'import.run', { type: 'circuit_appro', mode: 'courant', rows });
+  ok(i2.integrees.length === 0 && i2.deja.length === 1, 'Réimport du même fichier : rien de nouveau');
+  const cx = await call(sessions.com, 'circuit.cancel', { id: ap.mvt.id, motif: 'Erreur de saisie' });
+  ok(cx.mvt.statut === 'annule', 'Mouvement annulé avec motif (conservé)');
+  const D = (await call(sessions.dg, 'data.bootstrap')).data;
+  ok(D.grossistes.length === 1 && D.circuit_mvts.length === 4 && D.versements.length === 2, `La DG consulte le circuit (lecture) : ${D.circuit_mvts.length} mouvements, ${D.versements.length} versements`);
+  await call(sessions.com, 'circuit.depart', { date: addDays(today(), -7) });
+  ok((await call(sessions.dg, 'data.bootstrap')).data.parametres.find((x) => x.cle === 'circuit_date_depart')?.valeur?.date === addDays(today(), -7), 'Date des stocks initiaux du circuit enregistrée');
+  if (mode === 'pg') await expectErr(globalThis.__pool.query('delete from circuit_mvts'), 'Suppression de mouvement interdite en base', /Suppression interdite/);
+}
 console.log('Suppression définitive (Responsable commercial seul)');
 {
   await expectErr(call(sessions.daf, 'purge.preview', { cible: 'ventes_credit' }), 'La DAF ne peut pas supprimer', /Responsable Commercial/);

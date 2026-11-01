@@ -2,6 +2,7 @@
 import { DEFAULT_ROLES, DEFAULT_PARAMS, DEFAULT_CATEGORIES, DEFAULT_ZONES, DEFAULT_EQUIPES, DEFAULT_MARCHES } from '../shared/schema.js';
 import { uid, handle } from '../shared/core.js';
 import { today, addDays } from '../shared/logic.js';
+import { seedCircuit } from './demoCircuit.js';
 
 const now = () => new Date().toISOString();
 
@@ -74,10 +75,10 @@ export async function seedDemo(db, crypto, state) {
     'Ets Seyni', 'Grossiste Moctar', 'Alimentation Balkissa', 'Ets Adamou', 'Dépôt Lawali', 'Boutique Ramatou', 'Ets Chaibou', 'Grossiste Tanko'];
   for (const [k, n] of noms.entries()) {
     const m = state.marches[(k * 7) % state.marches.length];
-    clients.push(await ref('clients', { code: `CL${String(k + 1).padStart(3, '0')}`, nom: `${n} (démo)`, type: /Grossiste|Dépôt/.test(n) ? 'Grossiste' : k % 3 === 0 ? 'Demi-grossiste' : n.startsWith('Boutique') ? 'Boutique' : 'Détaillant', marche_id: m.id }));
+    clients.push(await ref('clients', { code: `DC${String(k + 1).padStart(3, '0')}`, nom: `${n} (démo)`, type: /Grossiste|Dépôt/.test(n) ? 'Grossiste' : k % 3 === 0 ? 'Demi-grossiste' : n.startsWith('Boutique') ? 'Boutique' : 'Détaillant', marche_id: m.id }));
   }
-  const depot = await ref('clients', { code: 'CL900', nom: 'Grand dépôt Katako (démo)', type: 'Grossiste', marche_id: state.marches.find((m) => m.nom === 'Katako').id, depositaire: true });
-  const depot2 = await ref('clients', { code: 'CL901', nom: 'Grand dépôt Zinder (démo)', type: 'Grossiste', marche_id: state.marches.find((m) => m.nom.startsWith('Grand marché de Zinder')).id, depositaire: true });
+  const depot = await ref('clients', { code: 'DC900', nom: 'Grand dépôt Katako (démo)', type: 'Grossiste', marche_id: state.marches.find((m) => m.nom === 'Katako').id, depositaire: true });
+  const depot2 = await ref('clients', { code: 'DC901', nom: 'Grand dépôt Zinder (démo)', type: 'Grossiste', marche_id: state.marches.find((m) => m.nom.startsWith('Grand marché de Zinder')).id, depositaire: true });
   const clientsDuMarche = (mid) => clients.filter((c) => c.marche_id === mid);
   await handle(db, 'param.save', { cle: 'plafond_cartons_client', valeur: 1000, motif: 'Valeur de référence du fichier (1 000 cartons par client)' }, ctx(U.daf));
 
@@ -216,6 +217,7 @@ export async function seedDemo(db, crypto, state) {
   }
   for (const mo of months.slice(0, -2)) await handle(db, 'cloture.set', { mois: mo, statut: 'cloture', commentaire: 'Clôture démo' }, ctx(U.daf));
   await handle(db, 'anomalie.create', { objet_type: 'depenses', description: 'Carburant Zinder en hausse : vérifier les relevés kilométriques (démo).' }, ctx(U.cdg));
+  await seedCircuit(db, C, state);
   return U;
 }
 

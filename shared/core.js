@@ -104,8 +104,9 @@ async function validateVente(t, h, lignes, { historique = false } = {}) {
   if (!isDate(h.date)) fail('Date de vente invalide.');
   if (!['comptant', 'credit'].includes(h.mode)) fail('Mode de vente invalide.');
   if (!h.agent_id && !historique) fail('Choisissez l’agent.');
-  if (!h.marche_id && !historique) fail('Choisissez le marché / village.');
-  if (h.agent_id) await one(t, 'agents', h.agent_id, 'Agent');
+  const ag = h.agent_id ? await one(t, 'agents', h.agent_id, 'Agent') : null;
+  // Circuit de distribution : un agent-dépôt ou un sous-agent peut vendre sans marché précisé
+  if (!h.marche_id && !historique && !ag?.role_circuit) fail('Choisissez le marché / village.');
   if (h.marche_id) await one(t, 'marches', h.marche_id, 'Marché');
   if (h.mode === 'credit' && !h.client_id) fail('Le client / débiteur est obligatoire pour une vente à crédit.');
   if (h.client_id) await one(t, 'clients', h.client_id, 'Client');
@@ -245,6 +246,9 @@ A['data.bootstrap'] = async ({ t, user, perms }) => {
     D.relances = (await t.select('relances')).filter((r) => ids.has(r.vente_id));
   } else { D.ventes = []; D.vente_lignes = []; D.remboursements = []; D.relances = []; }
   D.stock_mouvements = P('stock') || P('dashboard') ? await t.select('stock_mouvements') : [];
+  D.grossistes = await t.select('grossistes');
+  D.circuit_mvts = P('circuit') ? await t.select('circuit_mvts') : [];
+  D.versements = P('circuit') ? await t.select('versements') : [];
   if (P('depenses')) {
     const cats = new Map(D.categories_depense.map((c) => [c.id, c]));
     const all = (await t.select('depenses')).filter((d) => inScope(user, d.equipe_id, d.zone_id) || d.created_by === user.id);
@@ -297,13 +301,28 @@ A['ref.save'] = async ({ t, user, perms, payload, ip }) => {
     const dup = existing.find((r) => r.id !== id && low(r[labelKey]) === low(row[labelKey]));
     if (dup) fail(`« ${row[labelKey]} » existe déjà.`);
   }
+  // Circuit : un sous-agent est rattaché à un agent-dépôt ; un agent-dépôt n'a pas d'agent-dépôt
+  if (table === 'agents' && ('role_circuit' in row || 'depot_id' in row)) {
+    const avantA = id ? existing.find((r) => r.id === id) : null;
+    const role = 'role_circuit' in row ? row.role_circuit || null : avantA?.role_circuit || null;
+    if (role && !['depot', 'sous_agent'].includes(role)) fail('Rôle dans le circuit invalide.');
+    row.role_circuit = role;
+    const dep = 'depot_id' in row ? row.depot_id || null : avantA?.depot_id || null;
+    if (role === 'sous_agent') {
+      if (!dep) fail('Indiquez l’agent-dépôt de ce sous-agent.');
+      const d = existing.find((r) => r.id === dep);
+      if (!d || d.role_circuit !== 'depot' || d.id === id) fail('L’agent-dépôt choisi n’est pas déclaré comme agent-dépôt.');
+      row.depot_id = dep;
+    } else row.depot_id = null;
+  }
+  if (table === 'grossistes' && row.fournisseur) row.fournisseur = /rice/i.test(row.fournisseur) ? 'Oriba Rice' : 'Usine Oriba Foods';
   // Pas de doublon d'agent ou de marché dans une même équipe, ni de client portant le même nom
-  if (row.nom && ['agents', 'marches', 'clients'].includes(table)) {
+  if (row.nom && ['agents', 'marches', 'clients', 'grossistes'].includes(table)) {
     const cleNom = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/^march[e]\s+/, '').replace(/[^a-z0-9]+/g, ' ').trim();
     const avant = id ? existing.find((r) => r.id === id) : null;
     const eq = row.equipe_id !== undefined ? row.equipe_id : avant?.equipe_id;
-    const dup = existing.find((r) => r.id !== id && cleNom(r.nom) === cleNom(row.nom) && (table === 'clients' || (r.equipe_id || null) === (eq || null)));
-    if (dup) fail(`« ${row.nom} » existe déjà${table === 'clients' ? (dup.code ? ` (code ${dup.code})` : '') : ' dans cette équipe'} : doublon refusé.`);
+    const dup = existing.find((r) => r.id !== id && cleNom(r.nom) === cleNom(row.nom) && (table === 'clients' || table === 'grossistes' || (r.equipe_id || null) === (eq || null)));
+    if (dup) fail(`« ${row.nom} » existe déjà${table === 'clients' || table === 'grossistes' ? (dup.code ? ` (code ${dup.code})` : '') : ' dans cette équipe'} : doublon refusé.`);
   }
   if (id) {
     const avant = existing.find((r) => r.id === id);
@@ -335,6 +354,7 @@ A['param.save'] = async ({ t, user, perms, payload, ip }) => {
   const d = DEFAULT_PARAMS[cle];
   if (typeof d === 'number') { v = Number(v); if (isNaN(v) || v < 0) fail('Valeur numérique positive attendue.'); }
   else if (typeof d === 'boolean') v = !!v;
+  else if (cle === 'circuit_date_depart') { v = clean(v && typeof v === 'object' ? v.date : v); if (v && !isDate(v)) fail('Date invalide (AAAA-MM-JJ).'); v = { date: v || null }; }
   else if (Array.isArray(d)) {
     v = (Array.isArray(v) ? v : String(v).split(/[;,\s]+/)).filter((x) => x !== '').map(Number);
     if (v.length !== 3 || v.some((x) => isNaN(x) || x <= 0) || !(v[0] < v[1] && v[1] <= v[2])) fail('Trois seuils croissants attendus, par exemple 75, 90, 100.');
@@ -425,6 +445,9 @@ async function createRemb(t, user, perms, payload, opts = {}) {
   const r = await t.insert('remboursements', {
     id: uid(), numero: await nextNumero(t, 'RB', payload.date), vente_id: v.id, date: payload.date, montant,
     mode: clean(payload.mode), reference: clean(payload.reference), commentaire: clean(payload.commentaire), statut: 'valide',
+    ...(payload.lieu ? { lieu: payload.lieu === 'grossiste' ? 'grossiste' : 'caisse' } : {}),
+    ...(payload.lieu_grossiste_id ? { lieu_grossiste_id: (await one(t, 'grossistes', payload.lieu_grossiste_id, 'Grossiste')).id } : {}),
+    ...(payload.verse_par ? { verse_par: (await one(t, 'agents', payload.verse_par, 'Agent')).id } : {}),
     historique: !!opts.historique, import_id: opts.import_id || null, created_by: user.id, created_at: nowISO(),
   });
   await audit(t, user, 'CREATION', 'remboursements', r.id, null, r, null, opts.ip);
@@ -1011,9 +1034,12 @@ A['import.run'] = async ({ t, user, perms, payload, ip }) => {
   const ok = [], ko = [], brouillons = [], deja = [];
   const opts = { historique: !courant, import_id: importId, ip };
   // Identifiants des lignes de fichier déjà enregistrées : une même ligne n'est jamais importée deux fois
-  const refsVentes = type.startsWith('ventes_') ? new Set((await t.select('ventes')).map((v) => v.ref_externe).filter(Boolean)) : null;
+  const SRC_REF = { ventes_comptant: 'ventes', ventes_credit: 'ventes', circuit_appro: 'circuit_mvts', circuit_prise: 'circuit_mvts', circuit_dispatch: 'circuit_mvts', versements: 'versements' };
+  const refsVentes = SRC_REF[type] ? new Set((await t.select(SRC_REF[type])).map((v) => v.ref_externe).filter(Boolean))
+    : type === 'remboursements' ? new Set((await t.select('remboursements')).filter((x) => x.statut === 'valide').map((x) => x.reference).filter((x) => x && x.startsWith('CIRC|'))) : null;
   for (const [i, r] of rows.entries()) {
-    if (refsVentes && r.data?.ref_externe && refsVentes.has(r.data.ref_externe)) { deja.push(r.ligne ?? i + 1); continue; }
+    const cleLigne = type === 'remboursements' ? (r.data?.reference?.startsWith('CIRC|') ? r.data.reference : null) : r.data?.ref_externe;
+    if (refsVentes && cleLigne && refsVentes.has(cleLigne)) { deja.push(r.ligne ?? i + 1); continue; }
     if (type === 'remboursements' && r.data?.cumul !== undefined && r.data?.cumul !== null) {
       // Remboursement exprimé en cumul (tableau de bord) : le serveur n'ajoute que la différence avec ce qui est déjà enregistré
       const enr = (await t.select('remboursements', { vente_id: r.data.vente_id })).filter((x) => x.statut === 'valide').reduce((s, x) => s + num(x.montant), 0);
@@ -1043,6 +1069,10 @@ A['import.run'] = async ({ t, user, perms, payload, ip }) => {
         catch (e) { if (!(e instanceof AppError)) throw e; brouillons.push({ ligne: r.ligne ?? i + 1, motif: e.message }); }
       } else if (type === 'stock_remises') {
         await createStock(t, user, perms, { ...r.data, type: 'remise' }, opts);
+      } else if (type.startsWith('circuit_')) {
+        await saveCircuit(t, user, perms, { ...r.data, type: type.slice(8) }, opts);
+      } else if (type === 'versements') {
+        await saveVersement(t, user, perms, r.data, opts);
       } else if (type === 'objectifs') {
         const o = r.data;
         await A['objectif.bulk']({ t, user, perms, payload: { mois: o.mois, axe: o.axe, produit_id: o.produit_id || null, lignes: [{ cible_id: o.cible_id, objectif_cartons: o.objectif_cartons, objectif_ca: o.objectif_ca }], motif: 'Import Excel' }, ip });
@@ -1056,7 +1086,7 @@ A['import.run'] = async ({ t, user, perms, payload, ip }) => {
       } else fail('Type d’import inconnu.');
       });
       ok.push(r.ligne ?? i + 1);
-      if (refsVentes && r.data?.ref_externe) refsVentes.add(r.data.ref_externe);
+      if (refsVentes && cleLigne) refsVentes.add(cleLigne);
     } catch (e) {
       if (!(e instanceof AppError)) throw e;
       ko.push({ ligne: r.ligne ?? i + 1, erreur: e.message });
@@ -1069,10 +1099,114 @@ A['import.run'] = async ({ t, user, perms, payload, ip }) => {
 };
 
 
+// ---------- Circuit de distribution ----------
+const MODE_C = (m) => { const k = String(m || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); return k.startsWith('cred') ? 'credit' : k ? 'comptant' : null; };
+async function saveCircuit(t, user, perms, d, opts = {}) {
+  if (!can(perms, 'circuit', 'creer')) fail('Seul le Responsable Commercial & Force de Vente peut enregistrer les mouvements du circuit.', 403);
+  const type = d.type;
+  if (!['appro', 'prise', 'dispatch'].includes(type)) fail('Type de mouvement inconnu.');
+  if (!isDate(d.date)) fail('Date invalide.');
+  if (d.date > today()) fail('La date ne peut pas être dans le futur.');
+  const cartons = round2(num(d.cartons));
+  if (!(cartons > 0)) fail('Le nombre de cartons doit être positif.');
+  if (!d.produit_id) fail('Choisissez le produit.');
+  await one(t, 'produits', d.produit_id, 'Produit');
+  const row = { id: uid(), type, date: d.date, produit_id: d.produit_id, cartons, observation: clean(d.observation), ref_externe: clean(d.ref_externe), statut: 'valide', import_id: opts.import_id || null, created_by: user.id, created_at: nowISO() };
+  if (type === 'appro' || type === 'prise') {
+    if (!d.grossiste_id) fail('Choisissez le grossiste.');
+    await one(t, 'grossistes', d.grossiste_id, 'Grossiste');
+    row.grossiste_id = d.grossiste_id;
+    const prix = d.prix === '' || d.prix === null || d.prix === undefined ? null : num(d.prix);
+    if (prix !== null && prix < 0) fail('Prix invalide.');
+    row.prix = prix; row.montant = prix === null ? null : round2(prix * cartons);
+  }
+  if (type === 'appro') {
+    const f = clean(d.fournisseur);
+    if (!f) fail('Indiquez le fournisseur (usine Oriba Foods ou Oriba Rice).');
+    row.fournisseur = /rice/i.test(f) ? 'Oriba Rice' : 'Usine Oriba Foods';
+  }
+  if (type === 'prise' || type === 'dispatch') {
+    if (!d.agent_id) fail('Choisissez l’agent-dépôt.');
+    const ag = await one(t, 'agents', d.agent_id, 'Agent-dépôt');
+    if (ag.role_circuit !== 'depot') fail(`${ag.nom} n’est pas déclaré comme agent-dépôt (Référentiels > Agents).`);
+    row.agent_id = ag.id;
+  }
+  if (type === 'prise') row.mode = MODE_C(d.mode) || 'comptant';
+  if (type === 'dispatch') {
+    if (!d.sous_agent_id) fail('Choisissez le sous-agent.');
+    const sa = await one(t, 'agents', d.sous_agent_id, 'Sous-agent');
+    if (sa.role_circuit !== 'sous_agent' || sa.depot_id !== row.agent_id) fail(`${sa.nom} n’est pas un sous-agent de cet agent-dépôt.`);
+    row.sous_agent_id = sa.id;
+  }
+  row.numero = await nextNumero(t, 'CM', d.date);
+  const r = await t.insert('circuit_mvts', row);
+  await audit(t, user, 'CREATION', 'circuit_mvts', r.id, null, r, null, opts.ip);
+  return r;
+}
+// Date des stocks initiaux du circuit (fixée à la première reprise du classeur, modifiable ensuite dans Paramètres)
+A['circuit.depart'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'circuit', 'creer')) fail('Droit insuffisant.', 403);
+  if (!isDate(payload.date)) fail('Date invalide.');
+  const [avant] = await t.select('parametres', { cle: 'circuit_date_depart' });
+  if (avant?.valeur?.date) return { inchange: true };
+  if (avant) await t.updateWhere('parametres', { cle: 'circuit_date_depart' }, { valeur: { date: payload.date }, updated_at: nowISO(), updated_by: user.id });
+  else await t.insert('parametres', { cle: 'circuit_date_depart', valeur: { date: payload.date }, updated_at: nowISO(), updated_by: user.id });
+  await audit(t, user, 'MODIFICATION', 'parametres', 'circuit_date_depart', avant || null, { valeur: payload.date }, 'Date des stocks initiaux du classeur du circuit', ip);
+  return { date: payload.date };
+};
+A['circuit.save'] = async ({ t, user, perms, payload, ip }) => ({ mvt: await saveCircuit(t, user, perms, payload, { ip }) });
+A['circuit.cancel'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'circuit', 'annuler')) fail('Droit insuffisant pour annuler un mouvement.', 403);
+  if (!clean(payload.motif)) fail('Le motif d’annulation est obligatoire.');
+  const avant = await one(t, 'circuit_mvts', payload.id, 'Mouvement');
+  if (avant.statut === 'annule') fail('Ce mouvement est déjà annulé.');
+  const r = await t.update('circuit_mvts', avant.id, { statut: 'annule', motif: clean(payload.motif), updated_by: user.id, updated_at: nowISO() });
+  await audit(t, user, 'ANNULATION', 'circuit_mvts', avant.id, avant, r, payload.motif, ip);
+  return { mvt: r };
+};
+async function saveVersement(t, user, perms, d, opts = {}) {
+  if (!can(perms, 'circuit', 'creer')) fail('Seul le Responsable Commercial & Force de Vente peut enregistrer les versements.', 403);
+  if (!isDate(d.date)) fail('Date invalide.');
+  if (d.date > today()) fail('La date ne peut pas être dans le futur.');
+  const montant = round2(num(d.montant));
+  if (!(montant > 0)) fail('Le montant doit être positif.');
+  const objet = d.objet === 'reglement_grossiste' ? 'reglement_grossiste' : 'ventes_comptant';
+  const lieu = d.lieu === 'grossiste' ? 'grossiste' : 'caisse';
+  const row = { id: uid(), date: d.date, objet, lieu, montant, reference: clean(d.reference), commentaire: clean(d.commentaire), ref_externe: clean(d.ref_externe), statut: 'valide', import_id: opts.import_id || null, created_by: user.id, created_at: nowISO() };
+  if (objet === 'reglement_grossiste') {
+    if (!d.grossiste_id) fail('Choisissez le grossiste qui règle.');
+    row.grossiste_id = (await one(t, 'grossistes', d.grossiste_id, 'Grossiste')).id;
+    row.lieu = 'caisse';
+  } else {
+    if (!d.agent_id) fail('Choisissez l’agent qui verse.');
+    const ag = await one(t, 'agents', d.agent_id, 'Agent');
+    if (!ag.role_circuit) fail(`${ag.nom} n’est ni agent-dépôt ni sous-agent (Référentiels > Agents).`);
+    row.agent_id = ag.id;
+    if (lieu === 'grossiste') {
+      if (!d.lieu_grossiste_id) fail('Indiquez chez quel grossiste le versement a été fait.');
+      row.lieu_grossiste_id = (await one(t, 'grossistes', d.lieu_grossiste_id, 'Grossiste')).id;
+    }
+  }
+  row.numero = await nextNumero(t, 'VS', d.date);
+  const r = await t.insert('versements', row);
+  await audit(t, user, 'CREATION', 'versements', r.id, null, r, null, opts.ip);
+  return r;
+}
+A['versement.save'] = async ({ t, user, perms, payload, ip }) => ({ versement: await saveVersement(t, user, perms, payload, { ip }) });
+A['versement.cancel'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'circuit', 'annuler')) fail('Droit insuffisant pour annuler un versement.', 403);
+  if (!clean(payload.motif)) fail('Le motif d’annulation est obligatoire.');
+  const avant = await one(t, 'versements', payload.id, 'Versement');
+  if (avant.statut === 'annule') fail('Ce versement est déjà annulé.');
+  const r = await t.update('versements', avant.id, { statut: 'annule', motif: clean(payload.motif), updated_by: user.id, updated_at: nowISO() });
+  await audit(t, user, 'ANNULATION', 'versements', avant.id, avant, r, payload.motif, ip);
+  return { versement: r };
+};
+
 // Suppression définitive (réservée au droit « suppression ») : calcul de l'impact puis suppression en cascade, tracée dans l'audit
 export const CIBLES_SUPPRESSION = {
   ventes_comptant: 'Ventes au comptant (et lignes)', ventes_credit: 'Ventes à crédit (avec remboursements et relances)', remboursements: 'Remboursements',
-  stock: 'Stock confié (lots et mouvements)', depenses: 'Dépenses (avec validations et répartitions)', demandes: 'Demandes carburant et vidange',
+  stock: 'Stock confié (lots et mouvements)', circuit: 'Circuit de distribution (approvisionnements, prises, dispatch, versements)', depenses: 'Dépenses (avec validations et répartitions)', demandes: 'Demandes carburant et vidange',
   objectifs: 'Objectifs', suivi_agents: 'Fiches des agents terrain', budgets: 'Budgets', import: 'Tout ce qu’un import a créé', tout: 'Toutes les données (opérations et référentiels agents, clients, marchés, véhicules)',
 };
 async function planSuppression(t, user, p) {
@@ -1109,6 +1243,10 @@ async function planSuppression(t, user, p) {
     const lots = new Set(mv.filter((m) => m.type === 'remise' && (tout || (imp ? m.import_id === imp : enPeriode(m.date)))).map((m) => m.id));
     add('stock_mouvements', mv.filter((m) => lots.has(m.id) || lots.has(m.lot_id) || (!imp && !tout && m.type !== 'remise' && enPeriode(m.date))).map((m) => m.id));
   }
+  if (tout || cible === 'circuit' || imp) {
+    add('circuit_mvts', (await t.select('circuit_mvts')).filter((m) => tout || (imp ? m.import_id === imp : enPeriode(m.date))).map((m) => m.id));
+    add('versements', (await t.select('versements')).filter((v) => tout || (imp ? v.import_id === imp : enPeriode(v.date))).map((v) => v.id));
+  }
   if (tout || cible === 'depenses' || imp) {
     const ds = (await t.select('depenses')).filter((d) => tout || (imp ? d.import_id === imp : enPeriode(d.date) && okEq(d.equipe_id)));
     const ids = new Set(ds.map((d) => d.id));
@@ -1123,12 +1261,12 @@ async function planSuppression(t, user, p) {
   if (tout || cible === 'budgets') add('budgets', (await t.select('budgets')).filter((b) => tout || (moisOk(b.mois) && okEq(b.equipe_id))).map((b) => b.id));
   if (imp) add('imports', [imp]);
   if (tout) {
-    for (const tb of ['clotures', 'anomalies', 'imports', 'agents', 'clients', 'marches', 'vehicules']) add(tb, (await t.select(tb)).map((r) => r.id));
+    for (const tb of ['clotures', 'anomalies', 'imports', 'agents', 'clients', 'marches', 'vehicules', 'grossistes']) add(tb, (await t.select(tb)).map((r) => r.id));
   }
   // Une dépense supprimée ne doit plus être liée à une demande
   return P;
 }
-const ORDRE_SUPPRESSION = ['depense_validations', 'depense_repartitions', 'demandes', 'depenses', 'relances', 'remboursements', 'stock_mouvements', 'vente_lignes', 'ventes', 'suivi_agents', 'objectifs', 'budgets', 'clotures', 'anomalies', 'imports', 'agents', 'clients', 'marches', 'vehicules'];
+const ORDRE_SUPPRESSION = ['depense_validations', 'depense_repartitions', 'demandes', 'depenses', 'relances', 'remboursements', 'stock_mouvements', 'versements', 'circuit_mvts', 'vente_lignes', 'ventes', 'suivi_agents', 'objectifs', 'budgets', 'clotures', 'anomalies', 'imports', 'agents', 'clients', 'marches', 'vehicules', 'grossistes'];
 A['purge.preview'] = async ({ t, perms, user, payload }) => {
   if (!can(perms, 'suppression', 'supprimer')) fail('Seul le Responsable Commercial & Force de Vente peut supprimer des données.', 403);
   const P = await planSuppression(t, user, payload);
@@ -1143,7 +1281,7 @@ A['purge.run'] = async ({ t, perms, user, payload, ip }) => {
   if (P.ventes?.length) await t.updateWhere('ventes', { id: P.ventes }, { lot_id: null });
   if (P.depenses?.length) { const dem = (await t.select('demandes')).filter((d) => d.depense_id && P.depenses.includes(d.depense_id) && !(P.demandes || []).includes(d.id)); for (const d of dem) await t.update('demandes', d.id, { depense_id: null }); }
   if (P.stock_mouvements?.length) { const vl = (await t.select('ventes')).filter((v) => v.lot_id && P.stock_mouvements.includes(v.lot_id)); for (const v of vl) await t.update('ventes', v.id, { lot_id: null }); }
-  if (payload.cible === 'tout') { for (const tb of ['agents']) if (P[tb]?.length) await t.updateWhere(tb, { id: P[tb] }, { marche_id: null }); }
+  if (payload.cible === 'tout') { for (const tb of ['agents']) if (P[tb]?.length) await t.updateWhere(tb, { id: P[tb] }, { marche_id: null, depot_id: null }); }
   for (const tb of ORDRE_SUPPRESSION) {
     let ids = P[tb]; if (!ids?.length) continue;
     if (tb === 'stock_mouvements') { const mv = new Map((await t.select('stock_mouvements', { id: ids })).map((m) => [m.id, m])); ids = [...ids].sort((x, y) => (mv.get(x)?.type === 'remise' ? 1 : 0) - (mv.get(y)?.type === 'remise' ? 1 : 0)); }

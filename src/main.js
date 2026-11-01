@@ -17,6 +17,7 @@ import { renderObjectifs } from './pages/objectifs.js';
 import { renderSuivi } from './pages/suivi.js';
 import { renderSaisie, peutSaisirOuImporter } from './pages/saisie.js';
 import { renderSuppression } from './pages/suppression.js';
+import { renderCircuit, renderDepots, renderGrossistes, renderMouvements, renderVersements } from './pages/circuit.js';
 import { DEMO_USERS, DEMO_PASSWORD } from './demo-seed.js';
 import { LOGO } from './assets/logo.js';
 import { decorate } from './lib/ui.js';
@@ -24,12 +25,19 @@ import { ouvrirRapports } from './lib/rapports.js';
 
 const DEMO = !!window.ERP_DEMO || (() => { try { return new URLSearchParams(location.search).has('demo'); } catch { return false; } })();
 
-const NAV_ICONS = { 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'users', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', suppression: 'alert', audit: 'eye' };
+const NAV_ICONS = { 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'users', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', suppression: 'alert', audit: 'eye', circuit: 'chart', 'circuit-depots': 'users', 'circuit-grossistes': 'warehouse', 'circuit-mouvements': 'truck', 'circuit-versements': 'wallet' };
 const NAV = [
   ['Pilotage', [
     ['tableau-de-bord', 'Tableau de bord', () => App.can('dashboard'), renderDashboard],
     ['saisie', 'Saisie et import Excel', () => peutSaisirOuImporter(), renderSaisie],
     ['analyses', 'Cumuls et analyses', () => App.can('ventes') || App.can('dashboard'), renderAnalyses],
+  ]],
+  ['Circuit de distribution', [
+    ['circuit', 'Tableau de bord du circuit', () => App.can('circuit'), renderCircuit],
+    ['circuit-depots', 'Agents-dépôts et sous-agents', () => App.can('circuit'), renderDepots],
+    ['circuit-grossistes', 'Grossistes', () => App.can('circuit'), renderGrossistes],
+    ['circuit-mouvements', 'Mouvements de stock', () => App.can('circuit'), renderMouvements],
+    ['circuit-versements', 'Versements et caisse', () => App.can('circuit'), renderVersements],
   ]],
   ['Terrain', [
     ['terrain', 'Zones et équipes', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderTerrain],

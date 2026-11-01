@@ -35,8 +35,8 @@ export const nm = {
   user: (id) => { const u = App.I.users.get(id); return u ? [u.prenom, u.nom].filter(Boolean).join(' ') : '—'; },
 };
 
-export const opts = (table, label = 'nom', { all = false, filter } = {}) =>
-  (App.D[table] || []).filter((r) => (all || r.actif !== false) && (!filter || filter(r))).slice().sort((a, b) => String(a[label]).localeCompare(String(b[label]), 'fr')).map((r) => ({ v: r.id, l: r[label] + (r.actif === false ? ' (archivé)' : '') }));
+export const opts = (table, label = 'nom', { all = false, filter } = {}) => Object.assign(
+  (App.D[table] || []).filter((r) => (all || r.actif !== false) && (!filter || filter(r))).slice().sort((a, b) => String(a[label]).localeCompare(String(b[label]), 'fr')).map((r) => ({ v: r.id, l: r[label] + (r.actif === false ? ' (archivé)' : '') })), { table });
 
 // Barre de filtres réutilisable
 const FILTER_DEFS = {

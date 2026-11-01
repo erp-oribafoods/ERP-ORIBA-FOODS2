@@ -42,7 +42,7 @@ let echecs = 0; const verif = (ok, msg) => { console.log(`${ok ? '✓' : '✗'} 
   verif(t0.a.fin - t1.a.fin === 10 && t1.b.fin - t0.b.fin === 10, `Stock fin : ${A.nom} ${t0.a.fin} → ${t1.a.fin}, ${B.nom} ${t0.b.fin} → ${t1.b.fin}`);
   // Import : onglet 6-Transferts du modèle
   await p.evaluate(() => { location.hash = 'saisie-rapide'; }); await p.waitForTimeout(500);
-  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#s-mod')]);
+  const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#f-circ-mod')]);
   const fm = path.join(OUT, 'modele_transfert.xlsx'); await dl.saveAs(fm);
   const wb = XLSX.readFile(fm);
   verif(wb.SheetNames.includes('6-Transferts'), `Modèle : onglet 6-Transferts présent (${wb.SheetNames.join(', ')})`);
@@ -53,7 +53,7 @@ let echecs = 0; const verif = (ok, msg) => { console.log(`${ok ? '✓' : '✗'} 
   wb.Sheets['6-Transferts'] = XLSX.utils.aoa_to_sheet(aoa); const f2 = path.join(OUT, 'modele_transfert_rempli.xlsx'); XLSX.writeFile(wb, f2);
   const imp = async () => {
     await p.keyboard.press('Escape').catch(() => {}); await p.evaluate(() => { location.hash = 'saisie-rapide'; }); await p.waitForTimeout(500);
-    await p.click('#s-imp'); await p.waitForSelector('.modal [data-f]', { state: 'attached' });
+    await p.click('#f-circ'); await p.waitForSelector('.modal [data-f]', { state: 'attached' });
     await p.setInputFiles('.modal [data-f]', f2); await p.waitForSelector('.modal [data-b] table', { timeout: 60000 }); await p.waitForTimeout(300);
     return p.$$eval('.modal [data-b] tbody tr', (rs) => rs.map((r) => [...r.children].map((c) => c.textContent.trim())));
   };

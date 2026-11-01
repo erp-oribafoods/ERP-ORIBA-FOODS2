@@ -89,6 +89,15 @@ export function field(f, value, opts = {}) {
   else if (f.t?.startsWith('select:')) input = `<select id="${id}" name="${f.k}"${dis}><option value="">—</option>${f.t.slice(7).split('|').map((o) => { const [val, lib] = o.includes('=') ? o.split('=') : [o, o]; return `<option value="${esc(val)}" ${val === v ? 'selected' : ''}>${esc(lib)}</option>`; }).join('')}</select>`;
   else if (f.t === 'options') input = `<select id="${id}" name="${f.k}"${dis}>${f.empty === false ? '' : `<option value="">${esc(f.emptyLabel || '—')}</option>`}${(f.options || []).map((o) => `<option value="${esc(o.v)}" ${String(o.v) === String(v) ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select>`;
   else input = `<input id="${id}" name="${f.k}" type="${f.t === 'number' ? 'number' : f.t === 'date' ? 'date' : f.t === 'month' ? 'month' : f.t === 'password' ? 'password' : f.t === 'email' ? 'email' : 'text'}" ${f.t === 'number' ? `step="${f.step || 'any'}" min="${f.min ?? ''}"` : ''} value="${esc(v)}" ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ''} ${f.auto ? `autocomplete="${f.auto}"` : ''}${dis}>`;
+  // Listes : on choisit avec la flèche OU on écrit (voir initCombos)
+  if (input.startsWith('<select') && f.combo !== false && !f.disabled) {
+    const table = f.table || (f.t?.startsWith('ref:') ? f.t.slice(4) : f.options?.table) || '';
+    const sel = input.replace('<select ', `<select class="combo-sel" tabindex="-1" data-table="${esc(table)}" `);
+    const os = [...input.matchAll(/<option value="([^"]*)"\s*(selected)?>([^<]*)<\/option>/g)];
+    const o = os.find((x) => x[2]) || os[0];
+    const lib = o && o[1] !== '' ? o[3] : '';
+    input = `<span class="combo-w"><input type="text" class="combo-in" data-for="${id}" list="dl-${id}" autocomplete="off" placeholder="${esc(f.placeholder || 'Choisir ou écrire…')}" value="${lib}">${sel}</span><datalist id="dl-${id}"></datalist><small class="combo-hint" data-hint-for="${id}"></small>`;
+  }
   return `<label class="fld ${f.wide ? 'span2' : ''} ${opts.cls || ''}"><span>${esc(f.l)}${req}</span>${input}${help}</label>`;
 }
 
@@ -320,4 +329,79 @@ export function decorate(root) {
   let j = 0;
   for (const c of root.querySelectorAll('.card:not([data-dec]), .zcard:not([data-dec])')) { c.dataset.dec = '1'; c.style.setProperty('--i', Math.min(j++, 12)); }
   for (const [n, z] of [...root.querySelectorAll('.zcard')].entries()) z.style.setProperty('--zc', `var(--c${(n % 8) + 1})`);
+}
+
+// Champ « liste ou saisie libre » : on choisit dans la liste déroulante OU on tape un nom.
+// comboField : le champ ; comboLire : l'élément choisi (id) ou, sinon, le texte tapé (nouveau).
+const cleCombo = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+export function comboField(f, value = '') {
+  const id = `f-${f.k}`, dl = `dl-${f.k}`;
+  const sel = (f.options || []).find((o) => String(o.v) === String(value));
+  return `<label class="fld combo ${f.wide ? 'span2' : ''}"><span>${esc(f.l)}${f.req ? ' *' : ''}</span>
+    <span class="combo-w"><input id="${id}" name="${f.k}" type="text" class="combo-libre" list="${dl}" autocomplete="off" placeholder="${esc(f.placeholder || 'Choisir dans la liste ou écrire un nom')}" value="${esc(sel?.l || '')}">
+    <select class="combo-sel combo-pick" tabindex="-1" aria-label="${esc(f.l)} : liste"><option value="">—</option>${(f.options || []).map((o) => `<option value="${esc(o.l)}">${esc(o.l)}</option>`).join('')}</select></span>
+    <datalist id="${dl}">${(f.options || []).map((o) => `<option value="${esc(o.l)}"></option>`).join('')}</datalist>
+    <small data-hint="${f.k}" class="muted"></small></label>`;
+}
+// options : [{ v, l, noms: ['autres libellés reconnus'] }]
+export function comboLire(texte, options) {
+  const k = cleCombo(texte);
+  if (!k) return { id: null, texte: '' };
+  const o = options.find((x) => cleCombo(x.l) === k) || options.find((x) => (x.noms || []).some((n) => n && cleCombo(n) === k));
+  return o ? { id: o.v, texte: o.l } : { id: null, texte: String(texte).trim().replace(/\s+/g, ' ') };
+}
+
+
+// ---------- Listes « choisir ou écrire » (tous les formulaires) ----------
+const cleListe = (x) => String(x ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const clesOption = (o) => { const l = o.textContent || ''; return [l, l.split(' — ')[0], l.split(' (')[0], o.value].map(cleListe).filter(Boolean); };
+let creerElement = null;   // (table, nom) => Promise<{ v, l }> — fourni par l'application
+export const setComboCreator = (fn) => { creerElement = fn; };
+const CREABLES = { clients: 'client', agents: 'agent', grossistes: 'grossiste', marches: 'marché' };
+function syncTexte(sel) {
+  if (sel.classList.contains('combo-pick')) return;
+  const inp = sel.parentElement?.querySelector('.combo-in'); if (!inp) return;
+  const o = sel.selectedOptions[0];
+  inp.value = o && o.value !== '' ? o.textContent : '';
+  hint(sel, '');
+}
+function hint(sel, html) { const h = sel.closest('.fld')?.querySelector('.combo-hint'); if (h && h.dataset.html !== html) { h.innerHTML = html; h.dataset.html = html; } }
+function remplirListe(inp) {
+  const sel = inp.parentElement.querySelector('select'); const dl = document.getElementById(inp.getAttribute('list'));
+  if (sel && dl) dl.innerHTML = [...sel.options].filter((o) => o.value !== '').map((o) => `<option value="${esc(o.textContent)}"></option>`).join('');
+}
+function resoudre(inp) {
+  const sel = inp.parentElement.querySelector('select'); if (!sel) return;
+  const k = cleListe(inp.value);
+  const o = k ? [...sel.options].find((x) => x.value !== '' && cleListe(x.textContent) === k) || [...sel.options].find((x) => x.value !== '' && clesOption(x).includes(k)) : null;
+  const avant = sel.value, apres = o ? o.value : '';
+  if (avant !== apres) { sel.value = apres; sel.__depuisTexte = true; sel.dispatchEvent(new Event('change', { bubbles: true })); sel.__depuisTexte = false; }
+  if (!k || o) return hint(sel, '');
+  const t = sel.dataset.table, txt = inp.value.trim().replace(/\s+/g, ' ');
+  hint(sel, CREABLES[t] && creerElement ? `« ${esc(txt)} » n’est pas dans la liste. <button type="button" class="lnk combo-add">Ajouter ce ${CREABLES[t]}</button>` : `« ${esc(txt)} » n’est pas dans la liste : choisissez une valeur proposée.`);
+}
+export function initCombos() {
+  if (initCombos.fait) return; initCombos.fait = true;
+  document.addEventListener('focusin', (e) => { if (e.target.classList?.contains('combo-in')) remplirListe(e.target); });
+  document.addEventListener('input', (e) => { if (e.target.classList?.contains('combo-in')) { remplirListe(e.target); resoudre(e.target); } });
+  document.addEventListener('change', (e) => {
+    if (e.target.classList?.contains('combo-in')) resoudre(e.target);
+    else if (e.target.classList?.contains('combo-pick')) { const inp = e.target.parentElement.querySelector('.combo-libre'); inp.value = e.target.value; e.target.value = ''; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); }
+    else if (e.target.classList?.contains('combo-sel') && !e.target.__depuisTexte) syncTexte(e.target);
+  });
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest?.('.combo-add'); if (!b) return;
+    const fld = b.closest('.fld'), sel = fld.querySelector('select.combo-sel'), inp = fld.querySelector('.combo-in');
+    const nom = inp.value.trim().replace(/\s+/g, ' ');
+    b.disabled = true;
+    try {
+      const r = await creerElement(sel.dataset.table, nom);
+      const o = document.createElement('option'); o.value = r.v; o.textContent = r.l; sel.appendChild(o);
+      sel.value = r.v; sel.dispatchEvent(new Event('change', { bubbles: true }));
+      toast(`« ${r.l} » ajouté à la liste.`, 'ok');
+    } catch (er) { b.disabled = false; toast(er.message, 'err'); }
+  });
+  // Liste remplacée par le programme (ex. agents du dépôt choisi) : le texte suit
+  new MutationObserver((ms) => { for (const m of ms) { const sel = m.target.closest?.('select.combo-sel') || (m.target.matches?.('select.combo-sel') && m.target); if (sel) syncTexte(sel); } })
+    .observe(document.body, { childList: true, subtree: true });
 }

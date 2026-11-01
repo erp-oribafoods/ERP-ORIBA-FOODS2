@@ -21,45 +21,33 @@ import { renderAccueil, renderDepotsEssentiel, renderSaisieRapide, renderCredits
 import { renderCircuit, renderDepots, renderGrossistes, renderMouvements, renderVersements } from './pages/circuit.js';
 import { DEMO_USERS, DEMO_PASSWORD } from './demo-seed.js';
 import { LOGO } from './assets/logo.js';
-import { decorate } from './lib/ui.js';
+import { decorate, initCombos, setComboCreator } from './lib/ui.js';
 import { ouvrirRapports } from './lib/rapports.js';
 
 const DEMO = !!window.ERP_DEMO || (() => { try { return new URLSearchParams(location.search).has('demo'); } catch { return false; } })();
 
-const NAV_ICONS = { 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'users', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', suppression: 'alert', audit: 'eye', accueil: 'home', depots: 'warehouse', 'saisie-rapide': 'plus', credits: 'receipt', circuit: 'chart', 'circuit-depots': 'users', 'circuit-grossistes': 'warehouse', 'circuit-mouvements': 'truck', 'circuit-versements': 'wallet' };
+const NAV_ICONS = { ventes: 'cash', 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'users', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', suppression: 'alert', audit: 'eye', accueil: 'home', depots: 'warehouse', 'saisie-rapide': 'plus', credits: 'receipt', circuit: 'chart', 'circuit-depots': 'users', 'circuit-grossistes': 'warehouse', 'circuit-mouvements': 'truck', 'circuit-versements': 'wallet' };
 const ESSENTIEL = 'Essentiel';
 const NAV = [
+  // Un seul tableau de bord, un seul espace de saisie ; les pages en double ont été regroupées
   [ESSENTIEL, [
-    ['accueil', 'Tableau de bord', () => App.can('circuit'), renderAccueil],
+    ['accueil', 'Tableau de bord', () => App.can('circuit') || App.can('dashboard'), renderAccueil],
+    ['saisie-rapide', 'Saisie et import', () => App.can('circuit', 'creer') || peutSaisirOuImporter(), renderSaisieRapide],
     ['depots', 'Dépôts', () => App.can('circuit'), renderDepotsEssentiel],
-    ['saisie-rapide', 'Saisie et import', () => App.can('circuit'), renderSaisieRapide],
+    ['ventes', 'Ventes', () => App.can('ventes') || App.can('creances'), renderVentesUnique],
     ['credits', 'Crédits à relancer', () => App.can('circuit') || App.can('creances'), renderCreditsEssentiel],
   ]],
-  ['Pilotage', [
-    ['tableau-de-bord', 'Tableau de bord détaillé', () => App.can('dashboard'), renderDashboard],
-    ['saisie', 'Saisie et import Excel', () => peutSaisirOuImporter(), renderSaisie],
-    ['analyses', 'Cumuls et analyses', () => App.can('ventes') || App.can('dashboard'), renderAnalyses],
-  ]],
-  ['Circuit de distribution', [
-    ['circuit', 'Tableau de bord du circuit', () => App.can('circuit'), renderCircuit],
-    ['circuit-depots', 'Agents-dépôts et sous-agents', () => App.can('circuit'), renderDepots],
+  ['Suivi commercial', [
+    ['objectifs', 'Objectifs des agents', () => App.can('objectifs'), renderObjectifs],
+    ['agents', 'Agents', () => App.can('ventes') || App.can('dashboard'), renderAgents],
+    ['clients', 'Clients', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderClients],
     ['circuit-grossistes', 'Grossistes', () => App.can('circuit'), renderGrossistes],
-    ['circuit-mouvements', 'Mouvements de stock', () => App.can('circuit'), renderMouvements],
+    ['circuit-mouvements', 'Mouvements de cartons', () => App.can('circuit'), renderMouvements],
     ['circuit-versements', 'Versements et caisse', () => App.can('circuit'), renderVersements],
-  ]],
-  ['Terrain', [
-    ['terrain', 'Zones et équipes', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderTerrain],
-    ['agents', 'Agents commerciaux', () => App.can('ventes') || App.can('dashboard'), renderAgents],
-    ['clients', 'Clients et grossistes', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderClients],
-    ['objectifs', 'Objectifs et réalisations', () => App.can('objectifs'), renderObjectifs],
-    ['suivi-agents', 'Suivi des agents terrain', () => App.can('suivi'), renderSuivi],
-  ]],
-  ['Ventes et créances', [
-    ['ventes-comptant', 'Ventes au comptant', () => App.can('ventes'), (r) => renderVentes(r, 'comptant')],
-    ['ventes-credit', 'Ventes à crédit', () => App.can('ventes') || App.can('creances'), (r) => renderVentes(r, 'credit')],
     ['remboursements', 'Remboursements', () => App.can('remboursements'), renderRemboursements],
-    ['creances', 'Créances et alertes', () => App.can('creances'), renderCreances],
     ['stock', 'Stock confié', () => App.can('stock'), renderStock],
+    ['suivi-agents', 'Suivi des agents terrain', () => App.can('suivi'), renderSuivi],
+    ['terrain', 'Zones et équipes', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderTerrain],
   ]],
   ['Dépenses et logistique', [
     ['depenses', 'Saisie et validation', () => App.can('depenses'), renderDepenses],
@@ -74,13 +62,31 @@ const NAV = [
     ['utilisateurs', 'Utilisateurs', () => App.can('utilisateurs'), renderUtilisateurs],
     ['roles', 'Rôles et permissions', () => App.can('utilisateurs'), renderRoles],
     ['reprise', 'Reprise de données', () => App.can('import', 'creer'), renderReprise],
+    ['saisie', 'Imports avancés', () => peutSaisirOuImporter(), renderSaisie],
     ['suppression', 'Suppression de données', () => App.can('suppression', 'supprimer'), renderSuppression],
     ['audit', 'Audit et anomalies', () => App.can('audit') || App.can('audit', 'creer'), renderAudit],
   ]],
 ];
-const PAGES = new Map(NAV.flatMap(([, items]) => items.map((i) => [i[0], i])).concat([['mon-compte', ['mon-compte', 'Mon compte', () => true, renderCompte]]]));
+// Anciennes pages : hors du menu (regroupées ailleurs) mais les liens existants restent valables
+const CACHEES = [
+  ['tableau-de-bord', 'Tableau de bord détaillé', () => App.can('dashboard'), renderDashboard],
+  ['analyses', 'Cumuls et analyses', () => App.can('ventes') || App.can('dashboard'), renderAnalyses],
+  ['circuit', 'Tableau de bord du circuit', () => App.can('circuit'), renderCircuit],
+  ['circuit-depots', 'Dépôts et agents', () => App.can('circuit'), renderDepots],
+  ['ventes-comptant', 'Ventes au comptant', () => App.can('ventes'), (r) => renderVentes(r, 'comptant')],
+  ['ventes-credit', 'Ventes à crédit', () => App.can('ventes') || App.can('creances'), (r) => renderVentes(r, 'credit')],
+  ['creances', 'Créances et alertes', () => App.can('creances'), renderCreances],
+];
+const PAGES = new Map(NAV.flatMap(([, items]) => items.map((i) => [i[0], i])).concat(CACHEES.map((i) => [i[0], i]), [['mon-compte', ['mon-compte', 'Mon compte', () => true, renderCompte]]]));
 const titleOf = (p) => PAGES.get(p)?.[1] || '';
 
+// Ventes : une seule page, comptant et crédit en onglets
+function renderVentesUnique(root) {
+  const f = (App.filters.ventesOnglet = App.filters.ventesOnglet || { mode: App.can('ventes') ? 'comptant' : 'credit' });
+  root.innerHTML = `<div class="seg onglets" role="tablist">${App.can('ventes') ? `<button data-o="comptant" class="${f.mode === 'comptant' ? 'on' : ''}">Au comptant</button>` : ''}<button data-o="credit" class="${f.mode === 'credit' ? 'on' : ''}">À crédit</button></div><div id="v-host"></div>`;
+  $$('[data-o]', root).forEach((b) => b.addEventListener('click', () => { f.mode = b.dataset.o; renderVentesUnique(root); }));
+  renderVentes($('#v-host', root), f.mode);
+}
 const root = document.getElementById('app');
 let current = null;
 
@@ -92,7 +98,7 @@ function navHtml() {
   const essHtml = ess.map(groupe).join('');
   if (!essHtml) return autres.map(groupe).join('');
   const n = autres.reduce((s, [, items]) => s + items.filter((i) => i[2]()).length, 0);
-  return `${essHtml}<button class="nav-plus" type="button" aria-expanded="${lsNav.get()}">${icon('menu')}<span>Tous les modules (${n})</span></button><div class="nav-autres" ${lsNav.get() ? '' : 'hidden'}>${autres.map(groupe).join('')}</div>`;
+  return `${essHtml}<button class="nav-plus" type="button" aria-expanded="${lsNav.get()}">${icon('menu')}<span>Autres modules (${n})</span></button><div class="nav-autres" ${lsNav.get() ? '' : 'hidden'}>${autres.map(groupe).join('')}</div>`;
 }
 function firstPage() {
   for (const [, items] of NAV) for (const i of items) if (i[2]()) return i[0];
@@ -246,6 +252,14 @@ async function enter() {
 
 async function boot() {
   root.innerHTML = '<div class="loading-screen">Démarrage…</div>';
+  // Listes de saisie : choisir avec la flèche ou écrire ; un nom nouveau peut être ajouté à la liste
+  initCombos();
+  setComboCreator(async (table, nom) => {
+    if (!App.can('referentiels', 'modifier')) throw new Error('Seul le Responsable Commercial peut ajouter un élément aux listes.');
+    const r = await App.api.call('ref.save', { table, row: { nom, ...(table === 'clients' ? { type: 'Boutique' } : {}) }, motif: 'Ajouté depuis un formulaire de saisie' });
+    await App.refresh();
+    return { v: r.row.id, l: r.row.nom };
+  });
   try {
     App.api = DEMO ? await demoApi((m) => { root.innerHTML = `<div class="loading-screen">${esc(m)}</div>`; }) : serverApi();
     // Illustration uniquement : accès aux données de démonstration pour les tests automatiques

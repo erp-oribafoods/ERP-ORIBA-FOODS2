@@ -164,7 +164,7 @@ export function renderMouvements(root) {
 }
 
 const optsAgents = (role, depot) => (App.D.agents || []).filter((a) => a.actif !== false && a.role_circuit === role && (!depot || a.depot_id === depot)).sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((a) => ({ v: a.id, l: `${a.nom}${a.equipe_id ? ' — ' + nm.equipe(a.equipe_id) : ''}` }));
-const optsGrossistes = () => (App.D.grossistes || []).filter((g) => g.actif !== false).sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((g) => ({ v: g.id, l: `${g.nom}${g.localite ? ' — ' + g.localite : ''}` }));
+const optsGrossistes = () => Object.assign((App.D.grossistes || []).filter((g) => g.actif !== false).sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((g) => ({ v: g.id, l: `${g.nom}${g.localite ? ' — ' + g.localite : ''}` })), { table: 'grossistes' });
 
 export function formMouvement(type, depotId = '') {
   const T = { appro: 'Approvisionnement d’un grossiste', prise: 'Approvisionnement d’un dépôt', dispatch: 'Remise de cartons à un agent du dépôt', transfert: 'Transfert de cartons entre dépôts' }[type];
@@ -183,7 +183,7 @@ export function formMouvement(type, depotId = '') {
       ${field({ k: 'cartons', l: 'Cartons', t: 'number', req: 1, min: 0 })}
       ${type === 'appro' || type === 'prise' ? field({ k: 'prix', l: 'Prix du carton (FCFA)', t: 'number', min: 0 }, type === 'prise' && depotId ? prixDepot(depotId) || dernierPrix(type) : dernierPrix(type)) : ''}
       ${type === 'prise' ? field({ k: 'mode', l: 'Payé', t: 'options', options: [{ v: 'comptant', l: 'Comptant' }, { v: 'credit', l: 'À crédit' }], empty: false }) : ''}
-      ${field({ k: 'observation', l: 'Observation', t: 'text', wide: 1 })}</div><p class="err" hidden></p></form>`,
+      </div><p class="err" hidden></p></form>`,
     footer: '<button class="btn ghost" data-close>Annuler</button><button class="btn primary" id="ms">Enregistrer</button>',
     onMount: (m, close) => {
       const sa = $('[name=sous_agent_id]', m);
@@ -254,7 +254,7 @@ export function formVersement() {
       <div data-l>${field({ k: 'lieu', l: 'Lieu du versement', t: 'options', options: Object.entries(LIEUX_VERSEMENT).map(([v, l]) => ({ v, l })), empty: false })}</div>
       <div data-lg hidden>${field({ k: 'lieu_grossiste_id', l: 'Chez quel grossiste', t: 'options', options: optsGrossistes() })}</div>
       ${field({ k: 'montant', l: 'Montant (FCFA)', t: 'number', req: 1, min: 0 })}
-      ${field({ k: 'reference', l: 'Référence (reçu, bordereau…)', t: 'text' })}</div><p class="muted small" data-info></p><p class="err" hidden></p></form>`,
+      </div><p class="muted small" data-info></p><p class="err" hidden></p></form>`,
     footer: '<button class="btn ghost" data-close>Annuler</button><button class="btn primary" id="vs">Enregistrer</button>',
     onMount: (m, close) => {
       const v = (n) => $(`[name=${n}]`, m);
@@ -264,7 +264,7 @@ export function formVersement() {
         $('[data-a]', m).hidden = o === 'reglement_grossiste'; $('[data-g]', m).hidden = o !== 'reglement_grossiste'; $('[data-r]', m).hidden = o !== 'remboursement';
         $('[data-l]', m).hidden = o === 'reglement_grossiste'; $('[data-lg]', m).hidden = o === 'reglement_grossiste' || v('lieu').value !== 'grossiste';
         if (o === 'remboursement') { const cr = credits(); v('vente_id').innerHTML = '<option value="">—</option>' + cr.map((c) => `<option value="${c.id}">${esc(`${c.numero} · ${nm.client(c.client_id)} · reste ${fmtN(c.solde)} FCFA${c.statut === 'En retard' ? ' (en retard)' : ''}`)}</option>`).join(''); }
-        $('[data-info]', m).textContent = o === 'ventes_comptant' ? 'Argent des ventes comptant remis par l’dépôt (pour lui et ses agents) ou par un agent.' : o === 'remboursement' ? 'Le remboursement est enregistré sur la vente à crédit choisie : son solde et son statut se mettent à jour.' : 'Paiement fait par le grossiste à Oriba sur les cartons reçus.';
+        $('[data-info]', m).textContent = o === 'ventes_comptant' ? 'Argent des ventes comptant remis par le dépôt (pour lui et ses agents) ou par un agent.' : o === 'remboursement' ? 'Le remboursement est enregistré sur la vente à crédit choisie : son solde et son statut se mettent à jour.' : 'Paiement fait par le grossiste à Oriba sur les cartons reçus.';
       };
       ['objet', 'lieu', 'agent_id'].forEach((n) => v(n).addEventListener('change', maj)); maj();
       $('#vs', m.parentElement).addEventListener('click', (ev) => busy(ev.currentTarget, async () => {

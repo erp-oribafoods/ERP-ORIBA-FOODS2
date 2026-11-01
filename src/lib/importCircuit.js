@@ -19,7 +19,7 @@ function iso(v) {
   m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
 }
 const FEUILLES = { grossistes: /^grossistes$/i, depots: /^(agents?[\s-]*)?d[ée]p[oô]ts?$/i, sous: /^(sous[\s-]*)?agents?$/i, clients: /^clients?/i, params: /^param/i,
-  appro: /^1\s*[-–]?\s*appro/i, prise: /^2\s*[-–]?\s*prise/i, dispatch: /^3\s*[-–]?\s*dispatch/i, ventes: /^4\s*[-–]?\s*vente/i, versements: /^5\s*[-–]?\s*versement/i };
+  appro: /^1\s*[-–]?\s*appro/i, prise: /^2\s*[-–]?\s*prise/i, dispatch: /^3\s*[-–]?\s*dispatch/i, ventes: /^4\s*[-–]?\s*vente/i, versements: /^5\s*[-–]?\s*versement/i, transfert: /^6\s*[-–]?\s*transfert/i };
 const feuille = (wb, re) => wb.SheetNames.find((n) => re.test(n.trim()));
 export const estClasseurCircuit = (wb) => !!(feuille(wb, FEUILLES.depots) && (feuille(wb, FEUILLES.prise) || feuille(wb, FEUILLES.dispatch) || feuille(wb, FEUILLES.ventes)));
 
@@ -51,6 +51,7 @@ const C_JOURNAUX = {
   appro: { date: ['date'], grossiste: ['grossiste'], fournisseur: ['fournisseur'], produit: ['produit'], cartons: ['cartons'], prix: ['prix'], observation: ['observation'] },
   prise: { date: ['date'], agent: ['agent', 'depot'], grossiste: ['grossiste', 'source'], produit: ['produit'], cartons: ['cartons'], prix: ['prix'], mode: ['mode'], observation: ['observation'] },
   dispatch: { date: ['date'], agent: ['agent'], sous: ['sous_agent'], produit: ['produit'], cartons: ['cartons'], observation: ['observation'] },
+  transfert: { date: ['date'], de: ['depot_qui_envoie', 'de_', 'depot_depart'], vers: ['depot_qui_recoit', 'vers', 'depot_arrivee'], produit: ['produit'], cartons: ['cartons'], observation: ['observation'] },
   ventes: { date: ['date'], vendeur: ['vendeur'], client: ['client'], produit: ['produit'], cartons: ['cartons'], prix: ['prix'], mode: ['mode'], echeance: ['echeance'], numero: ['n_vente', 'no_vente', 'numero'] },
   versements: { date: ['date'], par: ['verse_par'], objet: ['objet'], numero: ['n_vente', 'no_vente'], lieu: ['lieu'], grossiste: ['grossiste'], montant: ['montant'] },
 };
@@ -124,7 +125,7 @@ export function analyseCircuit(wb) {
   const cle = generateurCles();
   const deja = { mvts: new Set((R.D.circuit_mvts || []).map((m) => m.ref_externe).filter(Boolean)), ventes: new Set((R.D.ventes || []).map((v) => v.ref_externe).filter(Boolean)), vers: new Set((R.D.versements || []).map((v) => v.ref_externe).filter(Boolean)),
     rembs: new Set((R.D.remboursements || []).filter((r) => r.statut === 'valide').map((r) => r.reference).filter(Boolean)) };
-  const res = { appro: [], prise: [], dispatch: [], ventes: [], versements: [], remboursements: [] };
+  const res = { appro: [], prise: [], dispatch: [], transfert: [], ventes: [], versements: [], remboursements: [] };
   const push = (k, r, msgs, ref2, data, apercu, set) => res[k].push({ ligne: r._ligne, statut: msgs.length ? 'rejet' : set.has(ref2) ? 'identique' : 'ok', msg: msgs.join(' ; '), ref: ref2, data, apercu });
   const prodOk = (r, msgs) => { const p = R.produit(r.produit); if (!p) msgs.push(`Produit « ${t(r.produit)} » inconnu`); return p; };
   const base = (r, msgs) => { const d = iso(r.date); if (!d) msgs.push('Date illisible'); else if (d > today()) msgs.push('Date dans le futur'); const q = num(r.cartons); if (!(q > 0)) msgs.push('Cartons manquants'); return { d, q }; };
@@ -149,6 +150,13 @@ export function analyseCircuit(wb) {
     if (!connu(S, r.sous) && !R.parCode(R.D.agents, r.sous)) msgs.push(`Sous-agent « ${t(r.sous)} » absent de la liste`);
     const ref2 = cle(['D', d, K(r.agent), K(r.sous), K(r.produit), q]);
     push('dispatch', r, msgs, ref2, { d, q, p, r }, `${fmtD(d)} · ${t(r.agent)} → ${t(r.sous)} · ${fmtN(q)} ctn`, deja.mvts);
+  }
+  for (const r of J.transfert) {
+    const msgs = []; const { d, q } = base(r, msgs); const p = prodOk(r, msgs);
+    for (const [x, lib] of [[r.de, 'qui envoie'], [r.vers, 'qui reçoit']]) if (!connu(A, x) && !R.parCode(R.D.agents, x)) msgs.push(`Dépôt ${lib} « ${t(x)} » absent de la liste`);
+    if (t(r.de) && K(r.de) === K(r.vers)) msgs.push('Le dépôt qui envoie et celui qui reçoit doivent être différents');
+    const ref2 = cle(['T', d, K(r.de), K(r.vers), K(r.produit), q]);
+    push('transfert', r, msgs, ref2, { d, q, p, r }, `${fmtD(d)} · ${t(r.de)} → ${t(r.vers)} · ${fmtN(q)} ctn`, deja.mvts);
   }
   const venteRef = new Map();
   for (const r of J.ventes) {
@@ -235,6 +243,7 @@ export async function appliquerCircuit(wb, fname, etape = () => {}) {
   if (nouv('appro').length) { etape('approvisionnements des grossistes'); R.appro = await envoyer('circuit_appro', `${fname} — 1-Appro grossistes`, mv('appro', (x) => ({ grossiste_id: g(x.data.r.grossiste), fournisseur: t(x.data.r.fournisseur), prix: num(x.data.r.prix) }))); }
   if (nouv('prise').length) { etape('prises des agents-dépôts'); R.prise = await envoyer('circuit_prise', `${fname} — 2-Prises agents`, mv('prise', (x) => ({ agent_id: ag(x.data.r.agent), ...(/oriba/i.test(t(x.data.r.grossiste)) ? { grossiste_id: null, fournisseur: t(x.data.r.grossiste) } : { grossiste_id: g(x.data.r.grossiste) }), prix: num(x.data.r.prix), mode: t(x.data.r.mode) }))); }
   if (nouv('dispatch').length) { etape('dispatch aux sous-agents'); R.dispatch = await envoyer('circuit_dispatch', `${fname} — 3-Dispatch`, mv('dispatch', (x) => ({ agent_id: ag(x.data.r.agent), sous_agent_id: ag(x.data.r.sous) }))); }
+  if (nouv('transfert').length) { etape('transferts entre dépôts'); R.transfert = await envoyer('circuit_transfert', `${fname} — 6-Transferts`, mv('transfert', (x) => ({ agent_id: ag(x.data.r.de), depot_dest_id: ag(x.data.r.vers) }))); }
   await App.refresh();
   for (const credit of [false, true]) {
     const rows = nouv('ventes').filter((x) => x.data.credit === credit).map((x) => ({ ligne: x.ligne, data: { date: x.data.d, agent_id: ag(x.data.r.vendeur), marche_id: null, client_id: cl(x.data.r.client), echeance: credit ? x.data.ech : null, ref_externe: x.ref, observation: null }, lignes: [{ produit_id: x.data.p.id, unite: 'carton', quantite: x.data.q, prix_unitaire: num(x.data.r.prix) }] }));
@@ -265,7 +274,7 @@ export function ouvrirImportCircuit() {
       let wb = null, fname = '';
       const zone = $('[data-b]', m);
       $('[data-mod]', m).addEventListener('click', () => modeleCircuit());
-      const LIBS = [['appro', '1-Appro grossistes'], ['prise', '2-Prises agents'], ['dispatch', '3-Dispatch'], ['ventes', '4-Ventes'], ['versements', '5-Versements (versements)'], ['remboursements', '5-Versements (remboursements)']];
+      const LIBS = [['appro', '1-Appro grossistes'], ['prise', '2-Prises agents'], ['dispatch', '3-Dispatch'], ['transfert', '6-Transferts entre dépôts'], ['ventes', '4-Ventes'], ['versements', '5-Versements (versements)'], ['remboursements', '5-Versements (remboursements)']];
       const afficher = () => {
         const A = analyseCircuit(wb);
         const c = (k, s) => A.res[k].filter((x) => x.statut === s).length;
@@ -285,7 +294,7 @@ export function ouvrirImportCircuit() {
           try {
             const r = await appliquerCircuit(wb, fname, (txt) => { prog.innerHTML = `<div class="note">${esc(txt)}…</div>`; });
             const f = (x) => (x ? `${fmtN(x.integrees)} ajoutée(s)${x.deja ? `, ${fmtN(x.deja)} déjà présente(s)` : ''}` : '0');
-            zone.innerHTML = `<div class="note ok"><b>Import terminé.</b><ul><li>Référentiels créés ou mis à jour : ${r.refs}</li><li>Approvisionnements : ${f(r.R.appro)} · Prises : ${f(r.R.prise)} · Dispatch : ${f(r.R.dispatch)}</li><li>Ventes comptant : ${f(r.R.comptant)} · Ventes à crédit : ${f(r.R.credit)}</li><li>Versements : ${f(r.R.versements)} · Remboursements : ${f(r.R.remb)}</li></ul>
+            zone.innerHTML = `<div class="note ok"><b>Import terminé.</b><ul><li>Référentiels créés ou mis à jour : ${r.refs}</li><li>Approvisionnements : ${f(r.R.appro)} · Prises : ${f(r.R.prise)} · Dispatch : ${f(r.R.dispatch)} · Transferts : ${f(r.R.transfert)}</li><li>Ventes comptant : ${f(r.R.comptant)} · Ventes à crédit : ${f(r.R.credit)}</li><li>Versements : ${f(r.R.versements)} · Remboursements : ${f(r.R.remb)}</li></ul>
               ${r.refus.length ? `<span class="t-crit">${r.refus.length} ligne(s) refusée(s) :</span><br><span class="small">${r.refus.slice(0, 15).map(esc).join('<br>')}</span>` : ''}</div><p class="muted small">Demain, réimportez le classeur complété : seules les nouvelles lignes seront ajoutées.</p>`;
             toast('Classeur du circuit importé.');
           } catch (e) { toast(e.message, 'err'); prog.innerHTML = `<div class="note warn">${esc(e.message)} — relancez l’import : les lignes déjà enregistrées ne seront pas reprises.</div>`; }
@@ -328,5 +337,6 @@ export function modeleCircuit() {
   add('3-Dispatch', 'Dispatch aux sous-agents', 'Cartons remis par l’agent-dépôt à ses sous-agents.', ['Date', 'Agent-dépôt (code)', 'Sous-agent (code)', 'Produit', 'Cartons', 'Observation'], ex([j, code(X1.A), code(X1.S), X1.P?.nom || '', 5, 'exemple']), [12, 14, 14, 22, 10, 26]);
   add('4-Ventes', 'Ventes aux clients', 'Une ligne par vente ; pour un crédit, client et échéance obligatoires.', ['Date', 'Vendeur (code)', 'Client (code)', 'Produit', 'Cartons', 'Prix carton (FCFA)', 'Mode', 'Échéance (crédit)', 'N° vente'], [], [12, 13, 12, 22, 9, 13, 11, 13, 10]);
   add('5-Versements', 'Versements et remboursements', 'Argent versé à la caisse Oriba ou chez le grossiste.', ['Date', 'Versé par (code)', 'Objet', 'N° vente (remboursement)', 'Lieu du versement', 'Grossiste (si versé chez lui)', 'Montant (FCFA)'], [], [12, 14, 20, 14, 18, 16, 15]);
+  add('6-Transferts', 'Transferts entre dépôts', 'Cartons envoyés d’un dépôt à un autre (ex. Dépôt Niamey 1 → Dépôt Niamey 2).', ['Date', 'Dépôt qui envoie (code)', 'Dépôt qui reçoit (code)', 'Produit', 'Cartons', 'Observation'], [], [12, 16, 16, 22, 10, 26]);
   saveBlob(`Classeur_circuit_ORIBA_${today()}.xlsx`, new Blob([X.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
 }

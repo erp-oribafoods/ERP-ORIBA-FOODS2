@@ -30,8 +30,13 @@ function situationVendeur(C, agent, date, { depot }, au = date) {
   const venduPar = (f) => C.ventes.filter((x) => x.v.agent_id === agent.id && f(x.v.date));
   const entrees = (f) => (depot ? C.mv.filter((m) => m.type === 'prise' && m.agent_id === agent.id && f(m.date)) : C.mv.filter((m) => m.type === 'dispatch' && m.sous_agent_id === agent.id && f(m.date)));
   const dispatchs = (f) => (depot ? C.mv.filter((m) => m.type === 'dispatch' && m.agent_id === agent.id && f(m.date)) : []);
-  const si = round2(num(agent.stock_initial) + somme(entrees(avant), (m) => m.cartons) - somme(dispatchs(avant), (m) => m.cartons) - somme(venduPar(avant), (x) => x.cartons));
+  // Transferts entre dépôts : reçus d'un autre dépôt / envoyés à un autre dépôt
+  const trIn = (f) => (depot ? C.mv.filter((m) => m.type === 'transfert' && m.depot_dest_id === agent.id && f(m.date)) : []);
+  const trOut = (f) => (depot ? C.mv.filter((m) => m.type === 'transfert' && m.agent_id === agent.id && f(m.date)) : []);
+  const si = round2(num(agent.stock_initial) + somme(entrees(avant), (m) => m.cartons) + somme(trIn(avant), (m) => m.cartons) - somme(trOut(avant), (m) => m.cartons) - somme(dispatchs(avant), (m) => m.cartons) - somme(venduPar(avant), (x) => x.cartons));
   const ent = entrees(jourJ);
+  const recuTransfert = somme(trIn(jourJ), (m) => m.cartons);
+  const transfere = somme(trOut(jourJ), (m) => m.cartons);
   const recu = somme(ent, (m) => m.cartons);
   const recuFoods = somme(ent.filter((m) => m.type === 'prise' && !m.grossiste_id && m.fournisseur !== 'Oriba Rice'), (m) => m.cartons);
   const recuRice = somme(ent.filter((m) => m.type === 'prise' && !m.grossiste_id && m.fournisseur === 'Oriba Rice'), (m) => m.cartons);
@@ -40,7 +45,7 @@ function situationVendeur(C, agent, date, { depot }, au = date) {
   const vj = venduPar(jourJ);
   const vc = somme(vj.filter((x) => x.v.mode === 'comptant'), (x) => x.cartons);
   const vk = somme(vj.filter((x) => x.v.mode === 'credit'), (x) => x.cartons);
-  const sf = round2(si + recu - disp - vc - vk);
+  const sf = round2(si + recu + recuTransfert - transfere - disp - vc - vk);
   const ids = depot ? C.reseau(agent.id) : new Set([agent.id]);
   const vReseau = C.ventes.filter((x) => ids.has(x.v.agent_id) && jourJ(x.v.date));
   const aVerser = somme(vReseau.filter((x) => x.v.mode === 'comptant'), (x) => x.montant);
@@ -55,7 +60,7 @@ function situationVendeur(C, agent, date, { depot }, au = date) {
   const objectif = somme((C.D.objectifs || []).filter((o) => o.actif !== false && o.axe === 'agent' && o.mois === mois && !o.produit_id && ids.has(o.cible_id)), (o) => o.objectif_cartons);
   const venduMois = somme(C.ventes.filter((x) => ids.has(x.v.agent_id) && x.v.date >= `${mois}-01` && x.v.date <= au), (x) => x.cartons);
   const enCours = somme(credits, (c) => c.solde), enRetard = somme(credits.filter((c) => c.statut === 'En retard'), (c) => c.solde);
-  return { id: agent.id, code: agent.code || '', nom: agent.nom, fonction: agent.fonction || '', equipe_id: agent.equipe_id, depot_id: agent.depot_id || null, prix: num(agent.prix_carton) || null, si, recu, recuFoods, recuRice, recuGross, disp, vc, vk, sf, ca, aVerser, verse, verseGrossiste, ecart: round2(aVerser - verse), remb, enCours, enRetard, objectif, venduMois, taux: objectif > 0 ? (venduMois / objectif) * 100 : null };
+  return { id: agent.id, code: agent.code || '', nom: agent.nom, fonction: agent.fonction || '', equipe_id: agent.equipe_id, depot_id: agent.depot_id || null, prix: num(agent.prix_carton) || null, si, recu, recuFoods, recuRice, recuGross, recuTransfert, transfere, disp, vc, vk, sf, ca, aVerser, verse, verseGrossiste, ecart: round2(aVerser - verse), remb, enCours, enRetard, objectif, venduMois, taux: objectif > 0 ? (venduMois / objectif) * 100 : null };
 }
 
 export function situationDepots(C, date, au = date) {
@@ -92,7 +97,7 @@ export function serie(C, date, n = 7) {
   for (let k = n - 1; k >= 0; k--) {
     const d = addDays(date, -k);
     const vj = C.ventes.filter((x) => x.v.date === d && x.v.date >= C.depart && C.reseauTous().has(x.v.agent_id));
-    out.push({ date: d, pris: somme(C.mv.filter((m) => m.type === 'prise' && m.date === d), (m) => m.cartons), disp: somme(C.mv.filter((m) => m.type === 'dispatch' && m.date === d), (m) => m.cartons),
+    out.push({ date: d, transferts: somme(C.mv.filter((m) => m.type === 'transfert' && m.date === d), (m) => m.cartons), pris: somme(C.mv.filter((m) => m.type === 'prise' && m.date === d), (m) => m.cartons), disp: somme(C.mv.filter((m) => m.type === 'dispatch' && m.date === d), (m) => m.cartons),
       vc: somme(vj.filter((x) => x.v.mode === 'comptant'), (x) => x.cartons), vk: somme(vj.filter((x) => x.v.mode === 'credit'), (x) => x.cartons), ca: somme(vj.filter((x) => x.v.mode === 'comptant'), (x) => x.montant),
       verse: somme(C.vers.filter((v) => v.objet === 'ventes_comptant' && v.date === d), (v) => v.montant) });
   }

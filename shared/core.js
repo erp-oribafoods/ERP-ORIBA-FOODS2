@@ -1034,7 +1034,7 @@ A['import.run'] = async ({ t, user, perms, payload, ip }) => {
   const ok = [], ko = [], brouillons = [], deja = [];
   const opts = { historique: !courant, import_id: importId, ip };
   // Identifiants des lignes de fichier déjà enregistrées : une même ligne n'est jamais importée deux fois
-  const SRC_REF = { ventes_comptant: 'ventes', ventes_credit: 'ventes', circuit_appro: 'circuit_mvts', circuit_prise: 'circuit_mvts', circuit_dispatch: 'circuit_mvts', versements: 'versements' };
+  const SRC_REF = { ventes_comptant: 'ventes', ventes_credit: 'ventes', circuit_appro: 'circuit_mvts', circuit_prise: 'circuit_mvts', circuit_dispatch: 'circuit_mvts', circuit_transfert: 'circuit_mvts', versements: 'versements' };
   const refsVentes = SRC_REF[type] ? new Set((await t.select(SRC_REF[type])).map((v) => v.ref_externe).filter(Boolean))
     : type === 'remboursements' ? new Set((await t.select('remboursements')).filter((x) => x.statut === 'valide').map((x) => x.reference).filter((x) => x && x.startsWith('CIRC|'))) : null;
   for (const [i, r] of rows.entries()) {
@@ -1105,7 +1105,7 @@ const MODE_C = (m) => { const k = String(m || '').normalize('NFD').replace(/[\u0
 async function saveCircuit(t, user, perms, d, opts = {}) {
   if (!can(perms, 'circuit', 'creer')) fail('Seul le Responsable Commercial & Force de Vente peut enregistrer les mouvements du circuit.', 403);
   const type = d.type;
-  if (!['appro', 'prise', 'dispatch'].includes(type)) fail('Type de mouvement inconnu.');
+  if (!['appro', 'prise', 'dispatch', 'transfert'].includes(type)) fail('Type de mouvement inconnu.');
   if (!isDate(d.date)) fail('Date invalide.');
   if (d.date > today()) fail('La date ne peut pas être dans le futur.');
   const cartons = round2(num(d.cartons));
@@ -1133,8 +1133,8 @@ async function saveCircuit(t, user, perms, d, opts = {}) {
     if (!f) fail('Indiquez le fournisseur (Oriba Foods ou Oriba Rice).');
     row.fournisseur = FOURN(f);
   }
-  if (type === 'prise' || type === 'dispatch') {
-    if (!d.agent_id) fail('Choisissez le dépôt.');
+  if (type === 'prise' || type === 'dispatch' || type === 'transfert') {
+    if (!d.agent_id) fail(type === 'transfert' ? 'Choisissez le dépôt qui envoie.' : 'Choisissez le dépôt.');
     const ag = await one(t, 'agents', d.agent_id, 'Dépôt');
     if (ag.role_circuit !== 'depot') fail(`${ag.nom} n’est pas déclaré comme dépôt (Référentiels > Agents).`);
     row.agent_id = ag.id;
@@ -1145,6 +1145,14 @@ async function saveCircuit(t, user, perms, d, opts = {}) {
     const sa = await one(t, 'agents', d.sous_agent_id, 'Agent');
     if (sa.role_circuit !== 'sous_agent' || sa.depot_id !== row.agent_id) fail(`${sa.nom} n’est pas un agent de ce dépôt.`);
     row.sous_agent_id = sa.id;
+  }
+  if (type === 'transfert') {
+    // Transfert de cartons d'un dépôt à un autre dépôt
+    if (!d.depot_dest_id) fail('Choisissez le dépôt qui reçoit.');
+    const dest = await one(t, 'agents', d.depot_dest_id, 'Dépôt');
+    if (dest.role_circuit !== 'depot') fail(`${dest.nom} n’est pas déclaré comme dépôt (Référentiels > Agents).`);
+    if (dest.id === row.agent_id) fail('Le dépôt qui envoie et le dépôt qui reçoit doivent être différents.');
+    row.depot_dest_id = dest.id;
   }
   row.numero = await nextNumero(t, 'CM', d.date);
   const r = await t.insert('circuit_mvts', row);

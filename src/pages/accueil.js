@@ -45,15 +45,16 @@ export function renderAccueil(root) {
     const dep = situationDepots(C, du, au), cr = creditsCircuit(C, au), retard = cr.filter((c) => c.statut === 'En retard');
     const reste = S(dep, 'ecart');
     $('#ek', root).innerHTML = [
-      kpi('Cartons reçus par les dépôts', ctn(S(dep, 'recu')), `Oriba Foods ${fmtQ(S(dep, 'recuFoods'))} · Oriba Rice ${fmtQ(S(dep, 'recuRice'))} · grossistes ${fmtQ(S(dep, 'recuGross'))}`),
+      kpi('Cartons reçus par les dépôts', ctn(S(dep, 'recu')), `Oriba Foods ${fmtQ(S(dep, 'recuFoods'))} · Oriba Rice ${fmtQ(S(dep, 'recuRice'))} · grossistes ${fmtQ(S(dep, 'recuGross'))}${S(dep, 'transfere') ? ` · ${fmtQ(S(dep, 'transfere'))} transférés entre dépôts` : ''}`),
       kpi('Cartons vendus', ctn(S(dep, 'venduReseau')), `comptant ${fmtQ(S(dep, 'vcReseau'))} · crédit ${fmtQ(S(dep, 'vkReseau'))}`),
       kpi('Argent à verser', fmtF(S(dep, 'aVerser')), `versé ${fmtF(S(dep, 'verse'))} · reste ${fmtF(reste)}`, reste > 0 ? 'crit' : 'ok'),
       kpi('Crédits en retard', fmtF(S(retard, 'solde')), `${new Set(retard.map((c) => c.client_id)).size} client(s) à relancer`, retard.length ? 'crit' : 'ok'),
     ].join('');
     new Table({ title: `Dépôts — ${libPer()}`, rows: dep, sort: { k: 'nom', dir: 1 }, pageSize: 20, exportable: true, onRow: (r) => { P().depot = r.id; App.go('depots'); },
-      foot: (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : ['siTotal', 'recuFoods', 'recuRice', 'recuGross', 'venduReseau', 'stockTotal', 'ecart'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + num(r[c.k]), 0))}</b>` : ''),
+      foot: (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : ['siTotal', 'recuFoods', 'recuRice', 'recuGross', 'recuTransfert', 'transfere', 'venduReseau', 'stockTotal', 'ecart'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + num(r[c.k]), 0))}</b>` : ''),
       cols: [{ k: 'nom', l: 'Dépôt', f: (r) => `<b>${esc(r.nom)}</b>` }, { k: 'siTotal', l: 'Stock début', num: 1, f: (r) => fmtQ(r.siTotal) },
         { k: 'recuFoods', l: 'Reçu Oriba Foods', num: 1, f: (r) => fmtQ(r.recuFoods) }, { k: 'recuRice', l: 'Reçu Oriba Rice', num: 1, f: (r) => fmtQ(r.recuRice) }, { k: 'recuGross', l: 'Reçu grossistes', num: 1, f: (r) => fmtQ(r.recuGross) },
+        { k: 'recuTransfert', l: 'Reçu d’un dépôt', num: 1, f: (r) => fmtQ(r.recuTransfert) }, { k: 'transfere', l: 'Transféré à un dépôt', num: 1, f: (r) => (r.transfere ? `−${fmtQ(r.transfere)}` : fmtQ(0)) },
         { k: 'venduReseau', l: 'Vendu', num: 1, f: (r) => fmtQ(r.venduReseau) }, { k: 'stockTotal', l: 'Stock fin', num: 1, f: (r) => (r.stockTotal < 0 ? `<b class="t-crit">${fmtQ(r.stockTotal)}</b>` : `<b>${fmtQ(r.stockTotal)}</b>`) },
         { k: 'taux', l: 'Objectif du mois', num: 1, v: (r) => r.taux ?? -1, f: (r) => (r.objectif ? `${pct(r.taux)}<small class="muted">${fmtQ(r.venduMois)} / ${fmtQ(r.objectif)} ctn</small>` : '—'), x: (r) => (r.taux === null ? '' : Math.round(r.taux)) },
         { k: 'ecart', l: 'Reste à verser (FCFA)', num: 1, f: (r) => (r.ecart > 0 ? `<b class="t-crit">${fmtN(r.ecart)}</b>` : fmtN(r.ecart)) }] }).mount($('#et', root));
@@ -76,28 +77,29 @@ export function renderDepotsEssentiel(root) {
   if (!depots.some((d) => d.id === p.depot)) p.depot = depots[0]?.id || '';
   const can = App.can('circuit', 'creer');
   root.innerHTML = pageHead('Dépôts', 'Pour chaque dépôt : ses cartons, ses agents, leurs ventes et leurs objectifs.',
-    can && p.depot ? `<button class="btn primary" id="d-appro">${icon('plus')} Approvisionner ce dépôt</button><button class="btn" id="d-remise">${icon('plus')} Remettre à un agent</button>` : '') +
+    can && p.depot ? `<button class="btn primary" id="d-appro">${icon('plus')} Approvisionner ce dépôt</button><button class="btn" id="d-remise">${icon('plus')} Remettre à un agent</button><button class="btn" id="d-transf">${icon('truck')} Transférer à un autre dépôt</button>` : '') +
     (depots.length ? `<div class="chips depot-chips">${depots.map((d) => `<button class="chip ${d.id === p.depot ? 'on' : ''}" data-d="${d.id}">${esc(d.nom)}</button>`).join('')}</div>` : noteVide()) + barre() +
     '<section class="kpis k4" id="dk"></section><article class="card"><header><h3 id="dt-t">Agents du dépôt</h3></header><div id="dt"></div></article>';
   $$('[data-d]', root).forEach((b) => b.addEventListener('click', () => { p.depot = b.dataset.d; renderDepotsEssentiel(root); }));
   $('#d-appro', root)?.addEventListener('click', () => formMouvement('prise', p.depot));
   $('#d-remise', root)?.addEventListener('click', () => formMouvement('dispatch', p.depot));
+  $('#d-transf', root)?.addEventListener('click', () => formMouvement('transfert', p.depot));
   const draw = () => {
     $('.per-lib', root).textContent = libPer();
     if (!p.depot) return;
     const [du, au] = bornes(), C = contexte(App.D, App.I);
     const d = situationDepots(C, du, au).find((x) => x.id === p.depot); if (!d) return;
     $('#dk', root).innerHTML = [
-      kpi('Reçu par le dépôt', ctn(d.recu), `Oriba Foods ${fmtQ(d.recuFoods)} · Oriba Rice ${fmtQ(d.recuRice)} · grossistes ${fmtQ(d.recuGross)}`),
+      kpi('Reçu par le dépôt', ctn(d.recu + d.recuTransfert), `Oriba Foods ${fmtQ(d.recuFoods)} · Oriba Rice ${fmtQ(d.recuRice)} · grossistes ${fmtQ(d.recuGross)}${d.recuTransfert || d.transfere ? ` · d’autres dépôts ${fmtQ(d.recuTransfert)} · transféré ${fmtQ(d.transfere)}` : ''}`),
       kpi('Vendu', ctn(d.venduReseau), `comptant ${fmtQ(d.vcReseau)} · crédit ${fmtQ(d.vkReseau)}`),
       kpi('Stock fin', ctn(d.stockTotal), `au dépôt ${fmtQ(d.sf)} · chez les agents ${fmtQ(d.stockSous)}`, d.stockTotal < 0 ? 'crit' : ''),
       kpi('Reste à verser', fmtF(d.ecart), `à verser ${fmtF(d.aVerser)} · versé ${fmtF(d.verse)}${d.prix ? ` · prix ${fmtN(d.prix)} FCFA/ctn` : ''}`, d.ecart > 0 ? 'crit' : 'ok'),
     ].join('');
     $('#dt-t', root).textContent = `Agents de ${d.nom} — ${libPer()}`;
-    const lignes = [{ ...d, nom: `${d.nom} (vente directe)`, recu: d.recu, si: d.si, sf: d.sf, fonction: 'Dépôt', _depot: true }, ...d.sousAgents];
+    const lignes = [{ ...d, nom: `${d.nom} (vente directe)`, recu: d.recu + d.recuTransfert, si: d.si, sf: d.sf, fonction: 'Dépôt', _depot: true }, ...d.sousAgents];
     new Table({ title: `Agents — ${d.nom}`, rows: lignes, sort: { k: 'objectif', dir: -1 }, pageSize: 30,
       foot: (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : ['si', 'vc', 'vk', 'sf', 'objectif', 'venduMois', 'enCours'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + num(r[c.k]), 0))}</b>` : ''),
-      cols: [{ k: 'nom', l: 'Agent' }, { k: 'fonction', l: 'Fonction' }, { k: 'si', l: 'Stock début', num: 1, f: (r) => fmtQ(r.si) }, { k: 'recu', l: 'Reçu', num: 1, f: (r) => fmtQ(r.recu) + (r._depot ? ' <small class="muted">(fournisseurs)</small>' : ' <small class="muted">(du dépôt)</small>') },
+      cols: [{ k: 'nom', l: 'Agent' }, { k: 'fonction', l: 'Fonction' }, { k: 'si', l: 'Stock début', num: 1, f: (r) => fmtQ(r.si) }, { k: 'recu', l: 'Reçu', num: 1, f: (r) => fmtQ(r.recu) + (r._depot ? ' <small class="muted">(fournisseurs et autres dépôts)</small>' : ' <small class="muted">(du dépôt)</small>') },
         { k: 'vc', l: 'Vendu comptant', num: 1, f: (r) => fmtQ(r.vc) }, { k: 'vk', l: 'Vendu crédit', num: 1, f: (r) => fmtQ(r.vk) }, { k: 'sf', l: 'Stock fin', num: 1, f: (r) => (r.sf < 0 ? `<b class="t-crit">${fmtQ(r.sf)}</b>` : `<b>${fmtQ(r.sf)}</b>`) },
         { k: 'objectif', l: 'Objectif du mois', num: 1, f: (r) => (r._depot ? '' : r.objectif ? fmtQ(r.objectif) : '—') }, { k: 'venduMois', l: 'Vendu du mois', num: 1, f: (r) => (r._depot ? '' : fmtQ(r.venduMois)) },
         { k: 'taux', l: 'Réalisé', num: 1, v: (r) => r.taux ?? -1, f: (r) => (r._depot ? '' : pct(r.taux)) }, { k: 'enCours', l: 'Crédits en cours (FCFA)', num: 1, f: (r) => (r.enRetard > 0 ? `<b class="t-crit">${fmtN(r.enCours)}</b>` : fmtN(r.enCours)) }] }).mount($('#dt', root));
@@ -114,6 +116,7 @@ export function renderSaisieRapide(root) {
     `<section class="tuiles">${tuile('s-imp', 'upload', 'Importer le classeur du jour', 'Toutes les opérations de la journée ; seules les nouvelles lignes sont ajoutées')}
       ${tuile('s-appro', 'warehouse', 'Approvisionnement d’un dépôt', 'Cartons reçus d’Oriba Foods, d’Oriba Rice ou d’un grossiste')}
       ${tuile('s-remise', 'users', 'Remise à un agent', 'Cartons donnés par le dépôt à un de ses agents')}
+      ${tuile('s-transf', 'truck', 'Transfert entre dépôts', 'Cartons envoyés d’un dépôt à un autre (ex. Niamey 1 → Niamey 2)')}
       ${tuile('s-vente', 'cash', 'Vente', 'Au comptant ou à crédit, par un agent ou par le dépôt')}
       ${tuile('s-vers', 'wallet', 'Versement ou remboursement', 'Argent versé à la caisse Oriba ou chez le grossiste')}
       ${tuile('s-mod', 'download', 'Modèle Excel du classeur', 'À remplir chaque jour, avec les listes déjà à jour')}</section>
@@ -122,6 +125,7 @@ export function renderSaisieRapide(root) {
   $('#s-imp', root).addEventListener('click', () => ouvrirImportCircuit());
   $('#s-appro', root).addEventListener('click', () => formMouvement('prise'));
   $('#s-remise', root).addEventListener('click', () => formMouvement('dispatch'));
+  $('#s-transf', root).addEventListener('click', () => formMouvement('transfert'));
   $('#s-vente', root).addEventListener('click', () => formVente());
   $('#s-vers', root).addEventListener('click', () => formVersement());
   $('#s-mod', root).addEventListener('click', () => modeleCircuit());

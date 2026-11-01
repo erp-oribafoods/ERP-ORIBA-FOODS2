@@ -270,6 +270,12 @@ console.log('Circuit de distribution (grossistes → agents-dépôts → sous-ag
   await call(sessions.com, 'circuit.save', { type: 'prise', date: today(), agent_id: depA.id, grossiste_id: gro.id, produit_id: prod.id, cartons: 30, prix: 12500, mode: 'Crédit' });
   await expectErr(call(sessions.com, 'circuit.save', { type: 'dispatch', date: today(), agent_id: depA.id, sous_agent_id: ag.id, produit_id: prod.id, cartons: 5 }), 'Dispatch refusé vers un agent qui n’est pas son sous-agent', /agent de ce dépôt/);
   await call(sessions.com, 'circuit.save', { type: 'dispatch', date: today(), agent_id: depA.id, sous_agent_id: sa.id, produit_id: prod.id, cartons: 12 });
+  const depB = await ref('agents', { code: 'D-NY2', nom: 'Dépôt Niamey 2', equipe_id: eq.id, zone_id: eq.zone_id, role_circuit: 'depot' });
+  const tr = await call(sessions.com, 'circuit.save', { type: 'transfert', date: today(), agent_id: depA.id, depot_dest_id: depB.id, produit_id: prod.id, cartons: 6 });
+  ok(tr.mvt.type === 'transfert' && tr.mvt.depot_dest_id === depB.id, `Transfert ${tr.mvt.numero} : Dépôt Niamey 1 → Dépôt Niamey 2 (6 ctn)`);
+  await expectErr(call(sessions.com, 'circuit.save', { type: 'transfert', date: today(), agent_id: depA.id, depot_dest_id: depA.id, produit_id: prod.id, cartons: 2 }), 'Transfert vers le même dépôt refusé', /différents/);
+  await expectErr(call(sessions.com, 'circuit.save', { type: 'transfert', date: today(), agent_id: depA.id, depot_dest_id: sa.id, produit_id: prod.id, cartons: 2 }), 'Transfert vers un agent (pas un dépôt) refusé', /pas déclaré comme dépôt/);
+  await expectErr(call(sessions.dg, 'circuit.save', { type: 'transfert', date: today(), agent_id: depA.id, depot_dest_id: depB.id, produit_id: prod.id, cartons: 2 }), 'La DG ne peut pas saisir de transfert', /Responsable Commercial/);
   const vs = await call(sessions.com, 'vente.create', { vente: { date: today(), mode: 'comptant', agent_id: sa.id }, lignes: [{ produit_id: prod.id, unite: 'carton', quantite: 4, prix_unitaire: 13000 }] });
   ok(vs.vente && !vs.vente.marche_id, 'Un sous-agent vend sans marché précisé');
   const v1 = await call(sessions.com, 'versement.save', { date: today(), objet: 'ventes_comptant', agent_id: depA.id, lieu: 'grossiste', lieu_grossiste_id: gro.id, montant: 52000 });
@@ -285,7 +291,7 @@ console.log('Circuit de distribution (grossistes → agents-dépôts → sous-ag
   const cx = await call(sessions.com, 'circuit.cancel', { id: ap.mvt.id, motif: 'Erreur de saisie' });
   ok(cx.mvt.statut === 'annule', 'Mouvement annulé avec motif (conservé)');
   const D = (await call(sessions.dg, 'data.bootstrap')).data;
-  ok(D.grossistes.length === 1 && D.circuit_mvts.length === 4 && D.versements.length === 2, `La DG consulte le circuit (lecture) : ${D.circuit_mvts.length} mouvements, ${D.versements.length} versements`);
+  ok(D.grossistes.length === 1 && D.circuit_mvts.length === 5 && D.versements.length === 2, `La DG consulte le circuit (lecture) : ${D.circuit_mvts.length} mouvements, ${D.versements.length} versements`);
   await call(sessions.com, 'circuit.depart', { date: addDays(today(), -7) });
   ok((await call(sessions.dg, 'data.bootstrap')).data.parametres.find((x) => x.cle === 'circuit_date_depart')?.valeur?.date === addDays(today(), -7), 'Date des stocks initiaux du circuit enregistrée');
   if (mode === 'pg') await expectErr(globalThis.__pool.query('delete from circuit_mvts'), 'Suppression de mouvement interdite en base', /Suppression interdite/);

@@ -138,11 +138,11 @@ export function renderGrossistes(root) {
 }
 
 // ---------------------------------------------------------------- Mouvements de stock
-const libType = { appro: 'Appro. grossiste', prise: 'Appro. dépôt', dispatch: 'Remise à un agent' };
+const libType = { appro: 'Appro. grossiste', prise: 'Appro. dépôt', dispatch: 'Remise à un agent', transfert: 'Transfert entre dépôts' };
 export function renderMouvements(root) {
   const f = F();
-  root.innerHTML = pageHead('Mouvements de stock du circuit', 'Approvisionnements des grossistes, prises des dépôts chez les grossistes et dispatch aux agents.',
-    `${actions()}${peutSaisir() ? `<button class="btn primary" data-n="prise">${icon('plus')} Approvisionnement d’un dépôt</button><button class="btn" data-n="dispatch">${icon('plus')} Remise à un agent</button><button class="btn" data-n="appro">${icon('plus')} Approvisionnement d’un grossiste</button>` : ''}`) + aide() +
+  root.innerHTML = pageHead('Mouvements de stock du circuit', 'Approvisionnements des grossistes et des dépôts, transferts entre dépôts et remises aux agents.',
+    `${actions()}${peutSaisir() ? `<button class="btn primary" data-n="prise">${icon('plus')} Approvisionnement d’un dépôt</button><button class="btn" data-n="dispatch">${icon('plus')} Remise à un agent</button><button class="btn" data-n="transfert">${icon('plus')} Transfert entre dépôts</button><button class="btn" data-n="appro">${icon('plus')} Approvisionnement d’un grossiste</button>` : ''}`) + aide() +
     `<div class="filters"><label class="ff"><span>Type</span><select id="m-type"><option value="">Tous</option>${Object.entries(libType).map(([k, l]) => `<option value="${k}" ${f.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
      <label class="ff"><span>Du</span><input type="date" id="m-du" value="${f.du}"></label><label class="ff"><span>Au</span><input type="date" id="m-au" value="${f.au}"></label>
      <label class="chk" style="align-self:end"><input type="checkbox" id="m-ann" ${f.annules ? 'checked' : ''}> <span>Afficher les annulés</span></label></div><article class="card" id="mt"></article>`;
@@ -153,7 +153,7 @@ export function renderMouvements(root) {
     new Table({ title: 'Mouvements du circuit', rows, sort: { k: 'date', dir: -1 }, pageSize: 30, onRow: (r) => ficheMouvement(r),
       foot: (c, rs) => (c.k === 'cartons' ? `<b>${fmtQ(rs.reduce((s, r) => s + num(r.cartons), 0))}</b>` : c.k === 'montant' ? `<b>${fmtN(rs.reduce((s, r) => s + num(r.montant), 0))}</b>` : ''),
       cols: [{ k: 'numero', l: 'N°' }, { k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'type', l: 'Type', v: (r) => libType[r.type] }, { k: 'grossiste', l: 'Grossiste', v: (r) => (r.grossiste_id ? nm.grossiste(r.grossiste_id) : '') },
-        { k: 'agent', l: 'Dépôt', v: (r) => (r.agent_id ? nm.agent(r.agent_id) : '') }, { k: 'sous', l: 'Agent', v: (r) => (r.sous_agent_id ? nm.agent(r.sous_agent_id) : '') }, { k: 'produit', l: 'Produit', v: (r) => nm.produit(r.produit_id) },
+        { k: 'agent', l: 'Dépôt', v: (r) => (r.agent_id ? nm.agent(r.agent_id) : '') }, { k: 'sous', l: 'Agent / dépôt qui reçoit', v: (r) => (r.sous_agent_id ? nm.agent(r.sous_agent_id) : r.depot_dest_id ? `→ ${nm.agent(r.depot_dest_id)}` : '') }, { k: 'produit', l: 'Produit', v: (r) => nm.produit(r.produit_id) },
         { k: 'cartons', l: 'Cartons', num: 1, f: (r) => fmtQ(r.cartons) }, { k: 'prix', l: 'Prix', num: 1, f: (r) => (r.prix === null ? '—' : fmtN(r.prix)) }, { k: 'montant', l: 'Montant (FCFA)', num: 1, f: (r) => (r.montant === null ? '—' : fmtN(r.montant)) },
         { k: 'detail', l: 'Source / mode', v: (r) => (r.type === 'appro' ? r.fournisseur : r.type === 'prise' ? `${r.grossiste_id ? 'Grossiste' : r.fournisseur || ''} · ${r.mode === 'credit' ? 'Crédit' : 'Comptant'}` : '') },
         { k: 'statut', l: 'Statut', v: (r) => (r.statut === 'annule' ? 'Annulé' : 'Valide'), f: (r) => (r.statut === 'annule' ? pill('Annulé', 'mute') : pill('Valide', 'ok')) }] }).mount($('#mt', root));
@@ -167,20 +167,21 @@ const optsAgents = (role, depot) => (App.D.agents || []).filter((a) => a.actif !
 const optsGrossistes = () => (App.D.grossistes || []).filter((g) => g.actif !== false).sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((g) => ({ v: g.id, l: `${g.nom}${g.localite ? ' — ' + g.localite : ''}` }));
 
 export function formMouvement(type, depotId = '') {
-  const T = { appro: 'Approvisionnement d’un grossiste', prise: 'Approvisionnement d’un dépôt', dispatch: 'Remise de cartons à un agent du dépôt' }[type];
+  const T = { appro: 'Approvisionnement d’un grossiste', prise: 'Approvisionnement d’un dépôt', dispatch: 'Remise de cartons à un agent du dépôt', transfert: 'Transfert de cartons entre dépôts' }[type];
   const prixDepot = (id) => (App.D.agents || []).find((a) => a.id === id)?.prix_carton ?? '';
   const dernierPrix = (t2) => [...(App.D.circuit_mvts || [])].filter((m) => m.type === t2 && m.prix !== null && m.statut !== 'annule').sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0]?.prix ?? '';
   modal({ title: T,
     body: `<form class="form" id="mf"><div class="grid2">
       ${field({ k: 'date', l: 'Date', t: 'date', req: 1 }, today())}
-      ${type !== 'appro' ? field({ k: 'agent_id', l: 'Dépôt', t: 'options', options: optsAgents('depot'), req: 1 }, depotId) : ''}
+      ${type !== 'appro' ? field({ k: 'agent_id', l: type === 'transfert' ? 'Dépôt qui envoie' : 'Dépôt', t: 'options', options: optsAgents('depot'), req: 1 }, depotId) : ''}
+      ${type === 'transfert' ? field({ k: 'depot_dest_id', l: 'Dépôt qui reçoit', t: 'options', options: optsAgents('depot').filter((o) => o.v !== depotId), req: 1 }) : ''}
       ${type === 'prise' ? field({ k: 'source', l: 'Pris chez', t: 'options', options: [{ v: 'Oriba Foods', l: 'Oriba Foods' }, { v: 'Oriba Rice', l: 'Oriba Rice' }, { v: 'grossiste', l: 'Un grossiste' }], empty: false }) : ''}
-      ${type !== 'dispatch' ? `<div data-gr ${type === 'prise' ? 'hidden' : ''}>${field({ k: 'grossiste_id', l: 'Grossiste', t: 'options', options: optsGrossistes(), req: 1 })}</div>` : ''}
+      ${type === 'appro' || type === 'prise' ? `<div data-gr ${type === 'prise' ? 'hidden' : ''}>${field({ k: 'grossiste_id', l: 'Grossiste', t: 'options', options: optsGrossistes(), req: 1 })}</div>` : ''}
       ${type === 'appro' ? field({ k: 'fournisseur', l: 'Fournisseur', t: 'options', options: [{ v: 'Oriba Foods', l: 'Oriba Foods' }, { v: 'Oriba Rice', l: 'Oriba Rice' }], empty: false }) : ''}
       ${type === 'dispatch' ? field({ k: 'sous_agent_id', l: 'Agent', t: 'options', options: [], req: 1 }) : ''}
       ${field({ k: 'produit_id', l: 'Produit', t: 'options', options: opts('produits'), req: 1 })}
       ${field({ k: 'cartons', l: 'Cartons', t: 'number', req: 1, min: 0 })}
-      ${type !== 'dispatch' ? field({ k: 'prix', l: 'Prix du carton (FCFA)', t: 'number', min: 0 }, type === 'prise' && depotId ? prixDepot(depotId) || dernierPrix(type) : dernierPrix(type)) : ''}
+      ${type === 'appro' || type === 'prise' ? field({ k: 'prix', l: 'Prix du carton (FCFA)', t: 'number', min: 0 }, type === 'prise' && depotId ? prixDepot(depotId) || dernierPrix(type) : dernierPrix(type)) : ''}
       ${type === 'prise' ? field({ k: 'mode', l: 'Payé', t: 'options', options: [{ v: 'comptant', l: 'Comptant' }, { v: 'credit', l: 'À crédit' }], empty: false }) : ''}
       ${field({ k: 'observation', l: 'Observation', t: 'text', wide: 1 })}</div><p class="err" hidden></p></form>`,
     footer: '<button class="btn ghost" data-close>Annuler</button><button class="btn primary" id="ms">Enregistrer</button>',
@@ -188,6 +189,8 @@ export function formMouvement(type, depotId = '') {
       const sa = $('[name=sous_agent_id]', m);
       const majSous = () => { if (!sa) return; const dep = $('[name=agent_id]', m).value; sa.innerHTML = '<option value="">—</option>' + optsAgents('sous_agent', dep).map((o) => `<option value="${o.v}">${esc(o.l)}</option>`).join(''); };
       $('[name=agent_id]', m)?.addEventListener('change', () => { majSous(); const p = prixDepot($('[name=agent_id]', m).value); if (type === 'prise' && p) $('[name=prix]', m).value = p; }); majSous();
+      const dst = $('[name=depot_dest_id]', m);
+      if (dst) $('[name=agent_id]', m).addEventListener('change', (e) => { const v = dst.value; dst.innerHTML = '<option value="">—</option>' + optsAgents('depot').filter((o) => o.v !== e.target.value).map((o) => `<option value="${o.v}" ${o.v === v ? 'selected' : ''}>${esc(o.l)}</option>`).join(''); });
       $('[name=source]', m)?.addEventListener('change', (e) => { $('[data-gr]', m).hidden = e.target.value !== 'grossiste'; });
       $('#ms', m.parentElement).addEventListener('click', (ev) => busy(ev.currentTarget, async () => {
         const d = readForm($('#mf', m));
@@ -199,7 +202,7 @@ export function formMouvement(type, depotId = '') {
 
 function ficheMouvement(r) {
   modal({ title: `${libType[r.type]} ${r.numero}`,
-    body: `<dl class="dl">${[['Date', fmtD(r.date)], ['Grossiste', r.grossiste_id ? nm.grossiste(r.grossiste_id) : '—'], ['Fournisseur', r.fournisseur || '—'], ['Dépôt', r.agent_id ? nm.agent(r.agent_id) : '—'], ['Agent', r.sous_agent_id ? nm.agent(r.sous_agent_id) : '—'],
+    body: `<dl class="dl">${[['Date', fmtD(r.date)], ['Grossiste', r.grossiste_id ? nm.grossiste(r.grossiste_id) : '—'], ['Fournisseur', r.fournisseur || '—'], ['Dépôt', r.agent_id ? nm.agent(r.agent_id) : '—'], ...(r.type === 'transfert' ? [['Dépôt qui reçoit', nm.agent(r.depot_dest_id)]] : [['Agent', r.sous_agent_id ? nm.agent(r.sous_agent_id) : '—']]),
       ['Produit', nm.produit(r.produit_id)], ['Cartons', fmtQ(r.cartons)], ['Prix', r.prix === null ? '—' : fmtF(r.prix)], ['Montant', r.montant === null ? '—' : fmtF(r.montant)], ['Mode', r.type === 'prise' ? (r.mode === 'credit' ? 'Crédit' : 'Comptant') : '—'],
       ['Observation', r.observation || '—'], ['Statut', r.statut === 'annule' ? `Annulé — ${r.motif || ''}` : 'Valide'], ['Saisi le', fmtD(r.created_at)]].map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`,
     footer: `${App.can('circuit', 'annuler') && r.statut !== 'annule' ? '<button class="btn danger" id="ma">Annuler ce mouvement</button>' : ''}<span class="grow"></span><button class="btn ghost" data-close>Fermer</button>`,

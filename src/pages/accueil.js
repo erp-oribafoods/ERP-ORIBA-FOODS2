@@ -1,7 +1,7 @@
 // Espace « Essentiel » : tableau de bord des dépôts, détail d'un dépôt, saisie rapide, crédits à relancer.
 // Peu de chiffres, ceux qui comptent : cartons reçus (Oriba Food, Oriba Rice, grossistes), vendus, stock, argent à verser, crédits en retard.
 import { App, nm, opts, pageHead } from '../app.js';
-import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, field, readForm, showErr, busy, toast, icon, pill, comboField, comboLire } from '../lib/ui.js';
+import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, field, readForm, showErr, busy, toast, icon, pill, comboField, comboLire, chart, palette } from '../lib/ui.js';
 import { contexte, situationDepots, creditsCircuit, lundi } from '../lib/circuit.js';
 import { ouvrirImportCircuit, modeleCircuit } from '../lib/importCircuit.js';
 import { formMouvement, formVersement } from './circuit.js';
@@ -45,6 +45,10 @@ export function renderAccueil(root) {
   root.innerHTML = pageHead(`${h < 12 ? 'Bonjour' : 'Bonsoir'}${qui ? ` ${qui}` : ''} 👋`, `${u.role_nom ? `${u.role_nom} · ` : ''}${jour.charAt(0).toUpperCase() + jour.slice(1)}. Bienvenue sur l’ERP ORIBA : voici l’essentiel de l’activité.`,
     App.can('circuit', 'creer') ? `<a class="btn primary" href="#saisie-rapide">${icon('plus')} Saisir ou importer</a>` : '') + (aucunDepot() && App.can('circuit') ? noteVide() : '') + barre() +
     `<section class="kpis k3" id="ek"></section>
+     <div class="grid2 acc-graph" id="eg">
+       <article class="card"><header><h3>Évolution des ventes</h3><span class="muted small" id="eg-l"></span></header><div class="cv h260"><canvas id="g-ventes"></canvas></div></article>
+       <article class="card"><header><h3>Objectif du mois par dépôt</h3><span class="muted small">cartons vendus / objectif</span></header><div class="cv h260"><canvas id="g-obj"></canvas></div></article>
+     </div><p class="muted small" id="eg-vide" hidden>Les graphiques s’afficheront dès que des ventes seront enregistrées.</p>
      <article class="card"><header><h3>Les dépôts</h3><span class="muted small">Cliquez sur un dépôt pour voir ses agents</span></header><div id="et"></div></article>
      <div class="grid2 acc-bas"><article class="card" id="ec"></article><article class="card" id="ea"></article></div>`;
   const draw = () => {
@@ -71,6 +75,7 @@ export function renderAccueil(root) {
       C.stockConnu ? kpi('Stock dans les dépôts', ctn(S(dep, 'stockTotal')), `reçu : Oriba Food ${fmtQ(S(dep, 'recuFoods'))} · Oriba Rice ${fmtQ(S(dep, 'recuRice'))} · grossistes ${fmtQ(S(dep, 'recuGross'))}`, S(dep, 'stockTotal') < 0 ? 'warn' : '')
         : kpi('Stock dans les dépôts', 'Non renseigné', 'Saisissez le stock de départ ou les approvisionnements des dépôts'),
     ].join('');
+    graphiques(root, C, dep, du, au);
     new Table({ title: `Dépôts — ${libPer()}`, rows: dep, sort: { k: 'nom', dir: 1 }, pageSize: 20, exportable: true, onRow: (r) => { P().depot = r.id; App.go('depots'); },
       foot: (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : ['siTotal', 'recuFoods', 'recuRice', 'recuGross', 'recuTransfert', 'transfere', 'venduReseau', 'stockTotal', 'enCours', 'resteFood', 'resteRice'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + num(r[c.k]), 0))}</b>` : ''),
       cols: [{ k: 'nom', l: 'Dépôt', f: (r) => `<b>${esc(r.nom)}</b>` }, { k: 'siTotal', l: 'Stock début', num: 1, f: (r) => fmtQ(r.siTotal) },
@@ -95,6 +100,33 @@ export function renderAccueil(root) {
   };
   lierBarre(root, draw);
   draw();
+}
+
+// Graphiques du tableau de bord : ventes jour par jour (comptant, crédit, encaissements) et objectif du mois par dépôt
+function graphiques(root, C, dep, du, au) {
+  const pal = palette();
+  const debut = du === au ? addDays(au, -13) : du;           // en vue « Jour » : les 14 derniers jours
+  const jours = []; for (let d = debut; d <= au; d = addDays(d, 1)) jours.push(d);
+  const parJour = (l, f) => { const m = new Map(); for (const x of l) m.set(f(x).date, (m.get(f(x).date) || 0) + num(f(x).val)); return m; };
+  const vC = parJour(C.ventes.filter((x) => x.v.mode === 'comptant' && x.v.date >= debut && x.v.date <= au), (x) => ({ date: x.v.date, val: x.montant }));
+  const vK = parJour(C.ventes.filter((x) => x.v.mode === 'credit' && x.v.date >= debut && x.v.date <= au), (x) => ({ date: x.v.date, val: x.montant }));
+  const enc = parJour(C.rembs.filter((r) => r.date >= debut && r.date <= au), (r) => ({ date: r.date, val: r.montant }));
+  const mois = au.slice(0, 7);
+  const dObj = dep.filter((d) => d.objectif > 0 || d.venduMois > 0).sort((a, b) => (b.objectif || 0) - (a.objectif || 0));
+  const vide = !vC.size && !vK.size && !enc.size && !dObj.length;
+  $('#eg', root).hidden = vide; $('#eg-vide', root).hidden = !vide;
+  if (vide) return;
+  $('#eg-l', root).textContent = `du ${fmtD(debut)} au ${fmtD(au)}`;
+  chart($('#g-ventes', root), { type: 'bar', stacked: true, data: { labels: jours.map((d) => fmtD(d).slice(0, 5)), datasets: [
+    { label: 'Ventes au comptant', data: jours.map((d) => vC.get(d) || 0), backgroundColor: pal[0], borderRadius: 3, stack: 'v' },
+    { label: 'Ventes à crédit', data: jours.map((d) => vK.get(d) || 0), backgroundColor: pal[2], borderRadius: 3, stack: 'v' },
+    { type: 'line', label: 'Encaissements sur crédits', data: jours.map((d) => enc.get(d) || 0), borderColor: pal[1], backgroundColor: pal[1], tension: 0.3, pointRadius: 2, borderWidth: 2, stack: 'e' }] } });
+  const h = Math.min(420, Math.max(260, dObj.length * 30 + 60)) + 'px';
+  $('#g-obj', root).parentElement.style.height = h; $('#g-ventes', root).parentElement.style.height = h;
+  chart($('#g-obj', root), { type: 'bar', horizontal: true, money: false, data: { labels: dObj.map((d) => d.nom.replace(/^Dépôt /, '')), datasets: [
+    { label: `Vendu (${mois.slice(5)}/${mois.slice(0, 4)})`, data: dObj.map((d) => d.venduMois), backgroundColor: pal[0], borderRadius: 3 },
+    { label: 'Objectif du mois', data: dObj.map((d) => d.objectif), backgroundColor: pal[3] || '#c9c2dd', borderRadius: 3 }] },
+    tip: (ctx) => `${ctx.dataset.label} : ${fmtQ(ctx.parsed.x)} ctn` });
 }
 
 // ---------------------------------------------------------------- Un dépôt et ses agents

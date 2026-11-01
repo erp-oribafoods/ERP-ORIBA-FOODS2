@@ -409,7 +409,8 @@ ul.alertes li.crit { background: var(--crit-bg, #fde8ea); } ul.alertes li.warn {
 .combo-w input::-webkit-calendar-picker-indicator { display: none !important; opacity: 0; }
 .acc-bas { align-items: start; }
 .acc-bas .card { margin: 0; }
-.seg.onglets { margin-bottom: 4px; display: inline-flex; width: auto; }
+.seg.onglets { margin-bottom: 4px; display: inline-flex; width: auto; align-self: flex-start; max-width: 100%; flex-wrap: wrap; }
+.seg.onglets button { padding: 8px 16px; font-size: .88rem; }
 ul.alertes small { display: inline; }
 .fichiers { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-bottom: 14px; }
 .fichiers .fichier { margin: 0; display: flex; flex-direction: column; gap: 8px; }

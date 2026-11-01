@@ -26,7 +26,7 @@ import { ouvrirRapports } from './lib/rapports.js';
 
 const DEMO = !!window.ERP_DEMO || (() => { try { return new URLSearchParams(location.search).has('demo'); } catch { return false; } })();
 
-const NAV_ICONS = { ventes: 'cash', 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'users', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', suppression: 'alert', audit: 'eye', accueil: 'home', depots: 'warehouse', 'saisie-rapide': 'plus', credits: 'receipt', circuit: 'chart', 'circuit-depots': 'users', 'circuit-grossistes': 'warehouse', 'circuit-mouvements': 'truck', 'circuit-versements': 'wallet' };
+const NAV_ICONS = { ventes: 'cash', cartons: 'truck', caisse: 'wallet', 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'target', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', suppression: 'alert', audit: 'eye', accueil: 'home', depots: 'warehouse', 'saisie-rapide': 'plus', credits: 'receipt', circuit: 'chart', 'circuit-depots': 'users', 'circuit-grossistes': 'warehouse', 'circuit-mouvements': 'truck', 'circuit-versements': 'wallet' };
 const ESSENTIEL = 'Essentiel';
 const NAV = [
   // Un seul tableau de bord, un seul espace de saisie ; les pages en double ont été regroupées
@@ -38,14 +38,11 @@ const NAV = [
     ['credits', 'Crédits à relancer', () => App.can('circuit') || App.can('creances'), renderCreditsEssentiel],
   ]],
   ['Suivi commercial', [
-    ['objectifs', 'Objectifs des agents', () => App.can('objectifs'), renderObjectifs],
-    ['agents', 'Agents', () => App.can('ventes') || App.can('dashboard'), renderAgents],
+    ['agents', 'Agents et objectifs', () => App.can('ventes') || App.can('dashboard') || App.can('objectifs'), renderAgentsObjectifs],
     ['clients', 'Clients', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderClients],
     ['circuit-grossistes', 'Grossistes', () => App.can('circuit'), renderGrossistes],
-    ['circuit-mouvements', 'Mouvements de cartons', () => App.can('circuit'), renderMouvements],
-    ['circuit-versements', 'Versements et caisse', () => App.can('circuit'), renderVersements],
-    ['remboursements', 'Remboursements', () => App.can('remboursements'), renderRemboursements],
-    ['stock', 'Stock confié', () => App.can('stock'), renderStock],
+    ['cartons', 'Cartons et stock', () => App.can('circuit') || App.can('stock'), onglets('cartons', [['mvts', 'Mouvements de cartons', () => App.can('circuit'), renderMouvements], ['stock', 'Stock confié aux clients', () => App.can('stock'), renderStock]])],
+    ['caisse', 'Versements et remboursements', () => App.can('circuit') || App.can('remboursements'), onglets('caisse', [['vers', 'Versements et caisse', () => App.can('circuit'), renderVersements], ['remb', 'Remboursements des crédits', () => App.can('remboursements'), renderRemboursements]])],
     ['suivi-agents', 'Suivi des agents terrain', () => App.can('suivi'), renderSuivi],
     ['terrain', 'Zones et équipes', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderTerrain],
   ]],
@@ -76,10 +73,35 @@ const CACHEES = [
   ['ventes-comptant', 'Ventes au comptant', () => App.can('ventes'), (r) => renderVentes(r, 'comptant')],
   ['ventes-credit', 'Ventes à crédit', () => App.can('ventes') || App.can('creances'), (r) => renderVentes(r, 'credit')],
   ['creances', 'Créances et alertes', () => App.can('creances'), renderCreances],
+  ['objectifs', 'Objectifs des agents', () => App.can('objectifs'), renderObjectifs],
+  ['circuit-mouvements', 'Mouvements de cartons', () => App.can('circuit'), renderMouvements],
+  ['stock', 'Stock confié', () => App.can('stock'), renderStock],
+  ['circuit-versements', 'Versements et caisse', () => App.can('circuit'), renderVersements],
+  ['remboursements', 'Remboursements', () => App.can('remboursements'), renderRemboursements],
 ];
 const PAGES = new Map(NAV.flatMap(([, items]) => items.map((i) => [i[0], i])).concat(CACHEES.map((i) => [i[0], i]), [['mon-compte', ['mon-compte', 'Mon compte', () => true, renderCompte]]]));
 const titleOf = (p) => PAGES.get(p)?.[1] || '';
 
+// Module à onglets : plusieurs anciennes pages regroupées en une seule entrée du menu
+function onglets(cle, tabs) {
+  const rendu = (root) => {
+    const vis = tabs.filter((t) => t[2]());
+    const f = (App.filters['onglet_' + cle] = App.filters['onglet_' + cle] || { o: vis[0]?.[0] });
+    if (!vis.some((t) => t[0] === f.o)) f.o = vis[0]?.[0];
+    root.innerHTML = `${vis.length > 1 ? `<div class="seg onglets" role="tablist">${vis.map(([k, l]) => `<button data-o="${k}" class="${f.o === k ? 'on' : ''}">${l}</button>`).join('')}</div>` : ''}<div class="onglet-host"></div>`;
+    $$('[data-o]', root).forEach((b) => b.addEventListener('click', () => { f.o = b.dataset.o; destroyCharts(); rendu(root); }));
+    vis.find((t) => t[0] === f.o)?.[3]($('.onglet-host', root));
+  };
+  return rendu;
+}
+// Agents et objectifs : un seul module, deux onglets (les objectifs du mois et leurs réalisations ; la liste des agents et leurs résultats)
+function renderAgentsObjectifs(root) {
+  const peutObj = App.can('objectifs'), peutAg = App.can('ventes') || App.can('dashboard');
+  const f = (App.filters.agentsOnglet = App.filters.agentsOnglet || { o: peutObj ? 'objectifs' : 'agents' });
+  root.innerHTML = `<div class="seg onglets" role="tablist">${peutObj ? `<button data-o="objectifs" class="${f.o === 'objectifs' ? 'on' : ''}">Objectifs et réalisations</button>` : ''}${peutAg ? `<button data-o="agents" class="${f.o === 'agents' ? 'on' : ''}">Liste des agents</button>` : ''}</div><div id="a-host"></div>`;
+  $$('[data-o]', root).forEach((b) => b.addEventListener('click', () => { f.o = b.dataset.o; renderAgentsObjectifs(root); }));
+  (f.o === 'objectifs' && peutObj ? renderObjectifs : renderAgents)($('#a-host', root));
+}
 // Ventes : une seule page, comptant et crédit en onglets
 function renderVentesUnique(root) {
   const f = (App.filters.ventesOnglet = App.filters.ventesOnglet || { mode: App.can('ventes') ? 'comptant' : 'credit' });

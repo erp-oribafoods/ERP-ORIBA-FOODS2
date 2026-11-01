@@ -10,14 +10,16 @@ export function circuitCtx(D, I) {
   const ventes = (D.ventes || []).filter((v) => v.statut === 'validee').map((v) => ({ v, ...venteTotals(v, I) }));
   const rembs = (D.remboursements || []).filter((r) => r.statut === 'valide');
   const dates = [...mv.map((m) => m.date)].sort();
-  const depart = I.p.circuit_date_depart?.date || dates[0] || '0000-01-01';
+  // Sans date de départ ni mouvement, le stock part d'aujourd'hui (les ventes anciennes ne rendent pas le stock négatif)
+  const depart = I.p.circuit_date_depart?.date || dates[0] || (D.agents || []).some((a) => num(a.stock_initial) > 0) && '0000-01-01' || new Date().toISOString().slice(0, 10);
   const depots = (D.agents || []).filter((a) => a.role_circuit === 'depot' && a.actif !== false);
   const sous = (D.agents || []).filter((a) => a.role_circuit === 'sous_agent' && a.actif !== false);
   const grossistes = (D.grossistes || []).filter((g) => g.actif !== false);
   const sousDe = new Map(depots.map((d) => [d.id, sous.filter((s) => s.depot_id === d.id)]));
   const reseau = (depotId) => new Set([depotId, ...(sousDe.get(depotId) || []).map((s) => s.id)]);
   const venteById = new Map(ventes.map((x) => [x.v.id, x]));
-  return { D, I, mv, vers, ventes, rembs, depart, depots, sous, grossistes, sousDe, reseau, venteById };
+  const stockConnu = mv.length > 0 || (D.agents || []).some((a) => num(a.stock_initial) > 0);
+  return { D, I, mv, vers, ventes, rembs, depart, depots, sous, grossistes, sousDe, reseau, venteById, stockConnu };
 }
 
 const entre = (d, a, b) => d >= a && d < b;       // [a ; b[
@@ -63,12 +65,26 @@ function situationVendeur(C, agent, date, { depot }, au = date) {
   return { id: agent.id, code: agent.code || '', nom: agent.nom, fonction: agent.fonction || '', equipe_id: agent.equipe_id, depot_id: agent.depot_id || null, prix: num(agent.prix_carton) || null, si, recu, recuFoods, recuRice, recuGross, recuTransfert, transfere, disp, vc, vk, sf, ca, aVerser, verse, verseGrossiste, ecart: round2(aVerser - verse), remb, enCours, enRetard, objectif, venduMois, taux: objectif > 0 ? (venduMois / objectif) * 100 : null };
 }
 
+// Part des cartons du dépôt venant d'Oriba Rice (le reste : Oriba Food), d'après ses approvisionnements
+function partRice(C, depotId, au) {
+  const fourn = (m) => (m.grossiste_id ? C.grossistes.find((g) => g.id === m.grossiste_id)?.fournisseur : m.fournisseur);
+  let food = 0, rice = 0;
+  for (const m of C.mv) if (m.type === 'prise' && m.agent_id === depotId && m.date <= au) { const f = fourn(m); if (f === 'Oriba Rice') rice += num(m.cartons); else if (f) food += num(m.cartons); }
+  return food + rice > 0 ? rice / (food + rice) : 0;
+}
 export function situationDepots(C, date, au = date) {
   return C.depots.map((d) => {
     const s = situationVendeur(C, d, date, { depot: true }, au);
+    // Argent à verser : à Oriba Food ou à Oriba Rice
+    const pr = partRice(C, d.id, au), ids = C.reseau(d.id);
+    const vs = C.vers.filter((v) => v.objet === 'ventes_comptant' && ids.has(v.agent_id) && v.date >= date && v.date <= au);
+    const verseRice = round2(somme(vs.filter((v) => v.beneficiaire === 'Oriba Rice'), (v) => v.montant) + somme(vs.filter((v) => !v.beneficiaire), (v) => v.montant) * pr);
+    const aVerserRice = round2(s.aVerser * pr);
+    const split = { partRice: pr, aVerserRice, aVerserFood: round2(s.aVerser - aVerserRice), verseRice, verseFood: round2(s.verse - verseRice) };
+    split.resteRice = round2(split.aVerserRice - split.verseRice); split.resteFood = round2(split.aVerserFood - split.verseFood);
     const ss = (C.sousDe.get(d.id) || []).map((x) => situationVendeur(C, x, date, { depot: false }, au));
     const vcR = round2(s.vc + somme(ss, (x) => x.vc)), vkR = round2(s.vk + somme(ss, (x) => x.vk));
-    return { ...s, stockSous: somme(ss, (x) => x.sf), stockTotal: round2(s.sf + somme(ss, (x) => x.sf)), siTotal: round2(s.si + somme(ss, (x) => x.si)), vcReseau: vcR, vkReseau: vkR, venduReseau: round2(vcR + vkR), nbSous: ss.length, sousAgents: ss };
+    return { ...s, ...split, stockSous: somme(ss, (x) => x.sf), stockTotal: round2(s.sf + somme(ss, (x) => x.sf)), siTotal: round2(s.si + somme(ss, (x) => x.si)), vcReseau: vcR, vkReseau: vkR, venduReseau: round2(vcR + vkR), nbSous: ss.length, sousAgents: ss };
   });
 }
 export function situationSous(C, date, au = date) { return C.sous.map((s) => situationVendeur(C, s, date, { depot: false }, au)); }

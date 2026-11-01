@@ -415,3 +415,6 @@ ul.alertes small { display: inline; }
 .fichiers .fichier { margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .fichiers .fichier h3 { margin: 0; font-size: 1rem; }
 .fichiers .fichier .row-act { margin-top: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.kpis.k3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1000px) { .kpis.k3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .kpis.k3 { grid-template-columns: minmax(0, 1fr); } }

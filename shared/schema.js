@@ -170,7 +170,7 @@ export const REFS = {
     l: 'Grossistes', one: 'grossiste',
     f: [
       { k: 'code', l: 'Code', t: 'text' }, { k: 'nom', l: 'Nom', t: 'text', req: 1 }, { k: 'localite', l: 'Localité', t: 'text' },
-      { k: 'fournisseur', l: 'Fournisseur habituel', t: 'select:Oriba Foods|Oriba Rice' }, { k: 'telephone', l: 'Téléphone', t: 'text' },
+      { k: 'fournisseur', l: 'Fournisseur habituel', t: 'select:Oriba Food|Oriba Rice' }, { k: 'telephone', l: 'Téléphone', t: 'text' },
       { k: 'stock_initial', l: 'Stock initial (cartons)', t: 'number' }, { k: 'solde_initial', l: 'Solde dû à Oriba au départ (FCFA)', t: 'number' },
     ],
   },
@@ -217,7 +217,7 @@ export const CANAUX_RELANCE = ['Visite', 'Appel', 'SMS / WhatsApp', 'Courrier', 
 export const STOCK_TYPES = {
   remise: 'Remise de stock (nouveau lot)',
   vente: 'Vente imputée (facturée)',
-  retour: 'Retour vers Oriba Foods',
+  retour: 'Retour vers Oriba Food',
   perte: 'Perte / avarie',
   ajustement_plus: 'Ajustement (+)',
   ajustement_moins: 'Ajustement (−)',
@@ -290,6 +290,6 @@ export const AXES_OBJECTIF = { agent: 'Agent', zone: 'Zone', equipe: 'Équipe', 
 
 // Circuit de distribution : usine / Oriba Rice → grossistes → agents-dépôts → sous-agents → clients
 export const CIRCUIT_TYPES = { appro: 'Approvisionnement d’un grossiste', prise: 'Approvisionnement d’un dépôt', dispatch: 'Remise à un agent', transfert: 'Transfert entre dépôts' };
-export const FOURNISSEURS = ['Oriba Foods', 'Oriba Rice'];
+export const FOURNISSEURS = ['Oriba Food', 'Oriba Rice'];
 export const OBJETS_VERSEMENT = { ventes_comptant: 'Ventes comptant', reglement_grossiste: 'Règlement grossiste' };
 export const LIEUX_VERSEMENT = { caisse: 'Caisse Oriba', grossiste: 'Chez le grossiste' };

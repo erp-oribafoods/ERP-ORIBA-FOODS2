@@ -1,5 +1,5 @@
 // Espace « Essentiel » : tableau de bord des dépôts, détail d'un dépôt, saisie rapide, crédits à relancer.
-// Peu de chiffres, ceux qui comptent : cartons reçus (Oriba Foods, Oriba Rice, grossistes), vendus, stock, argent à verser, crédits en retard.
+// Peu de chiffres, ceux qui comptent : cartons reçus (Oriba Food, Oriba Rice, grossistes), vendus, stock, argent à verser, crédits en retard.
 import { App, nm, opts, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, field, readForm, showErr, busy, toast, icon, pill, comboField, comboLire } from '../lib/ui.js';
 import { contexte, situationDepots, creditsCircuit, lundi } from '../lib/circuit.js';
@@ -38,9 +38,13 @@ const noteVide = () => `<div class="note warn">Aucun dépôt n’est encore enre
 
 // ---------------------------------------------------------------- Tableau de bord (unique)
 export function renderAccueil(root) {
-  root.innerHTML = pageHead('Tableau de bord', 'L’essentiel en un coup d’œil : ventes, objectifs, dépôts, argent à verser et crédits à relancer.',
+  // Mot de bienvenue selon l'heure : Bonjour le matin, Bonsoir à partir de midi
+  const u = App.user || {}, h = new Date().getHours();
+  const qui = [u.prenom, u.nom].filter(Boolean).join(' ');
+  const jour = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  root.innerHTML = pageHead(`${h < 12 ? 'Bonjour' : 'Bonsoir'}${qui ? ` ${qui}` : ''} 👋`, `${u.role_nom ? `${u.role_nom} · ` : ''}${jour.charAt(0).toUpperCase() + jour.slice(1)}. Bienvenue sur l’ERP ORIBA : voici l’essentiel de l’activité.`,
     App.can('circuit', 'creer') ? `<a class="btn primary" href="#saisie-rapide">${icon('plus')} Saisir ou importer</a>` : '') + (aucunDepot() && App.can('circuit') ? noteVide() : '') + barre() +
-    `<section class="kpis k4" id="ek"></section>
+    `<section class="kpis k3" id="ek"></section>
      <article class="card"><header><h3>Les dépôts</h3><span class="muted small">Cliquez sur un dépôt pour voir ses agents</span></header><div id="et"></div></article>
      <div class="grid2 acc-bas"><article class="card" id="ec"></article><article class="card" id="ea"></article></div>`;
   const draw = () => {
@@ -56,29 +60,35 @@ export function renderAccueil(root) {
     const venduMois = sm(C.ventes.filter((x) => x.v.date >= `${mois}-01` && x.v.date <= au), 'cartons');
     const cr = creditsCircuit(C, au, { tous: true }), retard = cr.filter((c) => c.statut === 'En retard');
     const reste = S(dep, 'ecart');
+    const enc = C.rembs.filter((r) => r.date >= du && r.date <= au);
+    const resteF = S(dep, 'resteFood'), resteR = S(dep, 'resteRice');
     $('#ek', root).innerHTML = [
-      kpi('Ventes', fmtF(sm(vp, 'montant')), `${ctn(sm(vp, 'cartons'))} · comptant ${fmtF(sm(vC, 'montant'))} · crédit ${fmtF(sm(vK, 'montant'))}${obj ? ` · objectif du mois ${fmtN((venduMois / obj) * 100, 0)} %` : ''}`),
-      kpi('Stock dans les dépôts', ctn(S(dep, 'stockTotal')), `reçu : Oriba Foods ${fmtQ(S(dep, 'recuFoods'))} · Oriba Rice ${fmtQ(S(dep, 'recuRice'))} · grossistes ${fmtQ(S(dep, 'recuGross'))}`),
-      kpi('Argent à verser', fmtF(reste), `ventes comptant ${fmtF(S(dep, 'aVerser'))} · versé ${fmtF(S(dep, 'verse'))}`, reste > 0 ? 'crit' : 'ok'),
-      kpi('Crédits clients', fmtF(S(cr, 'solde')), `dont en retard ${fmtF(S(retard, 'solde'))} (${new Set(retard.map((c) => c.client_id)).size} client(s))`, retard.length ? 'crit' : 'ok'),
+      kpi('Ventes au comptant', fmtF(sm(vC, 'montant')), `${ctn(sm(vC, 'cartons'))} · total des ventes ${fmtF(sm(vp, 'montant'))}${obj ? ` · objectif du mois ${fmtN((venduMois / obj) * 100, 0)} %` : ''}`),
+      kpi('Ventes à crédit', fmtF(sm(vK, 'montant')), `${ctn(sm(vK, 'cartons'))} · ${vK.length} vente(s)`),
+      kpi('Encaissements sur crédits', fmtF(sm(enc, 'montant')), `${enc.length} remboursement(s) reçu(s)`, 'ok'),
+      kpi('Argent à verser', fmtF(reste), `à Oriba Food ${fmtF(resteF)} · à Oriba Rice ${fmtF(resteR)} · déjà versé ${fmtF(S(dep, 'verse'))}`, reste > 0 ? 'crit' : 'ok'),
+      kpi('Crédits clients en cours', fmtF(S(cr, 'solde')), `dont en retard ${fmtF(S(retard, 'solde'))} (${new Set(retard.map((c) => c.client_id)).size} client(s))`, retard.length ? 'crit' : 'ok'),
+      C.stockConnu ? kpi('Stock dans les dépôts', ctn(S(dep, 'stockTotal')), `reçu : Oriba Food ${fmtQ(S(dep, 'recuFoods'))} · Oriba Rice ${fmtQ(S(dep, 'recuRice'))} · grossistes ${fmtQ(S(dep, 'recuGross'))}`, S(dep, 'stockTotal') < 0 ? 'warn' : '')
+        : kpi('Stock dans les dépôts', 'Non renseigné', 'Saisissez le stock de départ ou les approvisionnements des dépôts'),
     ].join('');
     new Table({ title: `Dépôts — ${libPer()}`, rows: dep, sort: { k: 'nom', dir: 1 }, pageSize: 20, exportable: true, onRow: (r) => { P().depot = r.id; App.go('depots'); },
-      foot: (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : ['siTotal', 'recuFoods', 'recuRice', 'recuGross', 'recuTransfert', 'transfere', 'venduReseau', 'stockTotal', 'ecart'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + num(r[c.k]), 0))}</b>` : ''),
+      foot: (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : ['siTotal', 'recuFoods', 'recuRice', 'recuGross', 'recuTransfert', 'transfere', 'venduReseau', 'stockTotal', 'enCours', 'resteFood', 'resteRice'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + num(r[c.k]), 0))}</b>` : ''),
       cols: [{ k: 'nom', l: 'Dépôt', f: (r) => `<b>${esc(r.nom)}</b>` }, { k: 'siTotal', l: 'Stock début', num: 1, f: (r) => fmtQ(r.siTotal) },
-        { k: 'recuFoods', l: 'Reçu Oriba Foods', num: 1, f: (r) => fmtQ(r.recuFoods) }, { k: 'recuRice', l: 'Reçu Oriba Rice', num: 1, f: (r) => fmtQ(r.recuRice) }, { k: 'recuGross', l: 'Reçu grossistes', num: 1, f: (r) => fmtQ(r.recuGross) },
+        { k: 'recuFoods', l: 'Reçu Oriba Food', num: 1, f: (r) => fmtQ(r.recuFoods) }, { k: 'recuRice', l: 'Reçu Oriba Rice', num: 1, f: (r) => fmtQ(r.recuRice) }, { k: 'recuGross', l: 'Reçu grossistes', num: 1, f: (r) => fmtQ(r.recuGross) },
         { k: 'recuTransfert', l: 'Reçu d’un dépôt', num: 1, f: (r) => fmtQ(r.recuTransfert) }, { k: 'transfere', l: 'Transféré à un dépôt', num: 1, f: (r) => (r.transfere ? `−${fmtQ(r.transfere)}` : fmtQ(0)) },
         { k: 'venduReseau', l: 'Vendu', num: 1, f: (r) => fmtQ(r.venduReseau) }, { k: 'stockTotal', l: 'Stock fin', num: 1, f: (r) => (r.stockTotal < 0 ? `<b class="t-crit">${fmtQ(r.stockTotal)}</b>` : `<b>${fmtQ(r.stockTotal)}</b>`) },
         { k: 'taux', l: 'Objectif du mois', num: 1, v: (r) => r.taux ?? -1, f: (r) => (r.objectif ? `${pct(r.taux)}<small class="muted">${fmtQ(r.venduMois)} / ${fmtQ(r.objectif)} ctn</small>` : '—'), x: (r) => (r.taux === null ? '' : Math.round(r.taux)) },
         { k: 'enCours', l: 'Crédits en cours (FCFA)', num: 1, f: (r) => (r.enRetard > 0 ? `<b class="t-crit">${fmtN(r.enCours)}</b>` : fmtN(r.enCours)) },
-        { k: 'ecart', l: 'Reste à verser (FCFA)', num: 1, f: (r) => (r.ecart > 0 ? `<b class="t-crit">${fmtN(r.ecart)}</b>` : fmtN(r.ecart)) }] }).mount($('#et', root));
+        { k: 'resteFood', l: 'À verser Oriba Food (FCFA)', num: 1, f: (r) => (r.resteFood > 0 ? `<b class="t-crit">${fmtN(r.resteFood)}</b>` : fmtN(r.resteFood)) },
+        { k: 'resteRice', l: 'À verser Oriba Rice (FCFA)', num: 1, f: (r) => (r.resteRice > 0 ? `<b class="t-crit">${fmtN(r.resteRice)}</b>` : fmtN(r.resteRice)) }] }).mount($('#et', root));
     // Crédits à relancer : les plus en retard d'abord
     const rang = (c) => (c.statut === 'En retard' ? 0 : c.proche ? 1 : 2);
     const top = [...cr].sort((a, b) => rang(a) - rang(b) || b.joursRetard - a.joursRetard || b.solde - a.solde).slice(0, 6);
     $('#ec', root).innerHTML = `<header><h3>Ventes à crédit à relancer</h3>${cr.length ? '<a class="small" href="#credits">Voir tous les crédits</a>' : ''}</header>${top.length ? `<ul class="alertes">${top.map((c) => `<li class="${c.statut === 'En retard' ? 'crit' : c.proche ? 'warn' : ''}"><b>${esc(nm.client(c.client_id) || 'Client non précisé')}</b> doit ${fmtF(c.solde)} — ${c.statut === 'En retard' ? `en retard de ${c.joursRetard} jour(s)` : `échéance le ${fmtD(c.echeance)}`}<small class="muted"> · vendeur : ${esc(nm.agent(c.agent_id))}</small></li>`).join('')}</ul>` : '<p class="muted">Aucun crédit en cours.</p>'}`;
     // À surveiller : dépôts
     const alertes = [
-      ...dep.filter((d) => d.ecart > 0).sort((a, b) => b.ecart - a.ecart).map((d) => [`${d.nom} : ${fmtF(d.ecart)} pas encore versés`, 'crit']),
-      ...dep.filter((d) => d.stockTotal < 0).map((d) => [`${d.nom} : stock négatif (${fmtQ(d.stockTotal)} ctn) — vérifier les saisies`, 'warn']),
+      ...dep.filter((d) => d.ecart > 0).sort((a, b) => b.ecart - a.ecart).map((d) => [`${d.nom} : ${fmtF(d.ecart)} pas encore versés${d.resteFood > 0 && d.resteRice > 0 ? ` (Oriba Food ${fmtF(d.resteFood)} · Oriba Rice ${fmtF(d.resteRice)})` : d.resteRice > 0 ? ' à Oriba Rice' : ' à Oriba Food'}`, 'crit']),
+      ...dep.filter((d) => C.stockConnu && d.stockTotal < 0).map((d) => [`${d.nom} : stock négatif (${fmtQ(d.stockTotal)} ctn) — vérifier les saisies`, 'warn']),
       ...dep.filter((d) => d.objectif && d.taux !== null && d.taux < 50 && au.slice(8, 10) >= '15').map((d) => [`${d.nom} : ${fmtN(d.taux, 0)} % de l’objectif du mois seulement`, 'warn']),
     ].slice(0, 6);
     $('#ea', root).innerHTML = `<header><h3>À surveiller</h3></header>${alertes.length ? `<ul class="alertes">${alertes.map(([t, c]) => `<li class="${c}">${esc(t)}</li>`).join('')}</ul>` : '<p class="muted">Rien à signaler.</p>'}`;
@@ -107,10 +117,10 @@ export function renderDepotsEssentiel(root) {
     const [du, au] = bornes(), C = contexte(App.D, App.I);
     const d = situationDepots(C, du, au).find((x) => x.id === p.depot); if (!d) return;
     $('#dk', root).innerHTML = [
-      kpi('Reçu par le dépôt', ctn(d.recu + d.recuTransfert), `Oriba Foods ${fmtQ(d.recuFoods)} · Oriba Rice ${fmtQ(d.recuRice)} · grossistes ${fmtQ(d.recuGross)}${d.recuTransfert || d.transfere ? ` · d’autres dépôts ${fmtQ(d.recuTransfert)} · transféré ${fmtQ(d.transfere)}` : ''}`),
+      kpi('Reçu par le dépôt', ctn(d.recu + d.recuTransfert), `Oriba Food ${fmtQ(d.recuFoods)} · Oriba Rice ${fmtQ(d.recuRice)} · grossistes ${fmtQ(d.recuGross)}${d.recuTransfert || d.transfere ? ` · d’autres dépôts ${fmtQ(d.recuTransfert)} · transféré ${fmtQ(d.transfere)}` : ''}`),
       kpi('Vendu', ctn(d.venduReseau), `comptant ${fmtQ(d.vcReseau)} · crédit ${fmtQ(d.vkReseau)}`),
-      kpi('Stock fin', ctn(d.stockTotal), `au dépôt ${fmtQ(d.sf)} · chez les agents ${fmtQ(d.stockSous)}`, d.stockTotal < 0 ? 'crit' : ''),
-      kpi('Reste à verser', fmtF(d.ecart), `à verser ${fmtF(d.aVerser)} · versé ${fmtF(d.verse)}${d.prix ? ` · prix ${fmtN(d.prix)} FCFA/ctn` : ''}`, d.ecart > 0 ? 'crit' : 'ok'),
+      (C.stockConnu ? kpi('Stock fin', ctn(d.stockTotal), `au dépôt ${fmtQ(d.sf)} · chez les agents ${fmtQ(d.stockSous)}`, d.stockTotal < 0 ? 'crit' : '') : kpi('Stock fin', 'Non renseigné', 'Saisissez le stock de départ ou les approvisionnements')),
+      kpi('Reste à verser', fmtF(d.ecart), `à Oriba Food ${fmtF(d.resteFood)} · à Oriba Rice ${fmtF(d.resteRice)} · déjà versé ${fmtF(d.verse)}${d.prix ? ` · prix ${fmtN(d.prix)} FCFA/ctn` : ''}`, d.ecart > 0 ? 'crit' : 'ok'),
     ].join('');
     $('#dt-t', root).textContent = `Agents de ${d.nom} — ${libPer()}`;
     const lignes = [{ ...d, nom: `${d.nom} (vente directe)`, recu: d.recu + d.recuTransfert, si: d.si, sf: d.sf, fonction: 'Dépôt', _depot: true }, ...d.sousAgents];
@@ -134,7 +144,7 @@ export function renderSaisieRapide(root) {
     `<h2 class="sec-t">Saisir une opération</h2>
      <section class="tuiles">${tuile('s-vente', 'cash', 'Vente', 'Au comptant ou à crédit')}
       ${tuile('s-vers', 'wallet', 'Versement ou remboursement', 'Argent versé à la caisse ou chez le grossiste ; crédit remboursé')}
-      ${tuile('s-appro', 'warehouse', 'Approvisionnement d’un dépôt', 'Cartons reçus d’Oriba Foods, d’Oriba Rice ou d’un grossiste')}
+      ${tuile('s-appro', 'warehouse', 'Approvisionnement d’un dépôt', 'Cartons reçus d’Oriba Food, d’Oriba Rice ou d’un grossiste')}
       ${tuile('s-remise', 'users', 'Remise à un agent', 'Cartons donnés par le dépôt à un de ses agents')}
       ${tuile('s-transf', 'truck', 'Transfert entre dépôts', 'Cartons envoyés d’un dépôt à un autre')}</section>
      <h2 class="sec-t">Importer les fichiers Excel</h2>

@@ -1,4 +1,4 @@
-// Circuit de distribution : usine Oriba Foods / Oriba Rice → grossistes → dépôts → agents → clients.
+// Circuit de distribution : usine Oriba Food / Oriba Rice → grossistes → dépôts → agents → clients.
 // Tableau de bord du jour, situation des dépôts et agents, grossistes par semaine, mouvements de stock et versements.
 import { App, nm, opts, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, confirmBox, field, readForm, showErr, busy, toast, icon, pill } from '../lib/ui.js';
@@ -51,7 +51,7 @@ export function renderCircuit(root) {
     const reste = S(dep, 'ecart');
     $('#k1', root).innerHTML = [
       kpi('Stock chez les grossistes', ctn(S(gs, 'sf')), 'fin de la semaine en cours'), kpi('Stock chez les dépôts', ctn(S(dep, 'sf')), 'fin de journée'), kpi('Stock chez les agents', ctn(S(ss, 'sf')), 'fin de journée'),
-      kpi('Approvisionnement des dépôts', ctn(S(dep, 'recu')), 'Oriba Foods, Oriba Rice et grossistes'), kpi('Dispatché aux agents', ctn(S(dep, 'disp'))),
+      kpi('Approvisionnement des dépôts', ctn(S(dep, 'recu')), 'Oriba Food, Oriba Rice et grossistes'), kpi('Dispatché aux agents', ctn(S(dep, 'disp'))),
       kpi('Vendu comptant', ctn(S(dep, 'vc') + S(ss, 'vc')), 'agents + agents'), kpi('Vendu à crédit', ctn(S(dep, 'vk') + S(ss, 'vk')), 'agents + agents'),
       kpi('Ventes comptant à verser', fmtF(S(dep, 'aVerser'))), kpi('Versé', fmtF(S(dep, 'verse')), `dont ${fmtF(S(dep, 'verseGrossiste'))} chez les grossistes`), kpi('Reste à verser', fmtF(reste), '', reste > 0 ? 'crit' : 'ok'),
       kpi('Remboursements de crédits reçus', fmtF(S(dep, 'remb'))), kpi('Règlements des grossistes reçus', fmtF(regJour)),
@@ -92,7 +92,7 @@ const foot = (keys) => (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : keys.include
 const KS = ['si', 'recu', 'disp', 'vc', 'vk', 'sf', 'stockSous', 'aVerser', 'verse', 'verseGrossiste', 'ecart', 'remb', 'enCours', 'enRetard'];
 
 export function renderDepots(root) {
-  root.innerHTML = pageHead('Dépôts et agents', 'Chaque dépôt s’approvisionne chez Oriba Foods, Oriba Rice ou un grossiste et remet les cartons à ses agents. Cliquez sur un dépôt pour voir ses agents.', actions()) + aide() + barreDate(root) +
+  root.innerHTML = pageHead('Dépôts et agents', 'Chaque dépôt s’approvisionne chez Oriba Food, Oriba Rice ou un grossiste et remet les cartons à ses agents. Cliquez sur un dépôt pour voir ses agents.', actions()) + aide() + barreDate(root) +
     '<article class="card"><header><h3>Dépôts — jour choisi (cartons et FCFA)</h3></header><div id="td"></div></article><article class="card"><header><h3>Agents des dépôts — jour choisi</h3></header><div id="ts"></div></article>';
   lierActions(root);
   const draw = () => {
@@ -175,9 +175,9 @@ export function formMouvement(type, depotId = '') {
       ${field({ k: 'date', l: 'Date', t: 'date', req: 1 }, today())}
       ${type !== 'appro' ? field({ k: 'agent_id', l: type === 'transfert' ? 'Dépôt qui envoie' : 'Dépôt', t: 'options', options: optsAgents('depot'), req: 1 }, depotId) : ''}
       ${type === 'transfert' ? field({ k: 'depot_dest_id', l: 'Dépôt qui reçoit', t: 'options', options: optsAgents('depot').filter((o) => o.v !== depotId), req: 1 }) : ''}
-      ${type === 'prise' ? field({ k: 'source', l: 'Pris chez', t: 'options', options: [{ v: 'Oriba Foods', l: 'Oriba Foods' }, { v: 'Oriba Rice', l: 'Oriba Rice' }, { v: 'grossiste', l: 'Un grossiste' }], empty: false }) : ''}
+      ${type === 'prise' ? field({ k: 'source', l: 'Pris chez', t: 'options', options: [{ v: 'Oriba Food', l: 'Oriba Food' }, { v: 'Oriba Rice', l: 'Oriba Rice' }, { v: 'grossiste', l: 'Un grossiste' }], empty: false }) : ''}
       ${type === 'appro' || type === 'prise' ? `<div data-gr ${type === 'prise' ? 'hidden' : ''}>${field({ k: 'grossiste_id', l: 'Grossiste', t: 'options', options: optsGrossistes(), req: 1 })}</div>` : ''}
-      ${type === 'appro' ? field({ k: 'fournisseur', l: 'Fournisseur', t: 'options', options: [{ v: 'Oriba Foods', l: 'Oriba Foods' }, { v: 'Oriba Rice', l: 'Oriba Rice' }], empty: false }) : ''}
+      ${type === 'appro' ? field({ k: 'fournisseur', l: 'Fournisseur', t: 'options', options: [{ v: 'Oriba Food', l: 'Oriba Food' }, { v: 'Oriba Rice', l: 'Oriba Rice' }], empty: false }) : ''}
       ${type === 'dispatch' ? field({ k: 'sous_agent_id', l: 'Agent', t: 'options', options: [], req: 1 }) : ''}
       ${field({ k: 'produit_id', l: 'Produit', t: 'options', options: opts('produits'), req: 1 })}
       ${field({ k: 'cartons', l: 'Cartons', t: 'number', req: 1, min: 0 })}
@@ -229,13 +229,13 @@ export function renderVersements(root) {
     new Table({ title: 'Versements', rows: vs, sort: { k: 'date', dir: -1 }, pageSize: 25, onRow: (r) => ficheVersement(r),
       foot: (c, rs) => (c.k === 'montant' ? `<b>${fmtN(rs.reduce((s, r) => s + num(r.montant), 0))}</b>` : ''),
       cols: [{ k: 'numero', l: 'N°' }, { k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'objet', l: 'Objet', v: (r) => OBJETS_VERSEMENT[r.objet] }, { k: 'par', l: 'Versé par', v: (r) => (r.agent_id ? nm.agent(r.agent_id) : nm.grossiste(r.grossiste_id)) },
-        { k: 'lieu', l: 'Lieu', v: (r) => (r.lieu === 'grossiste' ? `Chez ${nm.grossiste(r.lieu_grossiste_id)}` : 'Caisse Oriba') }, { k: 'montant', l: 'Montant (FCFA)', num: 1, f: (r) => `<b>${fmtN(r.montant)}</b>` }, { k: 'reference', l: 'Référence' },
+        { k: 'lieu', l: 'Lieu', v: (r) => (r.lieu === 'grossiste' ? `Chez ${nm.grossiste(r.lieu_grossiste_id)}` : 'Caisse Oriba') }, { k: 'beneficiaire', l: 'Pour', v: (r) => r.beneficiaire || '—' }, { k: 'montant', l: 'Montant (FCFA)', num: 1, f: (r) => `<b>${fmtN(r.montant)}</b>` }, { k: 'reference', l: 'Référence' },
         { k: 'statut', l: 'Statut', v: (r) => (r.statut === 'annule' ? 'Annulé' : 'Valide'), f: (r) => (r.statut === 'annule' ? pill('Annulé', 'mute') : pill('Valide', 'ok')) }] }).mount($('#vt', root));
     const ids = C.reseauTous(), vmap = new Map((App.D.ventes || []).map((v) => [v.id, v]));
     const rb = (App.D.remboursements || []).filter((r) => r.statut === 'valide' && ids.has(vmap.get(r.vente_id)?.agent_id));
     new Table({ title: 'Remboursements de crédits', rows: rb, sort: { k: 'date', dir: -1 }, pageSize: 15, empty: 'Aucun remboursement.',
       cols: [{ k: 'numero', l: 'N°' }, { k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'vente', l: 'Vente', v: (r) => vmap.get(r.vente_id)?.numero || '' }, { k: 'client', l: 'Client', v: (r) => nm.client(vmap.get(r.vente_id)?.client_id) },
-        { k: 'vendeur', l: 'Vendeur', v: (r) => nm.agent(vmap.get(r.vente_id)?.agent_id) }, { k: 'lieu', l: 'Lieu', v: (r) => (r.lieu === 'grossiste' ? `Chez ${nm.grossiste(r.lieu_grossiste_id)}` : 'Caisse Oriba') }, { k: 'montant', l: 'Montant (FCFA)', num: 1, f: (r) => fmtN(r.montant) }] }).mount($('#rt', root));
+        { k: 'vendeur', l: 'Vendeur', v: (r) => nm.agent(vmap.get(r.vente_id)?.agent_id) }, { k: 'lieu', l: 'Lieu', v: (r) => (r.lieu === 'grossiste' ? `Chez ${nm.grossiste(r.lieu_grossiste_id)}` : 'Caisse Oriba') }, { k: 'beneficiaire', l: 'Pour', v: (r) => r.beneficiaire || '—' }, { k: 'montant', l: 'Montant (FCFA)', num: 1, f: (r) => fmtN(r.montant) }] }).mount($('#rt', root));
   };
   lierDate(root, draw);
   draw();
@@ -253,6 +253,7 @@ export function formVersement() {
       <div data-r hidden>${field({ k: 'vente_id', l: 'Crédit remboursé', t: 'options', options: [], req: 1 })}</div>
       <div data-l>${field({ k: 'lieu', l: 'Lieu du versement', t: 'options', options: Object.entries(LIEUX_VERSEMENT).map(([v, l]) => ({ v, l })), empty: false })}</div>
       <div data-lg hidden>${field({ k: 'lieu_grossiste_id', l: 'Chez quel grossiste', t: 'options', options: optsGrossistes() })}</div>
+      <div data-b>${field({ k: 'beneficiaire', l: 'Argent pour', t: 'options', options: [{ v: 'Oriba Food', l: 'Oriba Food' }, { v: 'Oriba Rice', l: 'Oriba Rice' }], emptyLabel: 'Selon la provenance des cartons' })}</div>
       ${field({ k: 'montant', l: 'Montant (FCFA)', t: 'number', req: 1, min: 0 })}
       </div><p class="muted small" data-info></p><p class="err" hidden></p></form>`,
     footer: '<button class="btn ghost" data-close>Annuler</button><button class="btn primary" id="vs">Enregistrer</button>',
@@ -262,7 +263,7 @@ export function formVersement() {
       const maj = () => {
         const o = v('objet').value;
         $('[data-a]', m).hidden = o === 'reglement_grossiste'; $('[data-g]', m).hidden = o !== 'reglement_grossiste'; $('[data-r]', m).hidden = o !== 'remboursement';
-        $('[data-l]', m).hidden = o === 'reglement_grossiste'; $('[data-lg]', m).hidden = o === 'reglement_grossiste' || v('lieu').value !== 'grossiste';
+        $('[data-l]', m).hidden = o === 'reglement_grossiste'; $('[data-b]', m).hidden = o !== 'ventes_comptant'; $('[data-lg]', m).hidden = o === 'reglement_grossiste' || v('lieu').value !== 'grossiste';
         if (o === 'remboursement') { const cr = credits(); v('vente_id').innerHTML = '<option value="">—</option>' + cr.map((c) => `<option value="${c.id}">${esc(`${c.numero} · ${nm.client(c.client_id)} · reste ${fmtN(c.solde)} FCFA${c.statut === 'En retard' ? ' (en retard)' : ''}`)}</option>`).join(''); }
         $('[data-info]', m).textContent = o === 'ventes_comptant' ? 'Argent des ventes comptant remis par le dépôt (pour lui et ses agents) ou par un agent.' : o === 'remboursement' ? 'Le remboursement est enregistré sur la vente à crédit choisie : son solde et son statut se mettent à jour.' : 'Paiement fait par le grossiste à Oriba sur les cartons reçus.';
       };

@@ -355,7 +355,7 @@ export function ficheVehicule(id) {
 export function renderBudgets(root) {
   App.filters.budget = App.filters.budget || { mois: today().slice(0, 7) };
   const can = App.can('budgets', 'modifier');
-  root.innerHTML = pageHead('Budgets des dépenses', 'Budgets définis et approuvés par Oriba Foods. Aucun budget n’est déduit automatiquement de l’historique.',
+  root.innerHTML = pageHead('Budgets des dépenses', 'Budgets définis et approuvés par Oriba Food. Aucun budget n’est déduit automatiquement de l’historique.',
     `${boutonImport('budgets')}${can ? `<button class="btn primary" id="new">${icon('plus')} Nouveau budget</button>` : ''}`) +
     `<div class="filters"><label class="ff"><span>Mois</span><input type="month" id="bm" value="${App.filters.budget.mois}"></label></div><div class="card" id="tb"></div>`;
   lierImport(root, () => ({ mois: App.filters.budget.mois }));

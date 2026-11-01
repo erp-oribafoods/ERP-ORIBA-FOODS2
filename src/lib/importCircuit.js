@@ -53,7 +53,7 @@ const C_JOURNAUX = {
   dispatch: { date: ['date'], agent: ['agent'], sous: ['sous_agent'], produit: ['produit'], cartons: ['cartons'], observation: ['observation'] },
   transfert: { date: ['date'], de: ['depot_qui_envoie', 'de_', 'depot_depart'], vers: ['depot_qui_recoit', 'vers', 'depot_arrivee'], produit: ['produit'], cartons: ['cartons'], observation: ['observation'] },
   ventes: { date: ['date'], vendeur: ['vendeur'], client: ['client'], produit: ['produit'], cartons: ['cartons'], prix: ['prix'], mode: ['mode'], echeance: ['echeance'], numero: ['n_vente', 'no_vente', 'numero'] },
-  versements: { date: ['date'], par: ['verse_par'], objet: ['objet'], numero: ['n_vente', 'no_vente'], lieu: ['lieu'], grossiste: ['grossiste'], montant: ['montant'] },
+  versements: { date: ['date'], par: ['verse_par'], objet: ['objet'], numero: ['n_vente', 'no_vente'], lieu: ['lieu'], grossiste: ['grossiste'], montant: ['montant'], pour: ['argent_pour', 'pour', 'beneficiaire'] },
 };
 
 // Correspondance fichier → plateforme
@@ -140,7 +140,7 @@ export function analyseCircuit(wb) {
     const msgs = []; const { d, q } = base(r, msgs); const p = prodOk(r, msgs);
     if (!connu(A, r.agent) && !R.parCode(R.D.agents, r.agent)) msgs.push(`Agent-dépôt « ${t(r.agent)} » absent de la liste`);
     const direct = /oriba/i.test(t(r.grossiste));
-    if (!direct && !connu(G, r.grossiste) && !R.parCode(R.D.grossistes, r.grossiste)) msgs.push(`Source « ${t(r.grossiste)} » : ni Oriba Foods, ni Oriba Rice, ni un grossiste de la liste`);
+    if (!direct && !connu(G, r.grossiste) && !R.parCode(R.D.grossistes, r.grossiste)) msgs.push(`Source « ${t(r.grossiste)} » : ni Oriba Food, ni Oriba Rice, ni un grossiste de la liste`);
     const ref2 = cle(['P', d, K(r.agent), K(r.grossiste), K(r.produit), q, num(r.prix) ?? '', K(r.mode)]);
     push('prise', r, msgs, ref2, { d, q, p, r }, `${fmtD(d)} · ${t(r.agent)} chez ${t(r.grossiste)} · ${fmtN(q)} ctn · ${t(r.mode)}`, deja.mvts);
   }
@@ -252,7 +252,7 @@ export async function appliquerCircuit(wb, fname, etape = () => {}) {
   await App.refresh();
   if (nouv('versements').length) {
     etape('versements');
-    R.versements = await envoyer('versements', `${fname} — 5-Versements`, nouv('versements').map((x) => ({ ligne: x.ligne, data: { date: x.data.d, montant: x.data.m, objet: x.data.regl ? 'reglement_grossiste' : 'ventes_comptant', ...(x.data.regl ? { grossiste_id: g(x.data.r.par) } : { agent_id: ag(x.data.r.par) }), lieu: x.data.lieuG ? 'grossiste' : 'caisse', lieu_grossiste_id: x.data.lieuG ? g(x.data.r.grossiste) : null, ref_externe: x.ref } })));
+    R.versements = await envoyer('versements', `${fname} — 5-Versements`, nouv('versements').map((x) => ({ ligne: x.ligne, data: { date: x.data.d, montant: x.data.m, beneficiaire: /rice/i.test(t(x.data.r.pour)) ? 'Oriba Rice' : /food/i.test(t(x.data.r.pour)) ? 'Oriba Food' : null, objet: x.data.regl ? 'reglement_grossiste' : 'ventes_comptant', ...(x.data.regl ? { grossiste_id: g(x.data.r.par) } : { agent_id: ag(x.data.r.par) }), lieu: x.data.lieuG ? 'grossiste' : 'caisse', lieu_grossiste_id: x.data.lieuG ? g(x.data.r.grossiste) : null, ref_externe: x.ref } })));
   }
   if (nouv('remboursements').length) {
     etape('remboursements de crédits');
@@ -332,11 +332,11 @@ export function modeleCircuit() {
   add('Sous-agents', 'Sous-agents', 'Commerciaux de terrain de chaque agent-dépôt.', ['Code', 'Nom', 'Agent-dépôt', 'Localité / marché', 'Téléphone', 'Stock initial (cartons)'], sous.map((a) => [code(a), a.nom, code((D.agents || []).find((x) => x.id === a.depot_id)), '', a.telephone || '', a.stock_initial || 0]), [11, 26, 12, 22, 14, 14]);
   add('Clients', 'Clients', 'Clients des agents et sous-agents.', ['Code', 'Nom', 'Vendeur rattaché', 'Localité', 'Téléphone', 'Plafond (cartons)'], (D.clients || []).filter((c) => c.actif !== false).map((c) => [c.code || '', c.nom, '', '', c.telephone || '', c.plafond_cartons || '']), [9, 28, 13, 20, 13, 11]);
   const ex = (l) => (X1.A ? [l] : []);
-  add('1-Appro grossistes', 'Approvisionnement des grossistes', 'Cartons reçus par les grossistes.', ['Date', 'Grossiste (code)', 'Fournisseur', 'Produit', 'Cartons', 'Prix carton (FCFA)', 'Montant (FCFA)', 'Observation'], ex([j, code(X1.G), 'Oriba Foods', X1.P?.nom || '', 100, '', '', 'exemple']), [12, 14, 20, 22, 10, 14, 16, 26]);
-  add('2-Prises agents', 'Prises des agents-dépôts chez les grossistes', 'Déstockage chez les grossistes.', ['Date', 'Dépôt (code)', 'Source : Oriba Foods, Oriba Rice ou grossiste (code)', 'Produit', 'Cartons', 'Prix carton (FCFA)', 'Mode', 'Montant (FCFA)', 'Observation'], ex([j, code(X1.A), code(X1.G), X1.P?.nom || '', 20, '', 'Comptant', '', 'exemple']), [12, 14, 14, 22, 10, 14, 12, 16, 24]);
+  add('1-Appro grossistes', 'Approvisionnement des grossistes', 'Cartons reçus par les grossistes.', ['Date', 'Grossiste (code)', 'Fournisseur', 'Produit', 'Cartons', 'Prix carton (FCFA)', 'Montant (FCFA)', 'Observation'], ex([j, code(X1.G), 'Oriba Food', X1.P?.nom || '', 100, '', '', 'exemple']), [12, 14, 20, 22, 10, 14, 16, 26]);
+  add('2-Prises agents', 'Prises des agents-dépôts chez les grossistes', 'Déstockage chez les grossistes.', ['Date', 'Dépôt (code)', 'Source : Oriba Food, Oriba Rice ou grossiste (code)', 'Produit', 'Cartons', 'Prix carton (FCFA)', 'Mode', 'Montant (FCFA)', 'Observation'], ex([j, code(X1.A), code(X1.G), X1.P?.nom || '', 20, '', 'Comptant', '', 'exemple']), [12, 14, 14, 22, 10, 14, 12, 16, 24]);
   add('3-Dispatch', 'Dispatch aux sous-agents', 'Cartons remis par l’agent-dépôt à ses sous-agents.', ['Date', 'Agent-dépôt (code)', 'Sous-agent (code)', 'Produit', 'Cartons', 'Observation'], ex([j, code(X1.A), code(X1.S), X1.P?.nom || '', 5, 'exemple']), [12, 14, 14, 22, 10, 26]);
   add('4-Ventes', 'Ventes aux clients', 'Une ligne par vente ; pour un crédit, client et échéance obligatoires.', ['Date', 'Vendeur (code)', 'Client (code)', 'Produit', 'Cartons', 'Prix carton (FCFA)', 'Mode', 'Échéance (crédit)', 'N° vente'], [], [12, 13, 12, 22, 9, 13, 11, 13, 10]);
-  add('5-Versements', 'Versements et remboursements', 'Argent versé à la caisse Oriba ou chez le grossiste.', ['Date', 'Versé par (code)', 'Objet', 'N° vente (remboursement)', 'Lieu du versement', 'Grossiste (si versé chez lui)', 'Montant (FCFA)'], [], [12, 14, 20, 14, 18, 16, 15]);
+  add('5-Versements', 'Versements et remboursements', 'Argent versé à la caisse Oriba ou chez le grossiste.', ['Date', 'Versé par (code)', 'Objet', 'N° vente (remboursement)', 'Lieu du versement', 'Grossiste (si versé chez lui)', 'Montant (FCFA)', 'Argent pour (Oriba Food ou Oriba Rice)'], [], [12, 14, 20, 14, 18, 16, 15, 22]);
   add('6-Transferts', 'Transferts entre dépôts', 'Cartons envoyés d’un dépôt à un autre (ex. Dépôt Niamey 1 → Dépôt Niamey 2).', ['Date', 'Dépôt qui envoie (code)', 'Dépôt qui reçoit (code)', 'Produit', 'Cartons', 'Observation'], [], [12, 16, 16, 22, 10, 26]);
   saveBlob(`Classeur_circuit_ORIBA_${today()}.xlsx`, new Blob([X.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
 }

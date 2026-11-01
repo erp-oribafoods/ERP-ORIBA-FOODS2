@@ -415,3 +415,6 @@ alter table agents add column if not exists prix_carton numeric(14,2);
 alter table circuit_mvts add column if not exists depot_dest_id uuid references agents(id);
 alter table circuit_mvts drop constraint if exists circuit_mvts_type_check;
 alter table circuit_mvts add constraint circuit_mvts_type_check check (type in ('appro', 'prise', 'dispatch', 'transfert'));
+
+-- Versements : argent destiné à Oriba Food ou à Oriba Rice
+alter table versements add column if not exists beneficiaire text check (beneficiaire in ('Oriba Food', 'Oriba Rice'));

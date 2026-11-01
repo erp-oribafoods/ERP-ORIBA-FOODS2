@@ -8,7 +8,7 @@ import { openVente } from './ventes.js';
 
 export function renderStock(root) {
   const can = App.can('stock', 'creer');
-  root.innerHTML = pageHead('Stock confié', 'Un lot par remise : chaque lot garde son propre solde. Le stock confié reste distinct du stock général d’Oriba Foods.',
+  root.innerHTML = pageHead('Stock confié', 'Un lot par remise : chaque lot garde son propre solde. Le stock confié reste distinct du stock général d’Oriba Food.',
     `${boutonImport('stock_remises')}${can ? `<button class="btn primary" id="new">${icon('plus')} Nouvelle remise de stock</button>` : ''}`) + '<section class="kpis" id="k"></section><div class="card" id="tb"></div>';
   lierImport(root);
   const L = lots(App.I);

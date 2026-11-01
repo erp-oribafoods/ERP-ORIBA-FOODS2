@@ -280,6 +280,8 @@ console.log('Circuit de distribution (grossistes → agents-dépôts → sous-ag
   ok(vs.vente && !vs.vente.marche_id, 'Un sous-agent vend sans marché précisé');
   const v1 = await call(sessions.com, 'versement.save', { date: today(), objet: 'ventes_comptant', agent_id: depA.id, lieu: 'grossiste', lieu_grossiste_id: gro.id, montant: 52000 });
   ok(v1.versement.lieu === 'grossiste' && /^VS-/.test(v1.versement.numero), `Versement ${v1.versement.numero} chez le grossiste`);
+  const vR = await call(sessions.com, 'versement.save', { date: today(), objet: 'ventes_comptant', agent_id: sa.id, montant: 13000, beneficiaire: 'oriba rice' });
+  ok(vR.versement.beneficiaire === 'Oriba Rice', 'Versement destiné à Oriba Rice (orthographe corrigée)');
   await expectErr(call(sessions.com, 'versement.save', { date: today(), objet: 'ventes_comptant', agent_id: ag.id, montant: 1000 }), 'Versement refusé pour un agent hors circuit', /ni un dépôt/);
   const rg = await call(sessions.com, 'versement.save', { date: today(), objet: 'reglement_grossiste', grossiste_id: gro.id, montant: 300000 });
   ok(rg.versement.grossiste_id === gro.id && rg.versement.lieu === 'caisse', 'Règlement du grossiste à la caisse Oriba');
@@ -291,7 +293,7 @@ console.log('Circuit de distribution (grossistes → agents-dépôts → sous-ag
   const cx = await call(sessions.com, 'circuit.cancel', { id: ap.mvt.id, motif: 'Erreur de saisie' });
   ok(cx.mvt.statut === 'annule', 'Mouvement annulé avec motif (conservé)');
   const D = (await call(sessions.dg, 'data.bootstrap')).data;
-  ok(D.grossistes.length === 1 && D.circuit_mvts.length === 5 && D.versements.length === 2, `La DG consulte le circuit (lecture) : ${D.circuit_mvts.length} mouvements, ${D.versements.length} versements`);
+  ok(D.grossistes.length === 1 && D.circuit_mvts.length === 5 && D.versements.length === 3, `La DG consulte le circuit (lecture) : ${D.circuit_mvts.length} mouvements, ${D.versements.length} versements`);
   await call(sessions.com, 'circuit.depart', { date: addDays(today(), -7) });
   ok((await call(sessions.dg, 'data.bootstrap')).data.parametres.find((x) => x.cle === 'circuit_date_depart')?.valeur?.date === addDays(today(), -7), 'Date des stocks initiaux du circuit enregistrée');
   if (mode === 'pg') await expectErr(globalThis.__pool.query('delete from circuit_mvts'), 'Suppression de mouvement interdite en base', /Suppression interdite/);

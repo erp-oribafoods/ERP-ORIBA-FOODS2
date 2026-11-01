@@ -145,8 +145,8 @@ export const REFS = {
       { k: 'fonction', l: 'Fonction', t: 'text' }, { k: 'telephone', l: 'Téléphone pro.', t: 'text' }, { k: 'equipe_id', l: 'Équipe', t: 'ref:equipes' },
       { k: 'zone_id', l: 'Zone', t: 'ref:zones' }, { k: 'marche_id', l: 'Marché d’affectation', t: 'ref:marches' },
       { k: 'date_affectation', l: "Date d'affectation", t: 'date' },
-      { k: 'role_circuit', l: 'Rôle dans le circuit', t: 'select:depot=Agent-dépôt|sous_agent=Sous-agent' }, { k: 'depot_id', l: 'Agent-dépôt (pour un sous-agent)', t: 'ref:agents' },
-      { k: 'stock_initial', l: 'Stock initial du circuit (cartons)', t: 'number' },
+      { k: 'role_circuit', l: 'Rôle dans le circuit', t: 'select:depot=Dépôt|sous_agent=Agent d’un dépôt' }, { k: 'depot_id', l: 'Dépôt (pour un agent)', t: 'ref:agents' },
+      { k: 'stock_initial', l: 'Stock initial (cartons)', t: 'number' }, { k: 'prix_carton', l: 'Prix du carton DADI (FCFA, pour un dépôt)', t: 'number' },
     ],
   },
   marches: {
@@ -170,7 +170,7 @@ export const REFS = {
     l: 'Grossistes', one: 'grossiste',
     f: [
       { k: 'code', l: 'Code', t: 'text' }, { k: 'nom', l: 'Nom', t: 'text', req: 1 }, { k: 'localite', l: 'Localité', t: 'text' },
-      { k: 'fournisseur', l: 'Fournisseur habituel', t: 'select:Usine Oriba Foods|Oriba Rice' }, { k: 'telephone', l: 'Téléphone', t: 'text' },
+      { k: 'fournisseur', l: 'Fournisseur habituel', t: 'select:Oriba Foods|Oriba Rice' }, { k: 'telephone', l: 'Téléphone', t: 'text' },
       { k: 'stock_initial', l: 'Stock initial (cartons)', t: 'number' }, { k: 'solde_initial', l: 'Solde dû à Oriba au départ (FCFA)', t: 'number' },
     ],
   },
@@ -258,7 +258,7 @@ export const DEFAULT_MARCHES = [
 export const WRITABLE = {
   zones: ['nom', 'actif'],
   equipes: ['code', 'nom', 'zone_id', 'responsable', 'actif'],
-  agents: ['code', 'nom', 'fonction', 'telephone', 'equipe_id', 'zone_id', 'marche_id', 'date_affectation', 'role_circuit', 'depot_id', 'stock_initial', 'actif'],
+  agents: ['code', 'nom', 'fonction', 'telephone', 'equipe_id', 'zone_id', 'marche_id', 'date_affectation', 'role_circuit', 'depot_id', 'stock_initial', 'prix_carton', 'actif'],
   grossistes: ['code', 'nom', 'localite', 'fournisseur', 'telephone', 'stock_initial', 'solde_initial', 'actif'],
   marches: ['nom', 'commune', 'zone_id', 'equipe_id', 'actif'],
   clients: ['code', 'nom', 'type', 'marche_id', 'telephone', 'plafond_cartons', 'depositaire', 'actif'],
@@ -289,7 +289,7 @@ export const CATS_LOGISTIQUE = ['CARB', 'VIDA', 'FILT', 'VIGN', 'ASSU', 'REPA', 
 export const AXES_OBJECTIF = { agent: 'Agent', zone: 'Zone', equipe: 'Équipe', marche: 'Marché', produit: 'Produit', global: 'Global (tout le service)' };
 
 // Circuit de distribution : usine / Oriba Rice → grossistes → agents-dépôts → sous-agents → clients
-export const CIRCUIT_TYPES = { appro: 'Approvisionnement grossiste', prise: 'Prise chez un grossiste', dispatch: 'Dispatch à un sous-agent' };
-export const FOURNISSEURS = ['Usine Oriba Foods', 'Oriba Rice'];
+export const CIRCUIT_TYPES = { appro: 'Approvisionnement d’un grossiste', prise: 'Approvisionnement d’un dépôt', dispatch: 'Remise à un agent' };
+export const FOURNISSEURS = ['Oriba Foods', 'Oriba Rice'];
 export const OBJETS_VERSEMENT = { ventes_comptant: 'Ventes comptant', reglement_grossiste: 'Règlement grossiste' };
 export const LIEUX_VERSEMENT = { caisse: 'Caisse Oriba', grossiste: 'Chez le grossiste' };

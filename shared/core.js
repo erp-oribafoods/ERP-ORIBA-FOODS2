@@ -315,7 +315,7 @@ A['ref.save'] = async ({ t, user, perms, payload, ip }) => {
       row.depot_id = dep;
     } else row.depot_id = null;
   }
-  if (table === 'grossistes' && row.fournisseur) row.fournisseur = /rice/i.test(row.fournisseur) ? 'Oriba Rice' : 'Usine Oriba Foods';
+  if (table === 'grossistes' && row.fournisseur) row.fournisseur = /rice/i.test(row.fournisseur) ? 'Oriba Rice' : 'Oriba Foods';
   // Pas de doublon d'agent ou de marché dans une même équipe, ni de client portant le même nom
   if (row.nom && ['agents', 'marches', 'clients', 'grossistes'].includes(table)) {
     const cleNom = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/^march[e]\s+/, '').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -1100,6 +1100,7 @@ A['import.run'] = async ({ t, user, perms, payload, ip }) => {
 
 
 // ---------- Circuit de distribution ----------
+const FOURN = (f) => (/rice/i.test(f) ? 'Oriba Rice' : 'Oriba Foods');
 const MODE_C = (m) => { const k = String(m || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); return k.startsWith('cred') ? 'credit' : k ? 'comptant' : null; };
 async function saveCircuit(t, user, perms, d, opts = {}) {
   if (!can(perms, 'circuit', 'creer')) fail('Seul le Responsable Commercial & Force de Vente peut enregistrer les mouvements du circuit.', 403);
@@ -1113,29 +1114,36 @@ async function saveCircuit(t, user, perms, d, opts = {}) {
   await one(t, 'produits', d.produit_id, 'Produit');
   const row = { id: uid(), type, date: d.date, produit_id: d.produit_id, cartons, observation: clean(d.observation), ref_externe: clean(d.ref_externe), statut: 'valide', import_id: opts.import_id || null, created_by: user.id, created_at: nowISO() };
   if (type === 'appro' || type === 'prise') {
-    if (!d.grossiste_id) fail('Choisissez le grossiste.');
-    await one(t, 'grossistes', d.grossiste_id, 'Grossiste');
-    row.grossiste_id = d.grossiste_id;
+    // Un dépôt s'approvisionne chez Oriba Foods, chez Oriba Rice ou chez un grossiste ; un grossiste chez Oriba Foods ou Oriba Rice
+    if (type === 'appro' || d.grossiste_id) {
+      if (!d.grossiste_id) fail('Choisissez le grossiste.');
+      await one(t, 'grossistes', d.grossiste_id, 'Grossiste');
+      row.grossiste_id = d.grossiste_id;
+    } else {
+      const f = clean(d.fournisseur);
+      if (!f) fail('Indiquez la source : Oriba Foods, Oriba Rice ou un grossiste.');
+      row.fournisseur = FOURN(f);
+    }
     const prix = d.prix === '' || d.prix === null || d.prix === undefined ? null : num(d.prix);
     if (prix !== null && prix < 0) fail('Prix invalide.');
     row.prix = prix; row.montant = prix === null ? null : round2(prix * cartons);
   }
   if (type === 'appro') {
     const f = clean(d.fournisseur);
-    if (!f) fail('Indiquez le fournisseur (usine Oriba Foods ou Oriba Rice).');
-    row.fournisseur = /rice/i.test(f) ? 'Oriba Rice' : 'Usine Oriba Foods';
+    if (!f) fail('Indiquez le fournisseur (Oriba Foods ou Oriba Rice).');
+    row.fournisseur = FOURN(f);
   }
   if (type === 'prise' || type === 'dispatch') {
-    if (!d.agent_id) fail('Choisissez l’agent-dépôt.');
-    const ag = await one(t, 'agents', d.agent_id, 'Agent-dépôt');
-    if (ag.role_circuit !== 'depot') fail(`${ag.nom} n’est pas déclaré comme agent-dépôt (Référentiels > Agents).`);
+    if (!d.agent_id) fail('Choisissez le dépôt.');
+    const ag = await one(t, 'agents', d.agent_id, 'Dépôt');
+    if (ag.role_circuit !== 'depot') fail(`${ag.nom} n’est pas déclaré comme dépôt (Référentiels > Agents).`);
     row.agent_id = ag.id;
   }
   if (type === 'prise') row.mode = MODE_C(d.mode) || 'comptant';
   if (type === 'dispatch') {
-    if (!d.sous_agent_id) fail('Choisissez le sous-agent.');
-    const sa = await one(t, 'agents', d.sous_agent_id, 'Sous-agent');
-    if (sa.role_circuit !== 'sous_agent' || sa.depot_id !== row.agent_id) fail(`${sa.nom} n’est pas un sous-agent de cet agent-dépôt.`);
+    if (!d.sous_agent_id) fail('Choisissez l’agent.');
+    const sa = await one(t, 'agents', d.sous_agent_id, 'Agent');
+    if (sa.role_circuit !== 'sous_agent' || sa.depot_id !== row.agent_id) fail(`${sa.nom} n’est pas un agent de ce dépôt.`);
     row.sous_agent_id = sa.id;
   }
   row.numero = await nextNumero(t, 'CM', d.date);
@@ -1180,7 +1188,7 @@ async function saveVersement(t, user, perms, d, opts = {}) {
   } else {
     if (!d.agent_id) fail('Choisissez l’agent qui verse.');
     const ag = await one(t, 'agents', d.agent_id, 'Agent');
-    if (!ag.role_circuit) fail(`${ag.nom} n’est ni agent-dépôt ni sous-agent (Référentiels > Agents).`);
+    if (!ag.role_circuit) fail(`${ag.nom} n’est ni un dépôt ni un agent de dépôt (Référentiels > Agents).`);
     row.agent_id = ag.id;
     if (lieu === 'grossiste') {
       if (!d.lieu_grossiste_id) fail('Indiquez chez quel grossiste le versement a été fait.');

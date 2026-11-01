@@ -1,5 +1,5 @@
-// Circuit de distribution : usine Oriba Foods / Oriba Rice → grossistes → agents-dépôts → sous-agents → clients.
-// Tableau de bord du jour, situation des dépôts et sous-agents, grossistes par semaine, mouvements de stock et versements.
+// Circuit de distribution : usine Oriba Foods / Oriba Rice → grossistes → dépôts → agents → clients.
+// Tableau de bord du jour, situation des dépôts et agents, grossistes par semaine, mouvements de stock et versements.
 import { App, nm, opts, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, confirmBox, field, readForm, showErr, busy, toast, icon, pill } from '../lib/ui.js';
 import { contexte, situationDepots, situationSous, grossistesSemaine, serie, creditsCircuit, lundi } from '../lib/circuit.js';
@@ -34,12 +34,12 @@ function lierActions(root) {
   $('#c-imp', root)?.addEventListener('click', () => ouvrirImportCircuit());
   $('#c-mod', root)?.addEventListener('click', () => modeleCircuit());
 }
-const aide = () => (vide() ? `<div class="note warn">Aucun agent-dépôt n’est encore déclaré. Importez le classeur du circuit (onglets Grossistes, Agents-dépôts, Sous-agents…) ou déclarez le rôle de chaque agent dans Référentiels > Agents commerciaux (« Rôle dans le circuit »).</div>` : '');
+const aide = () => (vide() ? `<div class="note warn">Aucun dépôt n’est encore déclaré. Importez le classeur du circuit (onglets Grossistes, Dépôts, Agents des dépôts…) ou déclarez le rôle de chaque agent dans Référentiels > Agents commerciaux (« Rôle dans le circuit »).</div>` : '');
 
 // ---------------------------------------------------------------- Tableau de bord du circuit
 export function renderCircuit(root) {
-  root.innerHTML = pageHead('Tableau de bord du circuit', 'Grossistes → agents-dépôts → sous-agents → clients : stocks, ventes, caisse et crédits du jour choisi.', actions()) + aide() + barreDate(root) +
-    `<section class="kpis" id="k1"></section><div class="grid g2"><article class="card"><header><h3>Les 7 derniers jours</h3></header><div id="s7"></div></article><article class="card"><header><h3>Par zone (agent-dépôt) — jour choisi</h3></header><div id="pz"></div></article></div>
+  root.innerHTML = pageHead('Tableau de bord du circuit', 'Grossistes → dépôts → agents → clients : stocks, ventes, caisse et crédits du jour choisi.', actions()) + aide() + barreDate(root) +
+    `<section class="kpis" id="k1"></section><div class="grid g2"><article class="card"><header><h3>Les 7 derniers jours</h3></header><div id="s7"></div></article><article class="card"><header><h3>Par zone (dépôt) — jour choisi</h3></header><div id="pz"></div></article></div>
      <article class="card"><header><h3>Crédits à relancer</h3></header><div id="cr"></div></article>`;
   lierActions(root);
   const draw = () => {
@@ -50,9 +50,9 @@ export function renderCircuit(root) {
     const retard = cr.filter((c) => c.statut === 'En retard'), proches = cr.filter((c) => c.proche);
     const reste = S(dep, 'ecart');
     $('#k1', root).innerHTML = [
-      kpi('Stock chez les grossistes', ctn(S(gs, 'sf')), 'fin de la semaine en cours'), kpi('Stock chez les agents-dépôts', ctn(S(dep, 'sf')), 'fin de journée'), kpi('Stock chez les sous-agents', ctn(S(ss, 'sf')), 'fin de journée'),
-      kpi('Pris chez les grossistes', ctn(S(dep, 'recu')), 'par les agents-dépôts'), kpi('Dispatché aux sous-agents', ctn(S(dep, 'disp'))),
-      kpi('Vendu comptant', ctn(S(dep, 'vc') + S(ss, 'vc')), 'agents + sous-agents'), kpi('Vendu à crédit', ctn(S(dep, 'vk') + S(ss, 'vk')), 'agents + sous-agents'),
+      kpi('Stock chez les grossistes', ctn(S(gs, 'sf')), 'fin de la semaine en cours'), kpi('Stock chez les dépôts', ctn(S(dep, 'sf')), 'fin de journée'), kpi('Stock chez les agents', ctn(S(ss, 'sf')), 'fin de journée'),
+      kpi('Approvisionnement des dépôts', ctn(S(dep, 'recu')), 'Oriba Foods, Oriba Rice et grossistes'), kpi('Dispatché aux agents', ctn(S(dep, 'disp'))),
+      kpi('Vendu comptant', ctn(S(dep, 'vc') + S(ss, 'vc')), 'agents + agents'), kpi('Vendu à crédit', ctn(S(dep, 'vk') + S(ss, 'vk')), 'agents + agents'),
       kpi('Ventes comptant à verser', fmtF(S(dep, 'aVerser'))), kpi('Versé', fmtF(S(dep, 'verse')), `dont ${fmtF(S(dep, 'verseGrossiste'))} chez les grossistes`), kpi('Reste à verser', fmtF(reste), '', reste > 0 ? 'crit' : 'ok'),
       kpi('Remboursements de crédits reçus', fmtF(S(dep, 'remb'))), kpi('Règlements des grossistes reçus', fmtF(regJour)),
       kpi('Crédits clients en cours', fmtF(S(cr, 'solde')), `${cr.length} crédit(s)`), kpi('Dont en retard', fmtF(S(retard, 'solde')), `${new Set(retard.map((c) => c.client_id)).size} client(s) à relancer`, retard.length ? 'crit' : ''),
@@ -64,7 +64,7 @@ export function renderCircuit(root) {
       cols: [{ k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'pris', l: 'Pris (ctn)', num: 1, f: (r) => fmtQ(r.pris) }, { k: 'disp', l: 'Dispatché (ctn)', num: 1, f: (r) => fmtQ(r.disp) },
         { k: 'vc', l: 'Vendu comptant (ctn)', num: 1, f: (r) => fmtQ(r.vc) }, { k: 'vk', l: 'Vendu crédit (ctn)', num: 1, f: (r) => fmtQ(r.vk) }, { k: 'ca', l: 'Ventes comptant (FCFA)', num: 1, f: (r) => fmtN(r.ca) }, { k: 'verse', l: 'Versé (FCFA)', num: 1, f: (r) => fmtN(r.verse) }] }).mount($('#s7', root));
     new Table({ title: 'Circuit — par zone', rows: dep, sort: { k: 'zone', dir: 1 }, pageSize: 20, onRow: (r) => ficheDepot(r.id),
-      cols: [{ k: 'zone', l: 'Zone', v: (r) => nm.equipe(r.equipe_id) }, { k: 'nom', l: 'Agent-dépôt' }, { k: 'stock', l: 'Stock agent + sous-agents (ctn)', num: 1, v: (r) => r.sf + r.stockSous, f: (r) => fmtQ(r.sf + r.stockSous) },
+      cols: [{ k: 'zone', l: 'Zone', v: (r) => nm.equipe(r.equipe_id) }, { k: 'nom', l: 'Dépôt' }, { k: 'stock', l: 'Stock agent + agents (ctn)', num: 1, v: (r) => r.sf + r.stockSous, f: (r) => fmtQ(r.sf + r.stockSous) },
         { k: 'venduReseau', l: 'Vendu (ctn)', num: 1, f: (r) => fmtQ(r.venduReseau) }, { k: 'aVerser', l: 'À verser', num: 1, f: (r) => fmtN(r.aVerser) }, { k: 'verse', l: 'Versé', num: 1, f: (r) => fmtN(r.verse) },
         { k: 'ecart', l: 'Écart', num: 1, f: (r) => (r.ecart > 0 ? `<b class="t-crit">${fmtN(r.ecart)}</b>` : fmtN(r.ecart)) }] }).mount($('#pz', root));
     new Table({ title: 'Crédits à relancer', rows: cr.filter((c) => c.statut === 'En retard' || c.proche), sort: { k: 'joursRetard', dir: -1 }, pageSize: 10, empty: 'Aucun crédit en retard ni proche de l’échéance.',
@@ -76,10 +76,10 @@ export function renderCircuit(root) {
   draw();
 }
 
-// ---------------------------------------------------------------- Agents-dépôts et sous-agents
+// ---------------------------------------------------------------- Dépôts et agents
 const COLS_STOCK = (dep) => [
-  { k: 'si', l: 'Stock initial', num: 1, f: (r) => fmtQ(r.si) }, { k: 'recu', l: dep ? 'Pris chez les grossistes' : 'Reçu de l’agent', num: 1, f: (r) => fmtQ(r.recu) },
-  ...(dep ? [{ k: 'disp', l: 'Dispatché aux sous-agents', num: 1, f: (r) => fmtQ(r.disp) }] : []),
+  { k: 'si', l: 'Stock initial', num: 1, f: (r) => fmtQ(r.si) }, { k: 'recu', l: dep ? 'Approvisionné' : 'Reçu du dépôt', num: 1, f: (r) => fmtQ(r.recu) },
+  ...(dep ? [{ k: 'disp', l: 'Dispatché aux agents', num: 1, f: (r) => fmtQ(r.disp) }] : []),
   { k: 'vc', l: 'Vendu comptant', num: 1, f: (r) => fmtQ(r.vc) }, { k: 'vk', l: 'Vendu crédit', num: 1, f: (r) => fmtQ(r.vk) },
   { k: 'sf', l: 'Stock final', num: 1, f: (r) => (r.sf < 0 ? `<b class="t-crit">${fmtQ(r.sf)}</b>` : `<b>${fmtQ(r.sf)}</b>`) },
 ];
@@ -92,15 +92,15 @@ const foot = (keys) => (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : keys.include
 const KS = ['si', 'recu', 'disp', 'vc', 'vk', 'sf', 'stockSous', 'aVerser', 'verse', 'verseGrossiste', 'ecart', 'remb', 'enCours', 'enRetard'];
 
 export function renderDepots(root) {
-  root.innerHTML = pageHead('Agents-dépôts et sous-agents', 'Un agent-dépôt par zone : il prend les cartons chez les grossistes et les remet à ses sous-agents. Cliquez sur un agent-dépôt pour voir ses sous-agents.', actions()) + aide() + barreDate(root) +
-    '<article class="card"><header><h3>Agents-dépôts — jour choisi (cartons et FCFA)</h3></header><div id="td"></div></article><article class="card"><header><h3>Sous-agents — jour choisi</h3></header><div id="ts"></div></article>';
+  root.innerHTML = pageHead('Dépôts et agents', 'Chaque dépôt s’approvisionne chez Oriba Foods, Oriba Rice ou un grossiste et remet les cartons à ses agents. Cliquez sur un dépôt pour voir ses agents.', actions()) + aide() + barreDate(root) +
+    '<article class="card"><header><h3>Dépôts — jour choisi (cartons et FCFA)</h3></header><div id="td"></div></article><article class="card"><header><h3>Agents des dépôts — jour choisi</h3></header><div id="ts"></div></article>';
   lierActions(root);
   const draw = () => {
     const d = F().date, C = contexte(App.D, App.I);
-    new Table({ title: `Agents-dépôts au ${fmtD(d)}`, rows: situationDepots(C, d), sort: { k: 'zone', dir: 1 }, pageSize: 20, onRow: (r) => ficheDepot(r.id), foot: foot(KS), meta: () => `Date : ${fmtD(d)}`,
-      cols: [{ k: 'zone', l: 'Zone', v: (r) => nm.equipe(r.equipe_id) }, { k: 'nom', l: 'Agent-dépôt' }, ...COLS_STOCK(true), { k: 'stockSous', l: 'Stock chez ses sous-agents', num: 1, f: (r) => fmtQ(r.stockSous) }, ...COLS_ARGENT(true)] }).mount($('#td', root));
-    new Table({ title: `Sous-agents au ${fmtD(d)}`, rows: situationSous(C, d), sort: { k: 'depot', dir: 1 }, pageSize: 30, foot: foot(KS), meta: () => `Date : ${fmtD(d)}`,
-      cols: [{ k: 'nom', l: 'Sous-agent' }, { k: 'depot', l: 'Agent-dépôt', v: (r) => nm.agent(r.depot_id) }, ...COLS_STOCK(false), ...COLS_ARGENT(false)] }).mount($('#ts', root));
+    new Table({ title: `Dépôts au ${fmtD(d)}`, rows: situationDepots(C, d), sort: { k: 'zone', dir: 1 }, pageSize: 20, onRow: (r) => ficheDepot(r.id), foot: foot(KS), meta: () => `Date : ${fmtD(d)}`,
+      cols: [{ k: 'zone', l: 'Zone', v: (r) => nm.equipe(r.equipe_id) }, { k: 'nom', l: 'Dépôt' }, ...COLS_STOCK(true), { k: 'stockSous', l: 'Stock chez ses agents', num: 1, f: (r) => fmtQ(r.stockSous) }, ...COLS_ARGENT(true)] }).mount($('#td', root));
+    new Table({ title: `Agents des dépôts au ${fmtD(d)}`, rows: situationSous(C, d), sort: { k: 'depot', dir: 1 }, pageSize: 30, foot: foot(KS), meta: () => `Date : ${fmtD(d)}`,
+      cols: [{ k: 'nom', l: 'Agent' }, { k: 'depot', l: 'Dépôt', v: (r) => nm.agent(r.depot_id) }, ...COLS_STOCK(false), ...COLS_ARGENT(false)] }).mount($('#ts', root));
   };
   lierDate(root, draw);
   draw();
@@ -110,9 +110,9 @@ function ficheDepot(id) {
   const d = F().date, C = contexte(App.D, App.I);
   const r = situationDepots(C, d).find((x) => x.id === id); if (!r) return;
   modal({ title: `${r.nom} — ${nm.equipe(r.equipe_id)} — ${fmtD(d)}`, wide: true,
-    body: `<section class="kpis sm">${[kpi('Stock initial', ctn(r.si)), kpi('Pris chez les grossistes', ctn(r.recu)), kpi('Dispatché', ctn(r.disp)), kpi('Vendu (agent)', ctn(r.vc + r.vk)), kpi('Stock final agent', ctn(r.sf)), kpi('Stock chez ses sous-agents', ctn(r.stockSous)),
-      kpi('À verser (réseau)', fmtF(r.aVerser)), kpi('Versé', fmtF(r.verse)), kpi('Reste à verser', fmtF(r.ecart), '', r.ecart > 0 ? 'crit' : 'ok'), kpi('Crédits en cours', fmtF(r.enCours), r.enRetard ? `dont ${fmtF(r.enRetard)} en retard` : '', r.enRetard ? 'crit' : '')].join('')}</section><h4 class="form-t">Ses sous-agents</h4><div id="fs"></div>` });
-  new Table({ title: `Sous-agents de ${r.nom}`, rows: r.sousAgents, sort: { k: 'nom', dir: 1 }, pageSize: 20, foot: foot(KS), empty: 'Aucun sous-agent rattaché.', cols: [{ k: 'nom', l: 'Sous-agent' }, ...COLS_STOCK(false), ...COLS_ARGENT(false)] }).mount($('#fs'));
+    body: `<section class="kpis sm">${[kpi('Stock initial', ctn(r.si)), kpi('Approvisionné', ctn(r.recu)), kpi('Dispatché', ctn(r.disp)), kpi('Vendu (agent)', ctn(r.vc + r.vk)), kpi('Stock final agent', ctn(r.sf)), kpi('Stock chez ses agents', ctn(r.stockSous)),
+      kpi('À verser (réseau)', fmtF(r.aVerser)), kpi('Versé', fmtF(r.verse)), kpi('Reste à verser', fmtF(r.ecart), '', r.ecart > 0 ? 'crit' : 'ok'), kpi('Crédits en cours', fmtF(r.enCours), r.enRetard ? `dont ${fmtF(r.enRetard)} en retard` : '', r.enRetard ? 'crit' : '')].join('')}</section><h4 class="form-t">Ses agents</h4><div id="fs"></div>` });
+  new Table({ title: `Agents des dépôts de ${r.nom}`, rows: r.sousAgents, sort: { k: 'nom', dir: 1 }, pageSize: 20, foot: foot(KS), empty: 'Aucun agent rattaché.', cols: [{ k: 'nom', l: 'Agent' }, ...COLS_STOCK(false), ...COLS_ARGENT(false)] }).mount($('#fs'));
 }
 
 // ---------------------------------------------------------------- Grossistes
@@ -138,11 +138,11 @@ export function renderGrossistes(root) {
 }
 
 // ---------------------------------------------------------------- Mouvements de stock
-const libType = { appro: 'Approvisionnement', prise: 'Prise agent', dispatch: 'Dispatch' };
+const libType = { appro: 'Appro. grossiste', prise: 'Appro. dépôt', dispatch: 'Remise à un agent' };
 export function renderMouvements(root) {
   const f = F();
-  root.innerHTML = pageHead('Mouvements de stock du circuit', 'Approvisionnements des grossistes, prises des agents-dépôts chez les grossistes et dispatch aux sous-agents.',
-    `${actions()}${peutSaisir() ? `<button class="btn" data-n="appro">${icon('plus')} Approvisionnement</button><button class="btn" data-n="prise">${icon('plus')} Prise agent</button><button class="btn primary" data-n="dispatch">${icon('plus')} Dispatch</button>` : ''}`) + aide() +
+  root.innerHTML = pageHead('Mouvements de stock du circuit', 'Approvisionnements des grossistes, prises des dépôts chez les grossistes et dispatch aux agents.',
+    `${actions()}${peutSaisir() ? `<button class="btn primary" data-n="prise">${icon('plus')} Approvisionnement d’un dépôt</button><button class="btn" data-n="dispatch">${icon('plus')} Remise à un agent</button><button class="btn" data-n="appro">${icon('plus')} Approvisionnement d’un grossiste</button>` : ''}`) + aide() +
     `<div class="filters"><label class="ff"><span>Type</span><select id="m-type"><option value="">Tous</option>${Object.entries(libType).map(([k, l]) => `<option value="${k}" ${f.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
      <label class="ff"><span>Du</span><input type="date" id="m-du" value="${f.du}"></label><label class="ff"><span>Au</span><input type="date" id="m-au" value="${f.au}"></label>
      <label class="chk" style="align-self:end"><input type="checkbox" id="m-ann" ${f.annules ? 'checked' : ''}> <span>Afficher les annulés</span></label></div><article class="card" id="mt"></article>`;
@@ -153,9 +153,9 @@ export function renderMouvements(root) {
     new Table({ title: 'Mouvements du circuit', rows, sort: { k: 'date', dir: -1 }, pageSize: 30, onRow: (r) => ficheMouvement(r),
       foot: (c, rs) => (c.k === 'cartons' ? `<b>${fmtQ(rs.reduce((s, r) => s + num(r.cartons), 0))}</b>` : c.k === 'montant' ? `<b>${fmtN(rs.reduce((s, r) => s + num(r.montant), 0))}</b>` : ''),
       cols: [{ k: 'numero', l: 'N°' }, { k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'type', l: 'Type', v: (r) => libType[r.type] }, { k: 'grossiste', l: 'Grossiste', v: (r) => (r.grossiste_id ? nm.grossiste(r.grossiste_id) : '') },
-        { k: 'agent', l: 'Agent-dépôt', v: (r) => (r.agent_id ? nm.agent(r.agent_id) : '') }, { k: 'sous', l: 'Sous-agent', v: (r) => (r.sous_agent_id ? nm.agent(r.sous_agent_id) : '') }, { k: 'produit', l: 'Produit', v: (r) => nm.produit(r.produit_id) },
+        { k: 'agent', l: 'Dépôt', v: (r) => (r.agent_id ? nm.agent(r.agent_id) : '') }, { k: 'sous', l: 'Agent', v: (r) => (r.sous_agent_id ? nm.agent(r.sous_agent_id) : '') }, { k: 'produit', l: 'Produit', v: (r) => nm.produit(r.produit_id) },
         { k: 'cartons', l: 'Cartons', num: 1, f: (r) => fmtQ(r.cartons) }, { k: 'prix', l: 'Prix', num: 1, f: (r) => (r.prix === null ? '—' : fmtN(r.prix)) }, { k: 'montant', l: 'Montant (FCFA)', num: 1, f: (r) => (r.montant === null ? '—' : fmtN(r.montant)) },
-        { k: 'detail', l: 'Fournisseur / mode', v: (r) => (r.type === 'appro' ? r.fournisseur : r.type === 'prise' ? (r.mode === 'credit' ? 'Crédit' : 'Comptant') : '') },
+        { k: 'detail', l: 'Source / mode', v: (r) => (r.type === 'appro' ? r.fournisseur : r.type === 'prise' ? `${r.grossiste_id ? 'Grossiste' : r.fournisseur || ''} · ${r.mode === 'credit' ? 'Crédit' : 'Comptant'}` : '') },
         { k: 'statut', l: 'Statut', v: (r) => (r.statut === 'annule' ? 'Annulé' : 'Valide'), f: (r) => (r.statut === 'annule' ? pill('Annulé', 'mute') : pill('Valide', 'ok')) }] }).mount($('#mt', root));
   };
   const bind = (id, k, ev = 'change') => $(id, root).addEventListener(ev, (e) => { f[k] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; draw(); });
@@ -166,35 +166,40 @@ export function renderMouvements(root) {
 const optsAgents = (role, depot) => (App.D.agents || []).filter((a) => a.actif !== false && a.role_circuit === role && (!depot || a.depot_id === depot)).sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((a) => ({ v: a.id, l: `${a.nom}${a.equipe_id ? ' — ' + nm.equipe(a.equipe_id) : ''}` }));
 const optsGrossistes = () => (App.D.grossistes || []).filter((g) => g.actif !== false).sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((g) => ({ v: g.id, l: `${g.nom}${g.localite ? ' — ' + g.localite : ''}` }));
 
-function formMouvement(type) {
-  const T = { appro: 'Approvisionnement d’un grossiste', prise: 'Prise d’un agent-dépôt chez un grossiste', dispatch: 'Dispatch à un sous-agent' }[type];
+export function formMouvement(type, depotId = '') {
+  const T = { appro: 'Approvisionnement d’un grossiste', prise: 'Approvisionnement d’un dépôt', dispatch: 'Remise de cartons à un agent du dépôt' }[type];
+  const prixDepot = (id) => (App.D.agents || []).find((a) => a.id === id)?.prix_carton ?? '';
   const dernierPrix = (t2) => [...(App.D.circuit_mvts || [])].filter((m) => m.type === t2 && m.prix !== null && m.statut !== 'annule').sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0]?.prix ?? '';
   modal({ title: T,
     body: `<form class="form" id="mf"><div class="grid2">
       ${field({ k: 'date', l: 'Date', t: 'date', req: 1 }, today())}
-      ${type !== 'dispatch' ? field({ k: 'grossiste_id', l: 'Grossiste', t: 'options', options: optsGrossistes(), req: 1 }) : ''}
-      ${type === 'appro' ? field({ k: 'fournisseur', l: 'Fournisseur', t: 'options', options: [{ v: 'Usine Oriba Foods', l: 'Usine Oriba Foods' }, { v: 'Oriba Rice', l: 'Oriba Rice' }], empty: false }) : ''}
-      ${type !== 'appro' ? field({ k: 'agent_id', l: 'Agent-dépôt', t: 'options', options: optsAgents('depot'), req: 1 }) : ''}
-      ${type === 'dispatch' ? field({ k: 'sous_agent_id', l: 'Sous-agent', t: 'options', options: [], req: 1 }) : ''}
+      ${type !== 'appro' ? field({ k: 'agent_id', l: 'Dépôt', t: 'options', options: optsAgents('depot'), req: 1 }, depotId) : ''}
+      ${type === 'prise' ? field({ k: 'source', l: 'Pris chez', t: 'options', options: [{ v: 'Oriba Foods', l: 'Oriba Foods' }, { v: 'Oriba Rice', l: 'Oriba Rice' }, { v: 'grossiste', l: 'Un grossiste' }], empty: false }) : ''}
+      ${type !== 'dispatch' ? `<div data-gr ${type === 'prise' ? 'hidden' : ''}>${field({ k: 'grossiste_id', l: 'Grossiste', t: 'options', options: optsGrossistes(), req: 1 })}</div>` : ''}
+      ${type === 'appro' ? field({ k: 'fournisseur', l: 'Fournisseur', t: 'options', options: [{ v: 'Oriba Foods', l: 'Oriba Foods' }, { v: 'Oriba Rice', l: 'Oriba Rice' }], empty: false }) : ''}
+      ${type === 'dispatch' ? field({ k: 'sous_agent_id', l: 'Agent', t: 'options', options: [], req: 1 }) : ''}
       ${field({ k: 'produit_id', l: 'Produit', t: 'options', options: opts('produits'), req: 1 })}
       ${field({ k: 'cartons', l: 'Cartons', t: 'number', req: 1, min: 0 })}
-      ${type !== 'dispatch' ? field({ k: 'prix', l: 'Prix du carton (FCFA)', t: 'number', min: 0 }, dernierPrix(type)) : ''}
+      ${type !== 'dispatch' ? field({ k: 'prix', l: 'Prix du carton (FCFA)', t: 'number', min: 0 }, type === 'prise' && depotId ? prixDepot(depotId) || dernierPrix(type) : dernierPrix(type)) : ''}
       ${type === 'prise' ? field({ k: 'mode', l: 'Payé', t: 'options', options: [{ v: 'comptant', l: 'Comptant' }, { v: 'credit', l: 'À crédit' }], empty: false }) : ''}
       ${field({ k: 'observation', l: 'Observation', t: 'text', wide: 1 })}</div><p class="err" hidden></p></form>`,
     footer: '<button class="btn ghost" data-close>Annuler</button><button class="btn primary" id="ms">Enregistrer</button>',
     onMount: (m, close) => {
       const sa = $('[name=sous_agent_id]', m);
       const majSous = () => { if (!sa) return; const dep = $('[name=agent_id]', m).value; sa.innerHTML = '<option value="">—</option>' + optsAgents('sous_agent', dep).map((o) => `<option value="${o.v}">${esc(o.l)}</option>`).join(''); };
-      $('[name=agent_id]', m)?.addEventListener('change', majSous); majSous();
+      $('[name=agent_id]', m)?.addEventListener('change', () => { majSous(); const p = prixDepot($('[name=agent_id]', m).value); if (type === 'prise' && p) $('[name=prix]', m).value = p; }); majSous();
+      $('[name=source]', m)?.addEventListener('change', (e) => { $('[data-gr]', m).hidden = e.target.value !== 'grossiste'; });
       $('#ms', m.parentElement).addEventListener('click', (ev) => busy(ev.currentTarget, async () => {
-        try { await App.act('circuit.save', { ...readForm($('#mf', m)), type }, 'Mouvement enregistré.'); close(); } catch (e) { showErr(m, e.message); }
+        const d = readForm($('#mf', m));
+        if (type === 'prise') { if (d.source !== 'grossiste') { d.fournisseur = d.source; d.grossiste_id = null; } delete d.source; }
+        try { await App.act('circuit.save', { ...d, type }, 'Mouvement enregistré.'); close(); } catch (e) { showErr(m, e.message); }
       }));
     } });
 }
 
 function ficheMouvement(r) {
   modal({ title: `${libType[r.type]} ${r.numero}`,
-    body: `<dl class="dl">${[['Date', fmtD(r.date)], ['Grossiste', r.grossiste_id ? nm.grossiste(r.grossiste_id) : '—'], ['Fournisseur', r.fournisseur || '—'], ['Agent-dépôt', r.agent_id ? nm.agent(r.agent_id) : '—'], ['Sous-agent', r.sous_agent_id ? nm.agent(r.sous_agent_id) : '—'],
+    body: `<dl class="dl">${[['Date', fmtD(r.date)], ['Grossiste', r.grossiste_id ? nm.grossiste(r.grossiste_id) : '—'], ['Fournisseur', r.fournisseur || '—'], ['Dépôt', r.agent_id ? nm.agent(r.agent_id) : '—'], ['Agent', r.sous_agent_id ? nm.agent(r.sous_agent_id) : '—'],
       ['Produit', nm.produit(r.produit_id)], ['Cartons', fmtQ(r.cartons)], ['Prix', r.prix === null ? '—' : fmtF(r.prix)], ['Montant', r.montant === null ? '—' : fmtF(r.montant)], ['Mode', r.type === 'prise' ? (r.mode === 'credit' ? 'Crédit' : 'Comptant') : '—'],
       ['Observation', r.observation || '—'], ['Statut', r.statut === 'annule' ? `Annulé — ${r.motif || ''}` : 'Valide'], ['Saisi le', fmtD(r.created_at)]].map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`,
     footer: `${App.can('circuit', 'annuler') && r.statut !== 'annule' ? '<button class="btn danger" id="ma">Annuler ce mouvement</button>' : ''}<span class="grow"></span><button class="btn ghost" data-close>Fermer</button>`,
@@ -233,14 +238,14 @@ export function renderVersements(root) {
   draw();
 }
 
-function formVersement() {
+export function formVersement() {
   const C = contexte(App.D, App.I);
-  const tous = [...C.depots, ...C.sous].sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((a) => ({ v: a.id, l: `${a.nom}${a.role_circuit === 'depot' ? ' (agent-dépôt' + (a.equipe_id ? ', ' + nm.equipe(a.equipe_id) : '') + ')' : ' (sous-agent de ' + nm.agent(a.depot_id) + ')'}` }));
+  const tous = [...C.depots, ...C.sous].sort((a, b) => a.nom.localeCompare(b.nom, 'fr')).map((a) => ({ v: a.id, l: `${a.nom}${a.role_circuit === 'depot' ? ' (dépôt' + (a.equipe_id ? ', ' + nm.equipe(a.equipe_id) : '') + ')' : ' (agent de ' + nm.agent(a.depot_id) + ')'}` }));
   modal({ title: 'Nouveau versement',
     body: `<form class="form" id="vf"><div class="grid2">
       ${field({ k: 'objet', l: 'Objet', t: 'options', options: [{ v: 'ventes_comptant', l: 'Ventes comptant' }, { v: 'remboursement', l: 'Remboursement d’un crédit client' }, { v: 'reglement_grossiste', l: 'Règlement d’un grossiste à Oriba' }], empty: false })}
       ${field({ k: 'date', l: 'Date', t: 'date', req: 1 }, today())}
-      <div data-a>${field({ k: 'agent_id', l: 'Versé par (agent-dépôt ou sous-agent)', t: 'options', options: tous, req: 1 })}</div>
+      <div data-a>${field({ k: 'agent_id', l: 'Versé par (dépôt ou agent)', t: 'options', options: tous, req: 1 })}</div>
       <div data-g hidden>${field({ k: 'grossiste_id', l: 'Grossiste', t: 'options', options: optsGrossistes(), req: 1 })}</div>
       <div data-r hidden>${field({ k: 'vente_id', l: 'Crédit remboursé', t: 'options', options: [], req: 1 })}</div>
       <div data-l>${field({ k: 'lieu', l: 'Lieu du versement', t: 'options', options: Object.entries(LIEUX_VERSEMENT).map(([v, l]) => ({ v, l })), empty: false })}</div>
@@ -256,7 +261,7 @@ function formVersement() {
         $('[data-a]', m).hidden = o === 'reglement_grossiste'; $('[data-g]', m).hidden = o !== 'reglement_grossiste'; $('[data-r]', m).hidden = o !== 'remboursement';
         $('[data-l]', m).hidden = o === 'reglement_grossiste'; $('[data-lg]', m).hidden = o === 'reglement_grossiste' || v('lieu').value !== 'grossiste';
         if (o === 'remboursement') { const cr = credits(); v('vente_id').innerHTML = '<option value="">—</option>' + cr.map((c) => `<option value="${c.id}">${esc(`${c.numero} · ${nm.client(c.client_id)} · reste ${fmtN(c.solde)} FCFA${c.statut === 'En retard' ? ' (en retard)' : ''}`)}</option>`).join(''); }
-        $('[data-info]', m).textContent = o === 'ventes_comptant' ? 'Argent des ventes comptant remis par l’agent-dépôt (pour lui et ses sous-agents) ou par un sous-agent.' : o === 'remboursement' ? 'Le remboursement est enregistré sur la vente à crédit choisie : son solde et son statut se mettent à jour.' : 'Paiement fait par le grossiste à Oriba sur les cartons reçus.';
+        $('[data-info]', m).textContent = o === 'ventes_comptant' ? 'Argent des ventes comptant remis par l’dépôt (pour lui et ses agents) ou par un agent.' : o === 'remboursement' ? 'Le remboursement est enregistré sur la vente à crédit choisie : son solde et son statut se mettent à jour.' : 'Paiement fait par le grossiste à Oriba sur les cartons reçus.';
       };
       ['objet', 'lieu', 'agent_id'].forEach((n) => v(n).addEventListener('change', maj)); maj();
       $('#vs', m.parentElement).addEventListener('click', (ev) => busy(ev.currentTarget, async () => {

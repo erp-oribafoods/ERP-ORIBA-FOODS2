@@ -17,6 +17,7 @@ import { renderObjectifs } from './pages/objectifs.js';
 import { renderSuivi } from './pages/suivi.js';
 import { renderSaisie, peutSaisirOuImporter } from './pages/saisie.js';
 import { renderSuppression } from './pages/suppression.js';
+import { renderAccueil, renderDepotsEssentiel, renderSaisieRapide, renderCreditsEssentiel } from './pages/accueil.js';
 import { renderCircuit, renderDepots, renderGrossistes, renderMouvements, renderVersements } from './pages/circuit.js';
 import { DEMO_USERS, DEMO_PASSWORD } from './demo-seed.js';
 import { LOGO } from './assets/logo.js';
@@ -25,10 +26,17 @@ import { ouvrirRapports } from './lib/rapports.js';
 
 const DEMO = !!window.ERP_DEMO || (() => { try { return new URLSearchParams(location.search).has('demo'); } catch { return false; } })();
 
-const NAV_ICONS = { 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'users', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', suppression: 'alert', audit: 'eye', circuit: 'chart', 'circuit-depots': 'users', 'circuit-grossistes': 'warehouse', 'circuit-mouvements': 'truck', 'circuit-versements': 'wallet' };
+const NAV_ICONS = { 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'users', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', suppression: 'alert', audit: 'eye', accueil: 'home', depots: 'warehouse', 'saisie-rapide': 'plus', credits: 'receipt', circuit: 'chart', 'circuit-depots': 'users', 'circuit-grossistes': 'warehouse', 'circuit-mouvements': 'truck', 'circuit-versements': 'wallet' };
+const ESSENTIEL = 'Essentiel';
 const NAV = [
+  [ESSENTIEL, [
+    ['accueil', 'Tableau de bord', () => App.can('circuit'), renderAccueil],
+    ['depots', 'Dépôts', () => App.can('circuit'), renderDepotsEssentiel],
+    ['saisie-rapide', 'Saisie et import', () => App.can('circuit'), renderSaisieRapide],
+    ['credits', 'Crédits à relancer', () => App.can('circuit') || App.can('creances'), renderCreditsEssentiel],
+  ]],
   ['Pilotage', [
-    ['tableau-de-bord', 'Tableau de bord', () => App.can('dashboard'), renderDashboard],
+    ['tableau-de-bord', 'Tableau de bord détaillé', () => App.can('dashboard'), renderDashboard],
     ['saisie', 'Saisie et import Excel', () => peutSaisirOuImporter(), renderSaisie],
     ['analyses', 'Cumuls et analyses', () => App.can('ventes') || App.can('dashboard'), renderAnalyses],
   ]],
@@ -76,6 +84,16 @@ const titleOf = (p) => PAGES.get(p)?.[1] || '';
 const root = document.getElementById('app');
 let current = null;
 
+// Menu : l'espace « Essentiel » d'abord ; les autres modules sont repliés derrière « Tous les modules »
+const lsNav = { get() { try { return localStorage.getItem('oriba_nav_complet') === '1'; } catch { return false; } }, set(v) { try { localStorage.setItem('oriba_nav_complet', v ? '1' : '0'); } catch { /* ignoré */ } } };
+const groupe = ([g, items]) => { const vis = items.filter((i) => i[2]()); return vis.length ? `<div class="nav-g"><span>${g}</span>${vis.map((i) => `<a href="#${i[0]}" data-p="${i[0]}">${icon(NAV_ICONS[i[0]] || 'spark')}<span>${i[1]}</span></a>`).join('')}</div>` : ''; };
+function navHtml() {
+  const ess = NAV.filter(([g]) => g === ESSENTIEL), autres = NAV.filter(([g]) => g !== ESSENTIEL);
+  const essHtml = ess.map(groupe).join('');
+  if (!essHtml) return autres.map(groupe).join('');
+  const n = autres.reduce((s, [, items]) => s + items.filter((i) => i[2]()).length, 0);
+  return `${essHtml}<button class="nav-plus" type="button" aria-expanded="${lsNav.get()}">${icon('menu')}<span>Tous les modules (${n})</span></button><div class="nav-autres" ${lsNav.get() ? '' : 'hidden'}>${autres.map(groupe).join('')}</div>`;
+}
 function firstPage() {
   for (const [, items] of NAV) for (const i of items) if (i[2]()) return i[0];
   return 'mon-compte';
@@ -90,6 +108,7 @@ function route() {
   if (!def || !def[2]()) p = firstPage();
   current = p;
   $$('.nav a').forEach((a) => a.classList.toggle('on', a.dataset.p === p));
+  const autres = $('.nav-autres'); if (autres && autres.hidden && autres.querySelector(`[data-p="${p}"]`)) { autres.hidden = false; $('.nav-plus')?.setAttribute('aria-expanded', 'true'); }
   document.body.classList.remove('nav-open');
   destroyCharts();
   const main = $('#main');
@@ -124,7 +143,7 @@ function shell() {
   <div class="layout">
     <aside class="side" aria-label="Navigation">
       <div class="brand-logo"><img src="${LOGO}" alt="Oriba Food"></div><p class="brand-sub">ERP Gestion commerciale & force de vente</p>
-      <nav class="nav">${NAV.map(([g, items]) => { const vis = items.filter((i) => i[2]()); return vis.length ? `<div class="nav-g"><span>${g}</span>${vis.map((i) => `<a href="#${i[0]}" data-p="${i[0]}">${icon(NAV_ICONS[i[0]] || 'spark')}<span>${i[1]}</span></a>`).join('')}</div>` : ''; }).join('')}</nav>
+      <nav class="nav">${navHtml()}</nav>
       <a class="me" href="#mon-compte" data-p="mon-compte"><span class="av">${esc(initials)}</span><span><b>${esc([u.prenom, u.nom].filter(Boolean).join(' '))}</b><small>${esc(u.role_nom || '')}</small></span></a>
     </aside>
     <div class="body">
@@ -137,6 +156,7 @@ function shell() {
     </div>
   </div>`;
   $('.menu').addEventListener('click', () => document.body.classList.toggle('nav-open'));
+  $('.nav-plus')?.addEventListener('click', (e) => { const b = e.currentTarget; const ouvert = b.getAttribute('aria-expanded') !== 'true'; b.setAttribute('aria-expanded', ouvert); $('.nav-autres').hidden = !ouvert; lsNav.set(ouvert); });
   $('#logout').addEventListener('click', () => logout());
   $('#rapports').addEventListener('click', () => ouvrirRapports('hebdo'));
   $('#mdp').addEventListener('click', () => modal({ title: 'Changer mon mot de passe', body: `<p class="muted small">Chaque utilisateur peut changer lui-même son mot de passe, sans passer par l’administrateur : saisissez l’actuel puis le nouveau (8 caractères au moins, avec lettres et chiffres).</p>${passwordForm()}`,

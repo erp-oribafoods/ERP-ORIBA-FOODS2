@@ -20,8 +20,8 @@ export async function seedCircuit(db, C, state) {
   // Référentiels
   const G = {}, A = {}, CL = {};
   for (const [code, nom, localite, fournisseur, telephone, stock, solde] of SIM.grossistes) G[code] = (await ref('grossistes', { code, nom, localite, fournisseur, telephone, stock_initial: stock, solde_initial: solde })).id;
-  for (const [code, nom, z, , telephone, stock] of SIM.depots) { const e = eq(z); A[code] = (await ref('agents', { code, nom, equipe_id: e.id, zone_id: e.zone_id, telephone, role_circuit: 'depot', stock_initial: stock, fonction: 'Agent commercial (dépôt)' })).id; }
-  for (const [code, nom, dep, , telephone, stock] of SIM.sous) { const d = state.agents.find((a) => a.id === A[dep]); A[code] = (await ref('agents', { code, nom, equipe_id: d.equipe_id, zone_id: d.zone_id, telephone, role_circuit: 'sous_agent', depot_id: d.id, stock_initial: stock, fonction: 'Sous-agent' })).id; }
+  for (const [code, , z, , telephone, stock] of SIM.depots) { const e = eq(z); A[code] = (await ref('agents', { code, nom: `Dépôt ${z}`, equipe_id: e.id, zone_id: e.zone_id, telephone, role_circuit: 'depot', stock_initial: stock, fonction: 'Dépôt', prix_carton: /Konni/.test(z) ? 14000 : /Tahoua/.test(z) ? 13000 : 13250 })).id; }
+  for (const [code, nom, dep, , telephone, stock] of SIM.sous) { const d = state.agents.find((a) => a.id === A[dep]); A[code] = (await ref('agents', { code, nom, equipe_id: d.equipe_id, zone_id: d.zone_id, telephone, role_circuit: 'sous_agent', depot_id: d.id, stock_initial: stock, fonction: 'Agent commercial' })).id; }
   for (const [code, nom, , , telephone, plafond] of SIM.clients) CL[code] = (await ref('clients', { code, nom, type: code === 'CL000' ? 'Détaillant' : 'Boutique', telephone: telephone || null, plafond_cartons: plafond || null })).id;
   // Journaux (mêmes clés que l'import du classeur)
   const cle = generateurCles();

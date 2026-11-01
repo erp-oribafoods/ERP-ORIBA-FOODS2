@@ -21,7 +21,7 @@ const n = (s) => Number(String(s).replace(/[^\d,-]/g, '').replace(',', '.')) || 
   const dater = async (d) => { await p.fill('#c-date', d); await p.dispatchEvent('#c-date', 'change'); await p.waitForTimeout(2000); };
   await aller('circuit'); await dater('2026-10-31');
   let k = await kpis();
-  const attendu31 = { 'Stock chez les grossistes': 3500, 'Stock chez les agents-dépôts': 86, 'Stock chez les sous-agents': 87, 'Pris chez les grossistes': 315, 'Dispatché aux sous-agents': 152, 'Vendu comptant': 284, 'Vendu à crédit': 10,
+  const attendu31 = { 'Stock chez les grossistes': 3500, 'Stock chez les dépôts': 86, 'Stock chez les agents': 87, 'Approvisionnement des dépôts': 315, 'Dispatché aux agents': 152, 'Vendu comptant': 284, 'Vendu à crédit': 10,
     'Ventes comptant à verser': 3692000, 'Versé': 3131000, 'Reste à verser': 561000, 'Remboursements de crédits reçus': 234000, 'Règlements des grossistes reçus': 0, 'Solde dû par les grossistes': 27925000 };
   for (const [l, v] of Object.entries(attendu31)) verif(n(k[l]) === v, `31/10 — ${l} : plateforme ${k[l]} / classeur ${v.toLocaleString('fr-FR')}`);
   await p.screenshot({ path: path.join(OUT, 'circuit-dashboard.png'), fullPage: true });
@@ -68,7 +68,7 @@ const n = (s) => Number(String(s).replace(/[^\d,-]/g, '').replace(',', '.')) || 
   await p.click('.modal [data-go]'); await p.waitForSelector('.modal [data-b] .note.ok', { timeout: 60000 });
   console.log('   ', (await p.textContent('.modal [data-b] .note.ok')).replace(/\s+/g, ' ').slice(0, 300));
   await p.keyboard.press('Escape'); await aller('circuit'); await dater('2026-11-01'); k = await kpis();
-  verif(n(k['Dispatché aux sous-agents']) === 4 && n(k['Vendu comptant']) === 3 && n(k['Ventes comptant à verser']) === 39000 && n(k['Versé']) === 39000, `01/11 après import : dispatché ${k['Dispatché aux sous-agents']}, vendu ${k['Vendu comptant']}, à verser ${k['Ventes comptant à verser']}, versé ${k['Versé']}`);
+  verif(n(k['Dispatché aux agents']) === 4 && n(k['Vendu comptant']) === 3 && n(k['Ventes comptant à verser']) === 39000 && n(k['Versé']) === 39000, `01/11 après import : dispatché ${k['Dispatché aux agents']}, vendu ${k['Vendu comptant']}, à verser ${k['Ventes comptant à verser']}, versé ${k['Versé']}`);
   t = await imp(f2);
   verif(t.every((r) => r[1] === '0'), 'Même classeur réimporté une 2e fois : rien de nouveau');
   // Saisie à l'écran : un dispatch et un versement de remboursement

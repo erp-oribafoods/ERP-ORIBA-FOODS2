@@ -21,41 +21,52 @@ export function circuitCtx(D, I) {
 }
 
 const entre = (d, a, b) => d >= a && d < b;       // [a ; b[
-const jourJ = (d, j) => d === j;
 
-// Situation d'une journée pour un agent-dépôt ou un sous-agent
-function situationVendeur(C, agent, date, { depot }) {
+// Situation d'un dépôt ou d'un agent sur une période [date ; au] (un jour par défaut)
+function situationVendeur(C, agent, date, { depot }, au = date) {
   const dep = C.depart;
   const avant = (d) => d >= dep && d < date;
+  const jourJ = (d) => d >= date && d <= au;
   const venduPar = (f) => C.ventes.filter((x) => x.v.agent_id === agent.id && f(x.v.date));
   const entrees = (f) => (depot ? C.mv.filter((m) => m.type === 'prise' && m.agent_id === agent.id && f(m.date)) : C.mv.filter((m) => m.type === 'dispatch' && m.sous_agent_id === agent.id && f(m.date)));
   const dispatchs = (f) => (depot ? C.mv.filter((m) => m.type === 'dispatch' && m.agent_id === agent.id && f(m.date)) : []);
   const si = round2(num(agent.stock_initial) + somme(entrees(avant), (m) => m.cartons) - somme(dispatchs(avant), (m) => m.cartons) - somme(venduPar(avant), (x) => x.cartons));
-  const recu = somme(entrees((d) => jourJ(d, date)), (m) => m.cartons);
-  const disp = somme(dispatchs((d) => jourJ(d, date)), (m) => m.cartons);
-  const vj = venduPar((d) => jourJ(d, date));
+  const ent = entrees(jourJ);
+  const recu = somme(ent, (m) => m.cartons);
+  const recuFoods = somme(ent.filter((m) => m.type === 'prise' && !m.grossiste_id && m.fournisseur !== 'Oriba Rice'), (m) => m.cartons);
+  const recuRice = somme(ent.filter((m) => m.type === 'prise' && !m.grossiste_id && m.fournisseur === 'Oriba Rice'), (m) => m.cartons);
+  const recuGross = somme(ent.filter((m) => m.type === 'prise' && m.grossiste_id), (m) => m.cartons);
+  const disp = somme(dispatchs(jourJ), (m) => m.cartons);
+  const vj = venduPar(jourJ);
   const vc = somme(vj.filter((x) => x.v.mode === 'comptant'), (x) => x.cartons);
   const vk = somme(vj.filter((x) => x.v.mode === 'credit'), (x) => x.cartons);
   const sf = round2(si + recu - disp - vc - vk);
   const ids = depot ? C.reseau(agent.id) : new Set([agent.id]);
-  const aVerser = somme(C.ventes.filter((x) => ids.has(x.v.agent_id) && x.v.mode === 'comptant' && x.v.date === date), (x) => x.montant);
-  const vs = C.vers.filter((v) => v.objet === 'ventes_comptant' && ids.has(v.agent_id) && v.date === date);
+  const vReseau = C.ventes.filter((x) => ids.has(x.v.agent_id) && jourJ(x.v.date));
+  const aVerser = somme(vReseau.filter((x) => x.v.mode === 'comptant'), (x) => x.montant);
+  const ca = somme(vReseau, (x) => x.montant);
+  const vs = C.vers.filter((v) => v.objet === 'ventes_comptant' && ids.has(v.agent_id) && jourJ(v.date));
   const verse = somme(vs, (v) => v.montant);
   const verseGrossiste = somme(vs.filter((v) => v.lieu === 'grossiste'), (v) => v.montant);
-  const remb = somme(C.rembs.filter((r) => r.date === date && ids.has(C.venteById.get(r.vente_id)?.v.agent_id)), (r) => r.montant);
-  const credits = C.ventes.filter((x) => ids.has(x.v.agent_id) && x.v.mode === 'credit').map((x) => creditInfo(x.v, C.I, date));
+  const remb = somme(C.rembs.filter((r) => jourJ(r.date) && ids.has(C.venteById.get(r.vente_id)?.v.agent_id)), (r) => r.montant);
+  const credits = C.ventes.filter((x) => ids.has(x.v.agent_id) && x.v.mode === 'credit' && x.v.date <= au).map((x) => creditInfo(x.v, C.I, au));
+  // Objectif du mois (cartons) et ventes du mois jusqu'à la fin de la période
+  const mois = au.slice(0, 7);
+  const objectif = somme((C.D.objectifs || []).filter((o) => o.actif !== false && o.axe === 'agent' && o.mois === mois && !o.produit_id && ids.has(o.cible_id)), (o) => o.objectif_cartons);
+  const venduMois = somme(C.ventes.filter((x) => ids.has(x.v.agent_id) && x.v.date >= `${mois}-01` && x.v.date <= au), (x) => x.cartons);
   const enCours = somme(credits, (c) => c.solde), enRetard = somme(credits.filter((c) => c.statut === 'En retard'), (c) => c.solde);
-  return { id: agent.id, code: agent.code || '', nom: agent.nom, equipe_id: agent.equipe_id, depot_id: agent.depot_id || null, si, recu, disp, vc, vk, sf, aVerser, verse, verseGrossiste, ecart: round2(aVerser - verse), remb, enCours, enRetard };
+  return { id: agent.id, code: agent.code || '', nom: agent.nom, fonction: agent.fonction || '', equipe_id: agent.equipe_id, depot_id: agent.depot_id || null, prix: num(agent.prix_carton) || null, si, recu, recuFoods, recuRice, recuGross, disp, vc, vk, sf, ca, aVerser, verse, verseGrossiste, ecart: round2(aVerser - verse), remb, enCours, enRetard, objectif, venduMois, taux: objectif > 0 ? (venduMois / objectif) * 100 : null };
 }
 
-export function situationDepots(C, date) {
+export function situationDepots(C, date, au = date) {
   return C.depots.map((d) => {
-    const s = situationVendeur(C, d, date, { depot: true });
-    const ss = (C.sousDe.get(d.id) || []).map((x) => situationVendeur(C, x, date, { depot: false }));
-    return { ...s, stockSous: somme(ss, (x) => x.sf), venduReseau: round2(s.vc + s.vk + somme(ss, (x) => x.vc + x.vk)), nbSous: ss.length, sousAgents: ss };
+    const s = situationVendeur(C, d, date, { depot: true }, au);
+    const ss = (C.sousDe.get(d.id) || []).map((x) => situationVendeur(C, x, date, { depot: false }, au));
+    const vcR = round2(s.vc + somme(ss, (x) => x.vc)), vkR = round2(s.vk + somme(ss, (x) => x.vk));
+    return { ...s, stockSous: somme(ss, (x) => x.sf), stockTotal: round2(s.sf + somme(ss, (x) => x.sf)), siTotal: round2(s.si + somme(ss, (x) => x.si)), vcReseau: vcR, vkReseau: vkR, venduReseau: round2(vcR + vkR), nbSous: ss.length, sousAgents: ss };
   });
 }
-export function situationSous(C, date) { return C.sous.map((s) => situationVendeur(C, s, date, { depot: false })); }
+export function situationSous(C, date, au = date) { return C.sous.map((s) => situationVendeur(C, s, date, { depot: false }, au)); }
 
 // Semaine du lundi w0 au dimanche (w0 + 6)
 export const lundi = (d) => { const j = new Date(d + 'T00:00:00Z').getUTCDay(); return addDays(d, -((j + 6) % 7)); };

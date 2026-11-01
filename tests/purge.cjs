@@ -13,7 +13,7 @@ const map = { 'chart.umd.min.js': 'chart.js/dist/chart.umd.js', 'xlsx.full.min.j
     const vu = await p.$('a[data-p=suppression]');
     console.log(user, ': menu Suppression visible =', !!vu);
     if (!vu) { await ctx.close(); continue; }
-    await p.click('a[data-p=suppression]'); await p.waitForTimeout(600);
+    await p.evaluate(() => { location.hash = 'suppression'; }); await p.waitForTimeout(600);
     await p.selectOption('#pg-c', 'ventes_credit'); await p.click('#pg-calc'); await p.waitForTimeout(800);
     console.log('aperçu :', (await p.textContent('#pg-res')).replace(/\s+/g, ' ').slice(0, 200));
     await p.screenshot({ path: path.join(OUT, 'purge.png') });

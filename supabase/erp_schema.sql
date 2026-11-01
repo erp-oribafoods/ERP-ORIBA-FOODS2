@@ -407,3 +407,6 @@ create trigger versements_nodel before delete on versements for each row execute
 update roles set permissions = permissions || '{"circuit":["lire","creer","annuler","exporter"]}'::jsonb where nom = 'Responsable Commercial & Force de Vente';
 update roles set permissions = permissions || '{"circuit":["lire","exporter"]}'::jsonb where nom in ('Direction Générale (DG)', 'Contrôleur de Gestion', 'DAF');
 update roles set permissions = permissions || '{"circuit":["lire"]}'::jsonb where nom = 'Superviseur / Responsable d''équipe';
+
+-- 20261101150000_prix_depot
+alter table agents add column if not exists prix_carton numeric(14,2);

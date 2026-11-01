@@ -376,3 +376,25 @@ img.piece { max-width: 100%; border-radius: 6px; }
 .hero-act { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .hero-act .btn { background: rgba(255,255,255,.92); color: var(--c1, #45307a); border-color: transparent; }
 .rp-list { margin: 6px 0 0; padding-left: 18px; line-height: 1.7; }
+
+/* Espace Essentiel */
+.nav-plus { display: flex; align-items: center; gap: 10px; width: 100%; margin: 10px 0 4px; padding: 8px 12px; border: 1px dashed rgba(255,255,255,.25); border-radius: 8px; background: transparent; color: rgba(255,255,255,.75); font: inherit; font-size: .84rem; cursor: pointer; text-align: left; }
+.nav-plus:hover { background: rgba(255,255,255,.08); color: #fff; }
+.nav-plus svg { width: 16px; height: 16px; }
+.kpis.k4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .kpis.k4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .kpis.k4 { grid-template-columns: minmax(0, 1fr); } }
+.per-bar { align-items: end; gap: 12px; } .per-bar .seg { align-self: end; } .per-lib { align-self: end; padding-bottom: 8px; }
+ul.alertes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+ul.alertes li { padding: 8px 12px; border-radius: 6px; background: var(--info-bg); font-size: .9rem; }
+ul.alertes li.crit { background: var(--crit-bg, #fde8ea); } ul.alertes li.warn { background: var(--warn-bg); }
+.depot-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 4px; }
+.depot-chips .chip { border: 1px solid var(--line-2); background: var(--surface); border-radius: 999px; padding: 7px 14px; font: inherit; font-size: .9rem; cursor: pointer; color: var(--ink); }
+.depot-chips .chip.on { background: var(--brand); color: #fff; border-color: var(--brand); }
+.tuiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 900px) { .tuiles { grid-template-columns: minmax(0, 1fr); } }
+.tuile { text-align: left; cursor: pointer; font: inherit; color: inherit; gap: 6px; align-items: flex-start; }
+.tuile:hover:not([disabled]) { border-color: var(--brand); }
+.tuile[disabled] { opacity: .55; cursor: default; }
+.tuile b { font-size: 1.02rem; } .tuile-ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: var(--brand); color: #fff; }
+.tuile-ic svg { width: 20px; height: 20px; }

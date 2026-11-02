@@ -40,7 +40,10 @@ const noteVide = () => `<div class="note warn">Aucun dépôt n’est encore enre
 export function renderAccueil(root) {
   // Mot de bienvenue selon l'heure : Bonjour le matin, Bonsoir à partir de midi
   const u = App.user || {}, h = new Date().getHours();
-  const qui = [u.prenom, u.nom].filter(Boolean).join(' ');
+  // DG et DAF : le titre seul ; les autres : le prénom seul
+  const role = u.role_nom || '';
+  const titre = /\bDG\b|direction g[ée]n[ée]rale/i.test(role) ? 'DG' : /\bDAF\b|administratif et financier/i.test(role) ? 'DAF' : '';
+  const qui = titre || String(u.prenom || u.nom || '').trim().split(/\s+/)[0] || '';
   const jour = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   root.innerHTML = pageHead(`${h < 12 ? 'Bonjour' : 'Bonsoir'}${qui ? ` ${qui}` : ''} 👋`, `${u.role_nom ? `${u.role_nom} · ` : ''}${jour.charAt(0).toUpperCase() + jour.slice(1)}. Bienvenue sur l’ERP ORIBA : voici l’essentiel de l’activité.`,
     App.can('circuit', 'creer') ? `<a class="btn primary" href="#saisie-rapide">${icon('plus')} Saisir ou importer</a>` : '') + (aucunDepot() && App.can('circuit') ? noteVide() : '') + barre() +

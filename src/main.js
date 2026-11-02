@@ -42,7 +42,6 @@ const NAV = [
     ['clients', 'Clients et grossistes', () => App.can('ventes') || App.can('creances') || App.can('dashboard') || App.can('circuit'), onglets('clients', [['cl', 'Clients', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderClients], ['gr', 'Grossistes', () => App.can('circuit'), renderGrossistes]])],
     ['cartons', 'Mouvements de cartons', () => App.can('circuit'), renderMouvements],
     ['caisse', 'Versements et remboursements', () => App.can('circuit') || App.can('remboursements'), onglets('caisse', [['vers', 'Versements et caisse', () => App.can('circuit'), renderVersements], ['remb', 'Remboursements des crédits', () => App.can('remboursements'), renderRemboursements]])],
-    ['suivi-agents', 'Suivi des agents terrain', () => App.can('suivi'), renderSuivi],
     ['terrain', 'Zones et équipes', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderTerrain],
   ]],
   ['Dépenses et logistique', [
@@ -73,6 +72,7 @@ const CACHEES = [
   ['ventes-credit', 'Ventes à crédit', () => App.can('ventes') || App.can('creances'), (r) => renderVentes(r, 'credit')],
   ['creances', 'Créances et alertes', () => App.can('creances'), renderCreances],
   ['objectifs', 'Objectifs des agents', () => App.can('objectifs'), renderObjectifs],
+  ['suivi-agents', 'Suivi des agents terrain', () => App.can('suivi'), renderSuivi],
   ['circuit-grossistes', 'Grossistes', () => App.can('circuit'), renderGrossistes],
   ['circuit-mouvements', 'Mouvements de cartons', () => App.can('circuit'), renderMouvements],
   ['stock', 'Stock confié', () => App.can('stock'), renderStock],

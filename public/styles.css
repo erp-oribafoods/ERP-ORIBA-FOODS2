@@ -1,29 +1,31 @@
 /* ORIBA FOODS — ERP. Mise en page : barre latérale sombre + espace de travail clair, cartes réservées aux blocs de données. */
 /* ORIBA FOOD — identité : violet du logo, vert feuille, vert du contour. Barre latérale violette, espace de travail lavande clair. */
 :root {
-  --bg: #f4f2f9; --surface: #ffffff; --surface-2: #f8f6fc; --ink: #1e1638; --ink-2: #605a76; --line: #e4dfee; --line-2: #d2cbe2;
-  --brand: #45307a; --brand-2: #5b40a0; --brand-ink: #ffffff; --accent: #6e9a3e; --leaf: #2a9530; --side: #2a1c4e; --side-2: #3f2a72; --side-ink: #ece7f8; --side-mute: #a99dcb;
-  --ok: #2a9530; --warn: #d68910; --crit: #d0384b; --info: #3f7bd9; --mute: #8a8599;
-  --ok-bg: #e5f4e6; --warn-bg: #fdf1dc; --crit-bg: #fce6e9; --info-bg: #e6eefb; --mute-bg: #efedf3;
-  --c1: #5b3fa0; --c2: #6eaa3c; --c3: #f2a93b; --c4: #2ba6a0; --c5: #e0567a; --c6: #3f7bd9; --c7: #9b6fd6; --c8: #8c9a3a;
-  --t-violet: #5b3fa0; --t-vert: #3d9a35; --t-ambre: #e0921c; --t-sarcelle: #1f9c95; --t-rose: #d6466c; --t-bleu: #3a74d4;
+  /* Identité ORIBA FOOD : vert du contour du logo (dominant), violet du mot « food » (accent), blanc */
+  --bg: #f2f7ef; --surface: #ffffff; --surface-2: #f5faf2; --ink: #1a2b1d; --ink-2: #5a6a5c; --line: #e0ebda; --line-2: #c9dcc1;
+  --brand: #2f8a2c; --brand-2: #4caa3c; --brand-ink: #ffffff; --accent: #8cc63f; --leaf: #2f8a2c; --violet: #4b2e83; --violet-2: #6a4bb0;
+  --side: #10391b; --side-2: #1f6a2a; --side-ink: #eef7ea; --side-mute: #a8cba1;
+  --ok: #2f8a2c; --warn: #d68910; --crit: #d0384b; --info: #3f7bd9; --mute: #8a8599;
+  --ok-bg: #e4f3e1; --warn-bg: #fdf1dc; --crit-bg: #fce6e9; --info-bg: #e6eefb; --mute-bg: #eef2ec;
+  --c1: #2f8a2c; --c2: #5b3fa0; --c3: #8cc63f; --c4: #e5a224; --c5: #1f9c95; --c6: #9b7fd6; --c7: #d6466c; --c8: #6b8e23;
+  --t-violet: #5b3fa0; --t-vert: #2f8a2c; --t-ambre: #e0921c; --t-sarcelle: #1f9c95; --t-rose: #d6466c; --t-bleu: #3a74d4; --t-lime: #6fae2e;
   --f-display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif; --f-body: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif; --f-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
-  --r: 12px; --shadow: 0 1px 2px rgba(42, 28, 78, .06), 0 6px 20px rgba(42, 28, 78, .07);
+  --r: 14px; --shadow: 0 1px 2px rgba(20, 60, 25, .06), 0 8px 24px rgba(20, 60, 25, .07);
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #110c1f; --surface: #1a1430; --surface-2: #211a3a; --ink: #eee9fa; --ink-2: #aba2c8; --line: #2e2648; --line-2: #3b3159;
-  --brand: #a48cec; --brand-2: #b9a6f2; --brand-ink: #160f2b; --accent: #8cc85a; --leaf: #5cc35f; --side: #0d0a1b; --side-2: #1d1540; --side-ink: #ece7f8; --side-mute: #8e82b5;
+  --bg: #0d140e; --surface: #142016; --surface-2: #18281b; --ink: #e8f2e6; --ink-2: #a3b8a0; --line: #243826; --line-2: #2f4831;
+  --brand: #6fcf5c; --brand-2: #8ddc78; --brand-ink: #0c1f0e; --accent: #a6dd78; --leaf: #6fcf5c; --violet: #b9a6f2; --violet-2: #a48cec; --side: #0a1a0d; --side-2: #143519; --side-ink: #e8f5e4; --side-mute: #8fb489;
   --ok: #5cc35f; --warn: #f0ad45; --crit: #f0687a; --info: #79a6f0; --mute: #9a94ad;
   --ok-bg: #16301a; --warn-bg: #3a2b10; --crit-bg: #3d1720; --info-bg: #162640; --mute-bg: #252036;
-  --c1: #a48cec; --c2: #8cc85a; --c3: #f5bb5c; --c4: #3fc9c1; --c5: #f07d9c; --c6: #79a6f0; --c7: #c4a4f2; --c8: #b8c564;
+  --c1: #6fcf5c; --c2: #a48cec; --c3: #f5bb5c; --c4: #3fc9c1; --c5: #f07d9c; --c6: #79a6f0; --c7: #c4a4f2; --c8: #b8c564;
   --t-violet: #a48cec; --t-vert: #6cd06a; --t-ambre: #f5bb5c; --t-sarcelle: #3fc9c1; --t-rose: #f07d9c; --t-bleu: #79a6f0;
   --shadow: 0 1px 2px rgba(0, 0, 0, .35); color-scheme: dark; } }
 :root[data-theme="dark"] {
-  --bg: #110c1f; --surface: #1a1430; --surface-2: #211a3a; --ink: #eee9fa; --ink-2: #aba2c8; --line: #2e2648; --line-2: #3b3159;
-  --brand: #a48cec; --brand-2: #b9a6f2; --brand-ink: #160f2b; --accent: #8cc85a; --leaf: #5cc35f; --side: #0d0a1b; --side-2: #1d1540; --side-ink: #ece7f8; --side-mute: #8e82b5;
+  --bg: #0d140e; --surface: #142016; --surface-2: #18281b; --ink: #e8f2e6; --ink-2: #a3b8a0; --line: #243826; --line-2: #2f4831;
+  --brand: #6fcf5c; --brand-2: #8ddc78; --brand-ink: #0c1f0e; --accent: #a6dd78; --leaf: #6fcf5c; --violet: #b9a6f2; --violet-2: #a48cec; --side: #0a1a0d; --side-2: #143519; --side-ink: #e8f5e4; --side-mute: #8fb489;
   --ok: #5cc35f; --warn: #f0ad45; --crit: #f0687a; --info: #79a6f0; --mute: #9a94ad;
   --ok-bg: #16301a; --warn-bg: #3a2b10; --crit-bg: #3d1720; --info-bg: #162640; --mute-bg: #252036;
-  --c1: #a48cec; --c2: #8cc85a; --c3: #f5bb5c; --c4: #3fc9c1; --c5: #f07d9c; --c6: #79a6f0; --c7: #c4a4f2; --c8: #b8c564;
+  --c1: #6fcf5c; --c2: #a48cec; --c3: #f5bb5c; --c4: #3fc9c1; --c5: #f07d9c; --c6: #79a6f0; --c7: #c4a4f2; --c8: #b8c564;
   --t-violet: #a48cec; --t-vert: #6cd06a; --t-ambre: #f5bb5c; --t-sarcelle: #3fc9c1; --t-rose: #f07d9c; --t-bleu: #79a6f0;
   --shadow: 0 1px 2px rgba(0, 0, 0, .35); color-scheme: dark;
 }
@@ -436,3 +438,70 @@ ul.alertes small { display: inline; }
 #dz .zc-grid b { white-space: nowrap; }
 #dz .zc-grid small { white-space: nowrap; }
 #dz .zc-ca small { font: 400 .78rem var(--f-body); }
+
+/* ================= Thème ORIBA FOOD : vert dominant, touches de violet, blanc ; formes en feuille ================= */
+.t-lime { --tone: var(--t-lime); }
+/* Fond : blanc verdi avec de grandes formes douces (feuilles floues vert et violet) */
+body { background:
+  radial-gradient(620px 420px at 102% -6%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 62%),
+  radial-gradient(520px 380px at 30% 108%, color-mix(in srgb, var(--violet) 9%, transparent), transparent 60%),
+  radial-gradient(420px 320px at 75% 55%, color-mix(in srgb, var(--brand) 6%, transparent), transparent 65%),
+  var(--bg); background-attachment: fixed; }
+/* Barre latérale verte, avec des feuilles en filigrane */
+.side { background: radial-gradient(260px 220px at 110% 104%, rgba(140, 198, 63, .35), transparent 65%), radial-gradient(240px 200px at -20% 30%, rgba(106, 75, 176, .28), transparent 65%), linear-gradient(170deg, var(--side-2) 0%, var(--side) 62%); position: sticky; }
+.side::after { content: ""; position: absolute; right: -70px; bottom: 90px; width: 190px; height: 190px; border-radius: 0 100% 0 100%; border: 18px solid rgba(255, 255, 255, .045); transform: rotate(-12deg); pointer-events: none; }
+.brand-logo { border-radius: 22px 6px 22px 6px; box-shadow: 0 10px 24px rgba(0, 0, 0, .28); }
+.nav-g > span { color: #c4e3b7; }
+.nav a:hover { background: rgba(255, 255, 255, .08); }
+.nav a.on { background: linear-gradient(90deg, rgba(255, 255, 255, .2), rgba(255, 255, 255, .05)); box-shadow: inset 3px 0 0 var(--accent); border-radius: 14px 4px 14px 4px; color: #fff; }
+.nav a.on .ic { color: #c7ec9a; }
+.nav-plus { border-color: rgba(200, 236, 160, .35); }
+.me .av { background: linear-gradient(135deg, var(--accent), var(--brand)); }
+.top { background: color-mix(in srgb, #ffffff 82%, transparent); border-bottom-color: color-mix(in srgb, var(--accent) 25%, var(--line)); }
+/* Titres : violet du logo qui se fond dans le vert */
+.page-h h1 { background: linear-gradient(90deg, var(--violet) 0%, var(--violet-2) 35%, var(--brand) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* Boutons */
+.btn { border-radius: 10px; }
+.btn.primary { background: linear-gradient(135deg, var(--brand-2), var(--brand) 60%, #23701f); border-color: var(--brand); box-shadow: 0 6px 16px color-mix(in srgb, var(--brand) 32%, transparent); border-radius: 14px 5px 14px 5px; }
+.btn.primary:hover { background: linear-gradient(135deg, var(--brand), #23701f); }
+.seg { border-radius: 12px; }
+.seg button.on { background: linear-gradient(135deg, var(--brand-2), var(--brand)); color: #fff; }
+.seg.onglets { background: var(--surface); box-shadow: var(--shadow); }
+.seg.onglets button.on { border-radius: 10px; }
+/* Cartes : blanches, coins en feuille, ombre verte légère */
+.card { border-radius: 20px 8px 20px 8px; border-color: color-mix(in srgb, var(--accent) 22%, var(--line)); box-shadow: 0 1px 2px rgba(20, 60, 25, .05), 0 10px 26px rgba(20, 60, 25, .06); }
+.card:hover { box-shadow: 0 14px 32px rgba(20, 60, 25, .1); }
+.card > header h3::before { width: 10px; height: 10px; border-radius: 10px 2px 10px 2px; background: linear-gradient(135deg, var(--accent), var(--brand) 55%, var(--violet)); }
+/* Indicateurs : pastilles en forme de feuille */
+.kpi { border-radius: 20px 8px 20px 8px; border-color: color-mix(in srgb, var(--tone, var(--t-vert)) 18%, var(--line)); background: radial-gradient(160px 110px at 100% 0%, color-mix(in srgb, var(--tone, var(--t-vert)) 13%, transparent), transparent 70%), var(--surface); }
+.kpi-ic { border-radius: 16px 4px 16px 4px; background: linear-gradient(140deg, color-mix(in srgb, var(--tone, var(--t-vert)) 75%, #fff), var(--tone, var(--t-vert)) 45%, color-mix(in srgb, var(--tone, var(--t-vert)) 70%, #000)); }
+.kpi-l { color: color-mix(in srgb, var(--tone, var(--t-vert)) 45%, var(--ink-2)); }
+/* Cartes des dépôts */
+.zcard { border-radius: 22px 8px 22px 8px; border-top: 0; position: relative; overflow: hidden; background: radial-gradient(180px 120px at 105% -10%, color-mix(in srgb, var(--zc, var(--c1)) 16%, transparent), transparent 70%), var(--surface); }
+.zcard::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: linear-gradient(180deg, var(--zc, var(--c1)), color-mix(in srgb, var(--zc, var(--c1)) 40%, #fff)); }
+.zcard:hover { box-shadow: 0 14px 30px rgba(20, 60, 25, .13); }
+.bar { background: color-mix(in srgb, var(--accent) 16%, var(--line)); }
+.bar i { background: linear-gradient(90deg, var(--brand), var(--accent)); }
+/* Tableaux */
+.tbl th { background: color-mix(in srgb, var(--brand) 7%, var(--surface)); color: color-mix(in srgb, var(--brand) 55%, var(--ink-2)); }
+.tbl tbody tr.click:hover td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.tbl tfoot td { background: color-mix(in srgb, var(--violet) 5%, var(--surface)); }
+.tbl-wrap { border-radius: 12px 4px 12px 4px; }
+/* Tuiles de saisie et fichiers */
+.tuile { border-radius: 22px 8px 22px 8px; }
+.tuile-ic { border-radius: 14px 4px 14px 4px; background: linear-gradient(135deg, var(--accent), var(--brand)); color: #fff; }
+.tuile:nth-child(even) .tuile-ic { background: linear-gradient(135deg, var(--violet-2), var(--violet)); }
+.fichiers .fichier { border-radius: 22px 8px 22px 8px; border-left: 5px solid var(--brand); }
+.fichiers .fichier:nth-child(2) { border-left-color: var(--violet-2); } .fichiers .fichier:nth-child(3) { border-left-color: var(--accent); }
+/* Fenêtres, champs, pastilles */
+.modal { border-radius: 22px 8px 22px 8px; }
+.modal-h { background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 14%, var(--surface)), var(--surface)); }
+input:focus, select:focus, textarea:focus { border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); outline: none; }
+ul.alertes li { border-radius: 12px 4px 12px 4px; }
+/* Connexion et bandeau de démonstration */
+.auth { background: radial-gradient(900px 460px at 0% 0%, rgba(140, 198, 63, .35), transparent 60%), radial-gradient(800px 480px at 100% 100%, rgba(75, 46, 131, .22), transparent 60%), var(--bg); }
+.auth-card { border-radius: 26px 8px 26px 8px; border-top: 5px solid var(--brand); }
+.demo-band { background: linear-gradient(90deg, var(--brand), var(--accent)); }
+.hero { background: radial-gradient(600px 220px at 85% 0%, rgba(140, 198, 63, .45), transparent 60%), linear-gradient(120deg, #10391b 0%, #1f6a2a 55%, #4b2e83 100%); border-radius: 26px 8px 26px 8px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .top { background: color-mix(in srgb, var(--surface) 86%, transparent); } }
+:root[data-theme="dark"] .top { background: color-mix(in srgb, var(--surface) 86%, transparent); }

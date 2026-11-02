@@ -286,7 +286,7 @@ export function statutCreditPill(s) {
 }
 
 // ---------- Habillage dynamique des indicateurs ----------
-const TONES = ['t-violet', 't-vert', 't-sarcelle', 't-ambre', 't-bleu', 't-rose'];
+const TONES = ['t-vert', 't-violet', 't-lime', 't-sarcelle', 't-vert', 't-ambre'];
 const KPI_ICONS = [
   [/retard|expir|critique|anomal/i, 'alert', 't-rose'], [/plafond/i, 'gauge'], [/comptant/i, 'cash'], [/crédit/i, 'credit'], [/encaisse|rembours/i, 'wallet'],
   [/créance/i, 'receipt'], [/stock|lot/i, 'warehouse'], [/coût par carton|par carton/i, 'calc', 't-ambre'], [/carburant/i, 'fuel'], [/véhicule|parc/i, 'truck'],

@@ -1,0 +1,45 @@
+// Classeur journalier (fichier remis à l'utilisateur) : import complet sans rejet, puis réimport sans doublon
+const { chromium } = require('playwright'); const fs = require('fs'); const path = require('path');
+const CDN = process.env.CDN_DIR, OUT = process.env.OUT_DIR, F = process.env.JOURNALIER;
+const map = { 'chart.umd.min.js': 'chart.js/dist/chart.umd.js', 'xlsx.full.min.js': 'xlsx/dist/xlsx.full.min.js', 'jspdf.umd.min.js': 'jspdf/dist/jspdf.umd.min.js', 'jspdf.plugin.autotable.min.js': 'jspdf-autotable/dist/jspdf.plugin.autotable.min.js' };
+let echecs = 0; const verif = (ok, msg) => { console.log(`${ok ? '✓' : '✗'} ${msg}`); if (!ok) echecs++; };
+(async () => {
+  const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"></head><body>' + fs.readFileSync(path.join(__dirname, '../dist/demo.html'), 'utf8') + '</body></html>';
+  const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 1440, height: 1000 } }); const errs = [];
+  await ctx.route('**/*', (r) => { const u = r.request().url(); if (u.startsWith('http://erp.test/')) return r.fulfill({ contentType: 'text/html', body: html }); const f = Object.keys(map).find((k) => u.endsWith(k)); if (f) return r.fulfill({ contentType: 'application/javascript', body: fs.readFileSync(path.join(CDN, 'node_modules', map[f])) }); if (u.includes('fonts.g')) return r.fulfill({ contentType: 'text/css', body: '' }); return r.abort(); });
+  const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message)); p.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
+  await p.goto('http://erp.test/'); await p.waitForSelector('#lf', { timeout: 120000 });
+  await p.fill('[name=identifiant]', 'commercial'); await p.fill('[name=password]', 'Demo2026'); await p.click('#lf button[type=submit]'); await p.waitForSelector('.layout');
+  const D = () => p.evaluate(() => window.__ERP_DEBUG__());
+  const avant = await D();
+  const imp = async () => {
+    await p.keyboard.press('Escape').catch(() => {}); await p.waitForFunction(() => !document.querySelector('.modal'), null, { timeout: 10000 }).catch(() => {});
+    await p.evaluate(() => { location.hash = 'saisie-rapide'; }); await p.waitForTimeout(600);
+    await p.click('#f-circ'); await p.waitForSelector('.modal [data-f]', { state: 'attached' });
+    await p.setInputFiles('.modal [data-f]', F); await p.waitForSelector('.modal [data-b] table', { timeout: 60000 }); await p.waitForTimeout(400);
+    const t = await p.$$eval('.modal [data-b] tbody tr', (rs) => rs.map((r) => [...r.children].map((c) => c.textContent.trim())));
+    const rej = await p.$eval('.modal [data-b] details p', (x) => x.textContent).catch(() => '');
+    return { t, rej };
+  };
+  let { t, rej } = await imp();
+  console.log('  ', t.map((r) => r.join(' / ')).join(' ; '));
+  verif(t.every((r) => r[3] === '0') && !rej, `Contrôle : aucune ligne refusée${rej ? ' — ' + rej.slice(0, 300) : ''}`);
+  const n = (k) => Number(t.find((r) => r[0].startsWith(k))?.[1] || 0);
+  verif(n('2-Appro') === 2 && n('3-Remises') === 2 && n('4-Ventes') === 3 && n('6-Transferts') === 1 && n('5-Versements (versements)') === 1 && n('5-Versements (rembours') === 1, 'Toutes les lignes du jour sont reconnues (2 appro, 2 remises, 3 ventes, 1 versement, 1 remboursement, 1 transfert)');
+  await p.screenshot({ path: path.join(OUT, 'journalier-controle.png') });
+  await p.click('.modal [data-go]'); await p.waitForSelector('.modal .note.ok', { timeout: 120000 });
+  console.log('  ', (await p.textContent('.modal .note.ok')).replace(/\s+/g, ' ').slice(0, 900));
+  const apres = await D();
+  const sidi = apres.agents.find((a) => a.nom === 'Sidi Mohamed Baby');
+  verif(sidi && sidi.role_circuit === 'sous_agent', 'Agents de la liste créés et rattachés à leur dépôt');
+  verif(apres.ventes.length - avant.ventes.length === 3 && apres.circuit_mvts.length - avant.circuit_mvts.length === 5 && apres.versements.length - avant.versements.length === 1, `Enregistré : ${apres.ventes.length - avant.ventes.length} ventes, ${apres.circuit_mvts.length - avant.circuit_mvts.length} mouvements, ${apres.versements.length - avant.versements.length} versement`);
+  const idsAvant = new Set(avant.remboursements.map((r) => r.id));
+  const rb = apres.remboursements.filter((r) => !idsAvant.has(r.id) && r.statut === 'valide');
+  verif(rb.length === 1 && Number(rb[0].montant) === 10000 && apres.ventes.find((v) => v.id === rb[0].vente_id)?.mode === 'credit', 'Remboursement de la vente à crédit V001 enregistré (10 000 FCFA)');
+  const vr = apres.versements.find((v) => v.montant === 39750);
+  verif(vr && vr.beneficiaire === 'Oriba Rice', 'Versement « Argent pour : Oriba Rice » enregistré');
+  ({ t } = await imp());
+  verif(t.every((r) => r[1] === '0' && r[3] === '0'), `Même fichier réimporté : rien de nouveau (${t.map((r) => r[1]).join('/')})`);
+  verif(!errs.length, errs.length ? 'Erreurs : ' + errs.slice(0, 3).join(' | ') : 'Aucune erreur dans la page');
+  await b.close(); console.log(echecs ? `${echecs} échec(s)` : 'Tous les contrôles sont réussis'); process.exit(echecs ? 1 : 0);
+})();

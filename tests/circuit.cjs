@@ -64,7 +64,7 @@ const n = (s) => Number(String(s).replace(/[^\d,-]/g, '').replace(',', '.')) || 
   const f2 = path.join(OUT, 'circuit_jour2.xlsx'); XLSX.writeFile(wb, f2);
   t = await imp(f2);
   const aj = Object.fromEntries(t.map((r) => [r[0], n(r[1])]));
-  verif(aj['3-Dispatch'] === 1 && aj['4-Ventes'] === 1 && aj['5-Versements (versements)'] === 1 && aj['1-Appro grossistes'] === 0 && aj['2-Prises agents'] === 0, `Classeur du lendemain : seules les 3 nouvelles lignes sont proposées → ${JSON.stringify(aj)}`);
+  verif(aj['3-Remises agents'] === 1 && aj['4-Ventes'] === 1 && aj['5-Versements (versements)'] === 1 && aj['1-Appro grossistes'] === 0 && aj['2-Appro dépôts'] === 0, `Classeur du lendemain : seules les 3 nouvelles lignes sont proposées → ${JSON.stringify(aj)}`);
   await p.click('.modal [data-go]'); await p.waitForSelector('.modal [data-b] .note.ok', { timeout: 60000 });
   console.log('   ', (await p.textContent('.modal [data-b] .note.ok')).replace(/\s+/g, ' ').slice(0, 300));
   await p.keyboard.press('Escape'); await aller('circuit'); await dater('2026-11-01'); k = await kpis();
@@ -89,7 +89,7 @@ const n = (s) => Number(String(s).replace(/[^\d,-]/g, '').replace(',', '.')) || 
   await aller('circuit'); const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#c-mod')]);
   const fm = path.join(OUT, 'modele_circuit.xlsx'); await dl.saveAs(fm);
   const wm = XLSX.readFile(fm);
-  verif(['Grossistes', 'Agents-dépôts', 'Sous-agents', 'Clients', '1-Appro grossistes', '2-Prises agents', '3-Dispatch', '4-Ventes', '5-Versements'].every((s) => wm.SheetNames.includes(s)), `Modèle : ${wm.SheetNames.join(', ')}`);
+  verif(['Grossistes', 'Dépôts', 'Agents', 'Clients', '1-Appro grossistes', '2-Appro dépôts', '3-Remises agents', '4-Ventes', '5-Versements', '6-Transferts'].every((s) => wm.SheetNames.includes(s)), `Modèle : ${wm.SheetNames.join(', ')}`);
   t = await imp(fm);
   verif(t.every((r) => r[3] === '0'), `Modèle réimporté tel quel : aucun rejet (${t.map((r) => r[1]).join('/')} à ajouter = lignes d’exemple)`);
   // Plateforme vide (comme en production) : le classeur crée tout et donne les mêmes chiffres

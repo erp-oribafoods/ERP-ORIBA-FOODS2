@@ -46,7 +46,6 @@ const NAV = [
   ['Dépenses et logistique', [
     ['logistique', 'Logistique et charges', () => App.can('depenses'), onglets('logistique', [['log', 'Logistique et charges', () => App.can('depenses'), renderLogistique], ['pil', 'Pilotage des dépenses', () => App.can('depenses'), renderPilotage], ['val', 'Validation des dépenses', () => App.can('depenses', 'valider'), renderDepenses]])],
     ['budgets', 'Budgets', () => App.can('budgets'), renderBudgets],
-    ['cloture', 'Clôture mensuelle', () => App.can('cloture'), renderCloture],
   ]],
   ['Administration', [
     ['referentiels', 'Référentiels', () => App.can('referentiels'), renderReferentiels],
@@ -73,6 +72,7 @@ const CACHEES = [
   ['suivi-agents', 'Suivi des agents terrain', () => App.can('suivi'), renderSuivi],
   ['depenses', 'Saisie et validation', () => App.can('depenses'), renderDepenses],
   ['pilotage-depenses', 'Pilotage des dépenses', () => App.can('depenses'), renderPilotage],
+  ['cloture', 'Clôture mensuelle', () => App.can('cloture'), renderCloture],
   ['circuit-grossistes', 'Grossistes', () => App.can('circuit'), renderGrossistes],
   ['circuit-mouvements', 'Mouvements de cartons', () => App.can('circuit'), renderMouvements],
   ['stock', 'Stock confié', () => App.can('stock'), renderStock],

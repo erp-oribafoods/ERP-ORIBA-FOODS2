@@ -138,11 +138,10 @@ export function renderDepotsEssentiel(root) {
   const depots = (App.D.agents || []).filter((a) => a.role_circuit === 'depot' && a.actif !== false).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
   if (!depots.some((d) => d.id === p.depot)) p.depot = depots[0]?.id || '';
   const can = App.can('circuit', 'creer');
-  root.innerHTML = pageHead('Dépôts', 'Pour chaque dépôt : ses cartons, ses agents, leurs ventes et leurs objectifs.',
-    can && p.depot ? `<button class="btn primary" id="d-appro">${icon('plus')} Approvisionner ce dépôt</button><button class="btn" id="d-remise">${icon('plus')} Remettre à un agent</button><button class="btn" id="d-transf">${icon('truck')} Transférer à un autre dépôt</button>` : '') +
-    (depots.length ? `<div class="chips depot-chips">${depots.map((d) => `<button class="chip ${d.id === p.depot ? 'on' : ''}" data-d="${d.id}">${esc(d.nom)}</button>`).join('')}</div>` : noteVide()) + barre() +
-    '<section class="kpis k4" id="dk"></section><article class="card"><header><h3 id="dt-t">Agents du dépôt</h3></header><div id="dt"></div></article>';
-  $$('[data-d]', root).forEach((b) => b.addEventListener('click', () => { p.depot = b.dataset.d; renderDepotsEssentiel(root); }));
+  root.innerHTML = pageHead('Dépôts', 'Cliquez sur un dépôt pour voir ses agents. Chiffres de la période choisie.',
+    can && p.depot ? `<button class="btn primary" id="d-appro">${icon('plus')} Approvisionner un dépôt</button><button class="btn" id="d-remise">${icon('plus')} Remettre à un agent</button><button class="btn" id="d-transf">${icon('truck')} Transférer entre dépôts</button>` : '') +
+    (depots.length ? '' : noteVide()) + barre() +
+    '<section class="zgrid" id="dz"></section><article class="card" id="dt-c"><header><h3 id="dt-t">Agents du dépôt</h3></header><div id="dt"></div></article>';
   $('#d-appro', root)?.addEventListener('click', () => formMouvement('prise', p.depot));
   $('#d-remise', root)?.addEventListener('click', () => formMouvement('dispatch', p.depot));
   $('#d-transf', root)?.addEventListener('click', () => formMouvement('transfert', p.depot));
@@ -150,13 +149,27 @@ export function renderDepotsEssentiel(root) {
     $('.per-lib', root).textContent = libPer();
     if (!p.depot) return;
     const [du, au] = bornes(), C = contexte(App.D, App.I);
-    const d = situationDepots(C, du, au).find((x) => x.id === p.depot); if (!d) return;
-    $('#dk', root).innerHTML = [
-      kpi('Reçu par le dépôt', ctn(d.recu + d.recuTransfert), `Oriba Food ${fmtQ(d.recuFoods)} · Oriba Rice ${fmtQ(d.recuRice)} · grossistes ${fmtQ(d.recuGross)}${d.recuTransfert || d.transfere ? ` · d’autres dépôts ${fmtQ(d.recuTransfert)} · transféré ${fmtQ(d.transfere)}` : ''}`),
-      kpi('Vendu', ctn(d.venduReseau), `comptant ${fmtQ(d.vcReseau)} · crédit ${fmtQ(d.vkReseau)}`),
-      (C.stockConnu ? kpi('Stock fin', ctn(d.stockTotal), `au dépôt ${fmtQ(d.sf)} · chez les agents ${fmtQ(d.stockSous)}`, d.stockTotal < 0 ? 'crit' : '') : kpi('Stock fin', 'Non renseigné', 'Saisissez le stock de départ ou les approvisionnements')),
-      kpi('Reste à verser', fmtF(d.ecart), `à Oriba Food ${fmtF(d.resteFood)} · à Oriba Rice ${fmtF(d.resteRice)} · déjà versé ${fmtF(d.verse)}${d.prix ? ` · prix ${fmtN(d.prix)} FCFA/ctn` : ''}`, d.ecart > 0 ? 'crit' : 'ok'),
-    ].join('');
+    const tous = situationDepots(C, du, au);
+    const d = tous.find((x) => x.id === p.depot); if (!d) return;
+    // Une carte par dépôt : reçu, ventes, stock final, reste à verser, créances, clients
+    const ventesDe = (x) => { const ids = C.reseau(x.id); return C.ventes.filter((v) => ids.has(v.v.agent_id)); };
+    const cartes = tous.map((x) => {
+      const vs = ventesDe(x), vp = vs.filter((v) => v.v.date >= du && v.v.date <= au);
+      const clients = new Set(vs.map((v) => v.v.client_id).filter(Boolean)).size;
+      const nbRetard = creditsCircuit(C, au).filter((c) => C.reseau(x.id).has(c.agent_id) && c.statut === 'En retard').length;
+      return { ...x, ca: vp.reduce((s2, v) => s2 + num(v.montant), 0), clients, nbRetard };
+    });
+    cartes.sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { numeric: true }));
+    const maxCA = Math.max(1, ...cartes.map((x) => x.ca));
+    $('#dz', root).innerHTML = cartes.map((x, i) => `<button class="zcard ${x.id === p.depot ? 'on' : ''}" data-d="${x.id}" style="--zc: var(--c${(i % 8) + 1})">
+      <span class="zc-h"><b>${esc(x.nom)}</b>${x.nbRetard ? pill(`${x.nbRetard} crédit(s) en retard`, 'crit') : ''}</span>
+      <span class="zc-ca">${fmtF(x.ca)} <small class="muted">de ventes</small></span><span class="bar" title="Ventes de la période"><i style="width:${(x.ca / maxCA) * 100}%"></i></span>
+      <span class="zc-grid">
+        <span><small>Reçu par le dépôt</small><b>${fmtQ(x.recu + x.recuTransfert)} ctn</b></span><span><small>Ventes</small><b>${fmtQ(x.venduReseau)} ctn</b></span>
+        <span><small>Stock final</small><b class="${C.stockConnu && x.stockTotal < 0 ? 't-crit' : ''}">${C.stockConnu ? `${fmtQ(x.stockTotal)} ctn` : '—'}</b></span><span><small>Reste à verser</small><b class="${x.ecart > 0 ? 't-crit' : ''}">${fmtF(x.ecart)}</b></span>
+        <span><small>Créances</small><b class="${x.enRetard > 0 ? 't-crit' : ''}">${fmtF(x.enCours)}</b></span><span><small>Clients</small><b>${fmtN(x.clients)}</b></span>
+      </span></button>`).join('');
+    $$('#dz [data-d]', root).forEach((b) => b.addEventListener('click', () => { p.depot = b.dataset.d; draw(); $('#dt-c', root).scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
     $('#dt-t', root).textContent = `Agents de ${d.nom} — ${libPer()}`;
     const lignes = [{ ...d, nom: `${d.nom} (vente directe)`, recu: d.recu + d.recuTransfert, si: d.si, sf: d.sf, fonction: 'Dépôt', _depot: true }, ...d.sousAgents];
     new Table({ title: `Agents — ${d.nom}`, rows: lignes, sort: { k: 'objectif', dir: -1 }, pageSize: 30,

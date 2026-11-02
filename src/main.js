@@ -40,7 +40,7 @@ const NAV = [
   ['Suivi commercial', [
     ['agents', 'Agents et objectifs', () => App.can('ventes') || App.can('dashboard') || App.can('objectifs'), renderAgentsObjectifs],
     ['clients', 'Clients et grossistes', () => App.can('ventes') || App.can('creances') || App.can('dashboard') || App.can('circuit'), onglets('clients', [['cl', 'Clients', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderClients], ['gr', 'Grossistes', () => App.can('circuit'), renderGrossistes]])],
-    ['cartons', 'Cartons et stock', () => App.can('circuit') || App.can('stock'), onglets('cartons', [['mvts', 'Mouvements de cartons', () => App.can('circuit'), renderMouvements], ['stock', 'Stock confié aux clients', () => App.can('stock'), renderStock]])],
+    ['cartons', 'Mouvements de cartons', () => App.can('circuit'), renderMouvements],
     ['caisse', 'Versements et remboursements', () => App.can('circuit') || App.can('remboursements'), onglets('caisse', [['vers', 'Versements et caisse', () => App.can('circuit'), renderVersements], ['remb', 'Remboursements des crédits', () => App.can('remboursements'), renderRemboursements]])],
     ['suivi-agents', 'Suivi des agents terrain', () => App.can('suivi'), renderSuivi],
     ['terrain', 'Zones et équipes', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderTerrain],

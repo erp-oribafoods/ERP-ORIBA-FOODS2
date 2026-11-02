@@ -430,3 +430,9 @@ ul.alertes small { display: inline; }
 .tbl tfoot td { position: sticky; bottom: 0; z-index: 2; }
 .modal .tbl-wrap { max-height: 55vh; }
 @media (max-width: 700px) { .tbl-wrap { max-height: calc(100dvh - 130px); } }
+.zcard.on { border-color: var(--zc, var(--brand)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--zc, var(--brand)) 45%, transparent), 0 12px 28px rgba(42, 28, 78, .12); }
+#dz { margin-bottom: 14px; }
+#dz { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+#dz .zc-grid b { white-space: nowrap; }
+#dz .zc-grid small { white-space: nowrap; }
+#dz .zc-ca small { font: 400 .78rem var(--f-body); }

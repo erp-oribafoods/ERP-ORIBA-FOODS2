@@ -91,7 +91,7 @@ export const DEFAULT_ROLES = [
 ];
 
 export const DEFAULT_PARAMS = {
-  plafond_cartons_client: 1000,
+  plafond_cartons_client: 1000, plafond_creances_cartons: 0, seuil_alerte_creance_jours: 7,
   seuils_plafond: [75, 90, 100],
   blocage_credit_depassement: false,
   delai_paiement_jours: 30,
@@ -111,6 +111,8 @@ export const DEFAULT_PARAMS = {
 
 export const PARAM_DEFS = [
   { k: 'plafond_cartons_client', l: 'Plafond de créances par client (cartons)', t: 'number', g: 'Créances' },
+  { k: 'plafond_creances_cartons', l: 'Plafond global des créances de la force de vente (cartons)', t: 'number', g: 'Créances' },
+  { k: 'seuil_alerte_creance_jours', l: 'Seuil d’alerte des créances en retard (jours)', t: 'number', g: 'Créances' },
   { k: 'seuils_plafond', l: "Seuils d'alerte du plafond (%)", t: 'list', g: 'Créances' },
   { k: 'blocage_credit_depassement', l: 'Bloquer les nouveaux crédits au-delà du plafond', t: 'bool', g: 'Créances' },
   { k: 'delai_paiement_jours', l: 'Délai de paiement par défaut (jours)', t: 'number', g: 'Créances' },

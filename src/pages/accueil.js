@@ -9,10 +9,15 @@ import { ouvrirMiseAJour, peutMettreAJour } from '../lib/majTB.js';
 import { peutImporter, ouvrirImport } from '../lib/importer.js';
 import { today, addDays, num } from '../../shared/logic.js';
 
-const P = () => (App.filters.essentiel = App.filters.essentiel || { per: 'jour', date: today(), depot: '' });
+const P = () => (App.filters.essentiel = App.filters.essentiel || { per: 'tout', date: today(), du: '', au: today(), depot: '' });
+// Première vente enregistrée (vue « Tout »)
+const premiereVente = () => (App.D.ventes || []).reduce((m, v) => (v.statut === 'validee' && v.date < m ? v.date : m), today());
 function bornes() {
   const p = P(), d = p.date;
   if (p.per === 'semaine') { const l = lundi(d), f = addDays(l, 6); return [l, f > today() ? today() : f]; }
+  if (p.per === 'annee') return [`${d.slice(0, 4)}-01-01`, `${d.slice(0, 4)}-12-31` > today() ? today() : `${d.slice(0, 4)}-12-31`];
+  if (p.per === 'tout') return [premiereVente(), today()];
+  if (p.per === 'periode') { const du = p.du || premiereVente(), au = p.au || today(); return du <= au ? [du, au] : [au, du]; }
   if (p.per === 'mois') { const l = `${d.slice(0, 7)}-01`; const [y, m] = d.split('-').map(Number); const f = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); return [l, f > today() ? today() : f]; }
   return [d, d];
 }
@@ -25,13 +30,18 @@ const nomDepot = (id) => nm.agent(id);
 
 function barre() {
   const p = P();
-  return `<div class="filters per-bar"><div class="seg" role="group">${[['jour', 'Jour'], ['semaine', 'Semaine'], ['mois', 'Mois']].map(([k, l]) => `<button data-per="${k}" class="${p.per === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-    <label class="ff"><span>Date</span><input type="date" id="e-date" value="${p.date}" max="${today()}"></label><span class="muted small per-lib"></span></div>`;
+  return `<div class="filters per-bar"><div class="seg" role="group">${[['jour', 'Jour'], ['semaine', 'Semaine'], ['mois', 'Mois'], ['annee', 'Année'], ['tout', 'Tout'], ['periode', 'Période']].map(([k, l]) => `<button data-per="${k}" class="${p.per === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <label class="ff per-date" ${['tout', 'periode'].includes(p.per) ? 'hidden' : ''}><span>Date</span><input type="date" id="e-date" value="${p.date}" max="${today()}"></label>
+    <label class="ff per-du" ${p.per === 'periode' ? '' : 'hidden'}><span>Du</span><input type="date" id="e-du" value="${p.du || premiereVente()}" max="${today()}"></label>
+    <label class="ff per-du" ${p.per === 'periode' ? '' : 'hidden'}><span>Au</span><input type="date" id="e-au" value="${p.au || today()}" max="${today()}"></label><span class="muted small per-lib"></span></div>`;
 }
 function lierBarre(root, draw) {
   const p = P();
-  $$('[data-per]', root).forEach((b) => b.addEventListener('click', () => { p.per = b.dataset.per; $$('[data-per]', root).forEach((x) => x.classList.toggle('on', x === b)); draw(); }));
+  const vis = () => { $$('.per-date', root).forEach((x) => { x.hidden = ['tout', 'periode'].includes(p.per); }); $$('.per-du', root).forEach((x) => { x.hidden = p.per !== 'periode'; }); };
+  $$('[data-per]', root).forEach((b) => b.addEventListener('click', () => { p.per = b.dataset.per; $$('[data-per]', root).forEach((x) => x.classList.toggle('on', x === b)); vis(); draw(); }));
   $('#e-date', root).addEventListener('change', (e) => { p.date = e.target.value || today(); draw(); });
+  $('#e-du', root)?.addEventListener('change', (e) => { p.du = e.target.value; draw(); });
+  $('#e-au', root)?.addEventListener('change', (e) => { p.au = e.target.value || today(); draw(); });
 }
 const aucunDepot = () => (App.D.agents || []).every((a) => a.role_circuit !== 'depot');
 const noteVide = () => `<div class="note warn">Aucun dépôt n’est encore enregistré. Allez dans <a href="#saisie-rapide">Saisie et import</a> pour importer le classeur, ou déclarez les dépôts dans Référentiels.</div>`;
@@ -48,6 +58,7 @@ export function renderAccueil(root) {
   root.innerHTML = pageHead(`${h < 12 ? 'Bonjour' : 'Bonsoir'}${qui ? ` ${qui}` : ''} 👋`, `${u.role_nom ? `${u.role_nom} · ` : ''}${jour.charAt(0).toUpperCase() + jour.slice(1)}. Bienvenue sur l’ERP ORIBA : voici l’essentiel de l’activité.`,
     App.can('circuit', 'creer') ? `<a class="btn primary" href="#saisie-rapide">${icon('plus')} Saisir ou importer</a>` : '') + (aucunDepot() && App.can('circuit') ? noteVide() : '') + barre() +
     `<section class="kpis k3" id="ek"></section>
+     <h3 class="sec-t">Contrôle des créances</h3><section class="kpis k3 kpis-ctrl" id="ek2"></section>
      <div class="grid2 acc-graph" id="eg">
        <article class="card"><header><h3>Évolution des ventes</h3><span class="muted small" id="eg-l"></span></header><div class="cv h260"><canvas id="g-ventes"></canvas></div></article>
        <article class="card"><header><h3>Objectif du mois par dépôt</h3><span class="muted small">cartons vendus / objectif</span></header><div class="cv h260"><canvas id="g-obj"></canvas></div></article>
@@ -91,6 +102,19 @@ export function renderAccueil(root) {
         : kpi('Stock chez les dépôts', 'Non renseigné', 'Saisissez le stock de départ ou les approvisionnements des dépôts'),
       kpi('Stock chez les agents', ctn(stA), `agents déployés sur les marchés · total réseau ${ctn(stG + stD + stA)}`, stA < 0 ? 'warn' : ''),
     ].join('');
+    // Contrôle des créances (comme le TB des équipes) : plafond global, retards, clients débiteurs
+    const plafond = num(App.I.p.plafond_creances_cartons), seuil = num(App.I.p.seuil_alerte_creance_jours) || 7;
+    const qteCr = S(cr, 'cartonsRestants'), util = plafond > 0 ? (qteCr / plafond) * 100 : null;
+    const nbRetard = retard.length, nbSeuil = retard.filter((c) => c.joursRetard > seuil).length;
+    const debiteurs = new Set(cr.map((c) => c.client_id).filter(Boolean)).size;
+    $('#ek2', root).innerHTML = [
+      kpi('Quantité en créance', ctn(qteCr), `${cr.length} crédit(s) non soldé(s)`),
+      kpi('Plafond des créances', plafond ? ctn(plafond) : 'Non défini', plafond ? `utilisé à ${fmtN(util, 1)} %` : 'À définir dans Paramètres > Créances', util >= 100 ? 'crit' : util >= 80 ? 'warn' : ''),
+      kpi('Statut du plafond', util === null ? '—' : util >= 100 ? '🚨 Dépassé' : util >= 80 ? '⚠️ Proche' : '✅ Normal', util === null ? '' : `${fmtQ(Math.max(0, plafond - qteCr))} ctn de marge`, util >= 100 ? 'crit' : util >= 80 ? 'warn' : 'ok'),
+      kpi('Créances en retard', fmtN(nbRetard), `${fmtF(S(retard, 'solde'))}`, nbRetard ? 'crit' : 'ok'),
+      kpi(`Retard de plus de ${seuil} jours`, fmtN(nbSeuil), 'crédits à relancer en priorité', nbSeuil ? 'crit' : 'ok'),
+      kpi('Clients débiteurs actifs', fmtN(debiteurs), 'clients avec un solde à rembourser'),
+    ].join('');
     graphiques(root, C, dep, du, au);
     new Table({ title: `Dépôts — ${libPer()}`, rows: dep, sort: { k: 'nom', dir: 1 }, pageSize: 20, exportable: true, onRow: (r) => { P().depot = r.id; App.go('depots'); },
       foot: (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : ['siTotal', 'recuFoods', 'recuRice', 'recuGross', 'recuTransfert', 'transfere', 'venduReseau', 'stockTotal', 'enCours', 'resteFood', 'resteRice'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + num(r[c.k]), 0))}</b>` : ''),
@@ -130,7 +154,10 @@ function graphiques(root, C, dep, du, au) {
   const pal = palette();
   const debut = du === au ? addDays(au, -13) : du;           // en vue « Jour » : les 14 derniers jours
   const jours = []; for (let d = debut; d <= au; d = addDays(d, 1)) jours.push(d);
-  const parJour = (l, f) => { const m = new Map(); for (const x of l) m.set(f(x).date, (m.get(f(x).date) || 0) + num(f(x).val)); return m; };
+  // Longue période : un point par mois au lieu d'un par jour
+  const parMois = jours.length > 62, cle = (d) => (parMois ? d.slice(0, 7) : d);
+  if (parMois) { const m = [...new Set(jours.map(cle))]; jours.length = 0; jours.push(...m); }
+  const parJour = (l, f) => { const m = new Map(); for (const x of l) m.set(cle(f(x).date), (m.get(cle(f(x).date)) || 0) + num(f(x).val)); return m; };
   const vC = parJour(C.ventes.filter((x) => x.v.mode === 'comptant' && x.v.date >= debut && x.v.date <= au), (x) => ({ date: x.v.date, val: x.montant }));
   const vK = parJour(C.ventes.filter((x) => x.v.mode === 'credit' && x.v.date >= debut && x.v.date <= au), (x) => ({ date: x.v.date, val: x.montant }));
   const enc = parJour(C.rembs.filter((r) => r.date >= debut && r.date <= au), (r) => ({ date: r.date, val: r.montant }));
@@ -140,7 +167,7 @@ function graphiques(root, C, dep, du, au) {
   $('#eg', root).hidden = vide; $('#eg-vide', root).hidden = !vide;
   if (vide) return;
   $('#eg-l', root).textContent = `du ${fmtD(debut)} au ${fmtD(au)}`;
-  chart($('#g-ventes', root), { type: 'bar', stacked: true, data: { labels: jours.map((d) => fmtD(d).slice(0, 5)), datasets: [
+  chart($('#g-ventes', root), { type: 'bar', stacked: true, data: { labels: jours.map((d) => (parMois ? `${['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'][+d.slice(5, 7) - 1]} ${d.slice(2, 4)}` : fmtD(d).slice(0, 5))), datasets: [
     { label: 'Ventes au comptant', data: jours.map((d) => vC.get(d) || 0), backgroundColor: pal[0], borderRadius: 3, stack: 'v' },
     { label: 'Ventes à crédit', data: jours.map((d) => vK.get(d) || 0), backgroundColor: pal[2], borderRadius: 3, stack: 'v' },
     { type: 'line', label: 'Encaissements sur crédits', data: jours.map((d) => enc.get(d) || 0), borderColor: pal[1], backgroundColor: pal[1], tension: 0.3, pointRadius: 2, borderWidth: 2, stack: 'e' }] } });

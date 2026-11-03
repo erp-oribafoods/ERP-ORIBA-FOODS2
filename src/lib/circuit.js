@@ -169,7 +169,7 @@ export function serie(C, date, n = 7) {
 export function creditsCircuit(C, date, { tous = false } = {}) {
   const ids = C.reseauTous();
   return C.ventes.filter((x) => x.v.mode === 'credit' && (tous || ids.has(x.v.agent_id)) && x.v.date <= date).map((x) => ({ x, ci: creditInfo(x.v, C.I, date) }))
-    .filter((c) => c.ci.solde > 0).map(({ x, ci }) => ({ id: x.v.id, numero: x.v.numero, date: x.v.date, echeance: x.v.echeance, client_id: x.v.client_id, agent_id: x.v.agent_id, montant: ci.montant, rembourse: ci.rembourse, solde: ci.solde, statut: ci.statut, joursRetard: ci.joursRetard,
+    .filter((c) => c.ci.solde > 0).map(({ x, ci }) => ({ id: x.v.id, numero: x.v.numero, date: x.v.date, echeance: x.v.echeance, client_id: x.v.client_id, agent_id: x.v.agent_id, montant: ci.montant, rembourse: ci.rembourse, solde: ci.solde, cartonsRestants: ci.cartonsRestants, statut: ci.statut, joursRetard: ci.joursRetard,
       proche: ci.statut !== 'En retard' && x.v.echeance && x.v.echeance >= date && (Date.parse(x.v.echeance) - Date.parse(date)) / 86400000 <= 2 }));
 }
 

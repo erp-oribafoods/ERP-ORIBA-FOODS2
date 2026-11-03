@@ -19,7 +19,8 @@ function iso(v) {
   m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
 }
 const FEUILLES = { grossistes: /^grossistes$/i, depots: /^(agents?[\s-]*)?d[ée]p[oô]ts?$/i, sous: /^(sous[\s-]*)?agents?$/i, clients: /^clients?/i, params: /^param/i,
-  appro: /^1\s*[-–]?\s*appro/i, prise: /^2\s*[-–]?\s*(prise|appro)/i, dispatch: /^3\s*[-–]?\s*(dispatch|remise)/i, ventes: /^4\s*[-–]?\s*vente/i, versements: /^5\s*[-–]?\s*versement/i, transfert: /^6\s*[-–]?\s*transfert/i };
+  appro: /^1\s*[-–]?\s*appro/i, prise: /^2\s*[-–]?\s*(prise|appro)/i, dispatch: /^3\s*[-–]?\s*(dispatch|remise)/i, ventes: /^4\s*[-–]?\s*vente/i, versements: /^5\s*[-–]?\s*versement/i, transfert: /^6\s*[-–]?\s*transfert/i,
+  depenses: /^7\s*[-–]?\s*d[ée]pense/i, objectifs: /^8\s*[-–]?\s*objectif/i, budgets: /^9\s*[-–]?\s*budget/i };
 const feuille = (wb, re) => wb.SheetNames.find((n) => re.test(n.trim()));
 export const estClasseurCircuit = (wb) => !!(feuille(wb, FEUILLES.depots) && (feuille(wb, FEUILLES.prise) || feuille(wb, FEUILLES.dispatch) || feuille(wb, FEUILLES.ventes)));
 
@@ -27,7 +28,7 @@ export const estClasseurCircuit = (wb) => !!(feuille(wb, FEUILLES.depots) && (fe
 function lire(wb, re, cols) {
   const n = feuille(wb, re); if (!n) return [];
   const rows = window.XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: '', raw: true });
-  const h = rows.findIndex((r, i) => i < 12 && r.some((c) => ['code', 'date', 'produit'].includes(K(c))));
+  const h = rows.findIndex((r, i) => i < 12 && r.some((c) => ['code', 'date', 'produit', 'mois'].includes(K(c))));
   if (h < 0) return [];
   const head = rows[h].map(K);
   const idx = Object.fromEntries(Object.entries(cols).map(([k, al]) => [k, al.reduce((f, a) => (f >= 0 ? f : head.findIndex((c) => c === a || c.startsWith(a))), -1)]));
@@ -54,7 +55,22 @@ const C_JOURNAUX = {
   transfert: { date: ['date'], de: ['depot_qui_envoie', 'de_', 'depot_depart'], vers: ['depot_qui_recoit', 'vers', 'depot_arrivee'], produit: ['produit'], cartons: ['cartons'], observation: ['observation'] },
   ventes: { date: ['date'], vendeur: ['vendeur'], client: ['client'], produit: ['produit'], cartons: ['cartons'], prix: ['prix'], mode: ['mode'], echeance: ['echeance'], numero: ['n_vente', 'no_vente', 'numero'] },
   versements: { date: ['date'], par: ['verse_par'], objet: ['objet'], numero: ['n_vente', 'no_vente'], lieu: ['lieu'], grossiste: ['grossiste'], montant: ['montant'], pour: ['argent_pour', 'pour', 'beneficiaire'] },
+  depenses: { date: ['date'], equipe: ['equipe', 'depot', 'zone'], nature: ['nature', 'categorie'], montant: ['montant'], beneficiaire: ['beneficiaire'], vehicule: ['vehicule', 'immatriculation'], piece: ['n_piece', 'no_piece', 'piece', 'reference'], description: ['description', 'motif', 'observation'] },
+  objectifs: { mois: ['mois'], cible: ['agent', 'equipe', 'cible'], cartons: ['objectif_cartons', 'objectif'] },
+  budgets: { mois: ['mois'], equipe: ['equipe', 'depot', 'zone'], nature: ['nature', 'categorie'], montant: ['budget', 'montant'] },
 };
+const MOIS_FR = ['janv', 'fevr', 'mars', 'avr', 'mai', 'juin', 'juil', 'aout', 'sept', 'oct', 'nov', 'dec'];
+// Mois : 11/2026, 2026-11, une date du mois ou « novembre 2026 »
+function moisDe(v) {
+  if (vide(v)) return null;
+  if (v instanceof Date || typeof v === 'number') return iso(v)?.slice(0, 7) || null;
+  const s = cleNom(v);
+  let m = s.match(/^(\d{1,2})\D+(\d{4})$/); if (m && +m[1] >= 1 && +m[1] <= 12) return `${m[2]}-${m[1].padStart(2, '0')}`;
+  m = s.match(/^(\d{4})\D+(\d{1,2})$/); if (m && +m[2] >= 1 && +m[2] <= 12) return `${m[1]}-${m[2].padStart(2, '0')}`;
+  const d = iso(v); if (d) return d.slice(0, 7);
+  m = s.match(/^([a-z]+)\D*(\d{4})$/); if (m) { const i = MOIS_FR.findIndex((x) => m[1].startsWith(x)); if (i >= 0) return `${m[2]}-${String(i + 1).padStart(2, '0')}`; }
+  return null;
+}
 
 // Correspondance fichier → plateforme
 function referentiels() {
@@ -64,7 +80,15 @@ function referentiels() {
   const parNom = (l, n) => { const r = actifs(l).filter((x) => cleNom(x.nom) === cleNom(n)); return r.length === 1 ? r[0] : null; };
   const equipe = (z) => { const k = cleNom(z).replace(/^axe /, '').replace(/^zone /, ''); return actifs(D.equipes).find((e) => cleNom(e.nom) === k || cleNom(e.code) === k) || null; };
   const produit = (p) => actifs(D.produits).find((x) => cleNom(x.nom) === cleNom(p) || (x.code && cleNom(x.code) === cleNom(p))) || null;
-  return { D, parCode, parNom, equipe, produit };
+  // Nature de dépense : libellé ou code, ou mot-clé (salaires, carburant, vidange, réparation, assurance…)
+  const categorie = (n) => {
+    const k = cleNom(n); if (!k) return null;
+    const l = actifs(D.categories_depense);
+    return l.find((c) => cleNom(c.libelle) === k || cleNom(c.code) === k) || l.find((c) => cleNom(c.libelle).startsWith(k) || k.startsWith(cleNom(c.libelle)))
+      || l.find((c) => cleNom(c.libelle).split(' ').some((w) => w.length > 4 && k.split(' ').some((x) => x.length > 4 && x.slice(0, 5) === w.slice(0, 5)))) || null;
+  };
+  const vehicule = (v) => actifs(D.vehicules).find((x) => K(x.immatriculation) === K(v)) || null;
+  return { D, parCode, parNom, equipe, produit, categorie, vehicule };
 }
 
 export function analyseCircuit(wb) {
@@ -133,7 +157,7 @@ export function analyseCircuit(wb) {
   const cle = generateurCles();
   const deja = { mvts: new Set((R.D.circuit_mvts || []).map((m) => m.ref_externe).filter(Boolean)), ventes: new Set((R.D.ventes || []).map((v) => v.ref_externe).filter(Boolean)), vers: new Set((R.D.versements || []).map((v) => v.ref_externe).filter(Boolean)),
     rembs: new Set((R.D.remboursements || []).filter((r) => r.statut === 'valide').map((r) => r.reference).filter(Boolean)) };
-  const res = { appro: [], prise: [], dispatch: [], transfert: [], ventes: [], versements: [], remboursements: [] };
+  const res = { appro: [], prise: [], dispatch: [], transfert: [], ventes: [], versements: [], remboursements: [], depenses: [], objectifs: [], budgets: [] };
   const push = (k, r, msgs, ref2, data, apercu, set) => res[k].push({ ligne: r._ligne, statut: msgs.length ? 'rejet' : set.has(ref2) ? 'identique' : 'ok', msg: msgs.join(' ; '), ref: ref2, data, apercu });
   const prodOk = (r, msgs) => { const p = R.produit(r.produit); if (!p) msgs.push(`Produit « ${t(r.produit)} » inconnu`); return p; };
   const base = (r, msgs) => { const d = iso(r.date); if (!d) msgs.push('Date illisible'); else if (d > today()) msgs.push('Date dans le futur'); const q = num(r.cartons); if (!(q > 0)) msgs.push('Cartons manquants'); return { d, q }; };
@@ -198,15 +222,53 @@ export function analyseCircuit(wb) {
       push('versements', r, msgs, ref2, { d, m, r, regl, lieuG }, `${fmtD(d)} · ${t(r.par)} · ${regl ? 'règlement grossiste' : 'ventes comptant'} · ${fmtN(m)} FCFA${lieuG ? ' chez ' + t(r.grossiste) : ''}`, deja.vers);
     }
   }
+  // Équipe d'une dépense ou d'un budget : nom de l'équipe / zone, ou nom d'un dépôt (son équipe)
+  const equipeDe = (x) => R.equipe(x) || (() => { const a = (A.get(K(x)) || S.get(K(x)))?.ex || R.parCode(R.D.agents, x) || R.parNom(R.D.agents, x); return a ? (R.D.equipes || []).find((e) => e.id === a.equipe_id) : null; })();
+  // 7-Dépenses : une dépense déjà enregistrée (même date, nature, équipe, montant, bénéficiaire) n'est pas reprise
+  const KD = (d, c, e, m, b) => [d, c, e, Number(m), cleNom(b)].join('|');
+  const depEx = new Map();
+  for (const x of R.D.depenses || []) if (!['annulee', 'rejetee'].includes(x.statut)) { const k = KD(x.date, x.categorie_id, x.equipe_id, x.montant, x.beneficiaire); depEx.set(k, (depEx.get(k) || 0) + 1); }
+  const depVu = new Map();
+  for (const r of J.depenses || []) {
+    const msgs = []; const d = iso(r.date); if (!d) msgs.push('Date illisible'); else if (d > today()) msgs.push('Date dans le futur');
+    const m = num(r.montant); if (!(m > 0)) msgs.push('Montant manquant');
+    const eq = equipeDe(r.equipe); if (!eq) msgs.push(`Équipe ou dépôt « ${t(r.equipe)} » inconnu`);
+    const cat = R.categorie(r.nature); if (!cat) msgs.push(`Nature de dépense « ${t(r.nature)} » inconnue`);
+    const veh = t(r.vehicule) ? R.vehicule(r.vehicule) : null; if (t(r.vehicule) && !veh) msgs.push(`Véhicule « ${t(r.vehicule)} » inconnu`);
+    const k = KD(d, cat?.id, eq?.id, m, r.beneficiaire); const n = (depVu.get(k) || 0) + 1; depVu.set(k, n);
+    res.depenses.push({ ligne: r._ligne, statut: msgs.length ? 'rejet' : n <= (depEx.get(k) || 0) ? 'identique' : 'ok', msg: msgs.join(' ; '), ref: k, data: { d, m, eq, cat, veh, r, n }, apercu: `${fmtD(d)} · ${eq?.nom || t(r.equipe)} · ${cat?.libelle || t(r.nature)} · ${fmtN(m)} FCFA` });
+  }
+  // 8-Objectifs : agent (ou équipe) et objectif du mois en cartons
+  for (const r of J.objectifs || []) {
+    const msgs = []; const mo = moisDe(r.mois); if (!mo) msgs.push('Mois illisible (écrivez 11/2026)');
+    const q = num(r.cartons); if (vide(r.cartons)) continue; if (!(q >= 0)) msgs.push('Objectif illisible');
+    const ag = (A.get(K(r.cible)) || S.get(K(r.cible)))?.ex || R.parCode(R.D.agents, r.cible) || trouverAgent(r.cible, (R.D.agents || []).filter((x) => x.actif !== false));
+    const eq = ag ? null : R.equipe(r.cible);
+    const aCreer = !ag && !eq && (A.get(K(r.cible))?.data || S.get(K(r.cible))?.data || [...S.values(), ...A.values()].find((x) => x.data && cleNom(x.data.nom) === cleNom(r.cible)));
+    if (!ag && !eq && !aCreer) msgs.push(`Agent ou équipe « ${t(r.cible)} » introuvable`);
+    const axe = ag ? 'agent' : 'equipe', cible = ag?.id || eq?.id;
+    const ex = (R.D.objectifs || []).find((o) => o.actif !== false && o.mois === mo && o.axe === axe && o.cible_id === cible && !o.produit_id);
+    res.objectifs.push({ ligne: r._ligne, statut: msgs.length ? 'rejet' : ex && Number(ex.objectif_cartons) === q ? 'identique' : 'ok', msg: msgs.join(' ; '), data: { mo, q, axe, cible }, apercu: `${mo || t(r.mois)} · ${ag?.nom || eq?.nom || t(r.cible)} · ${fmtN(q)} ctn` });
+  }
+  // 9-Budgets : budget du mois par équipe et nature
+  for (const r of J.budgets || []) {
+    const msgs = []; const mo = moisDe(r.mois); if (!mo) msgs.push('Mois illisible (écrivez 11/2026)');
+    if (!App.can('budgets', 'modifier')) msgs.push('Votre profil ne peut pas modifier les budgets');
+    const m = num(r.montant); if (vide(r.montant)) continue; if (!(m >= 0)) msgs.push('Montant illisible');
+    const eq = equipeDe(r.equipe); if (!eq) msgs.push(`Équipe ou dépôt « ${t(r.equipe)} » inconnu`);
+    const cat = t(r.nature) ? R.categorie(r.nature) : null; if (t(r.nature) && !cat) msgs.push(`Nature de dépense « ${t(r.nature)} » inconnue`);
+    const ex = (R.D.budgets || []).find((b) => b.actif !== false && b.mois === mo && (b.equipe_id || null) === (eq?.id || null) && (b.categorie_id || null) === (cat?.id || null) && !b.vehicule_id);
+    res.budgets.push({ ligne: r._ligne, statut: msgs.length ? 'rejet' : ex && Number(ex.montant) === m ? 'identique' : 'ok', msg: msgs.join(' ; '), data: { mo, m, eq, cat }, apercu: `${mo || t(r.mois)} · ${eq?.nom || t(r.equipe)} · ${cat?.libelle || t(r.nature) || 'toutes natures'} · ${fmtN(m)} FCFA` });
+  }
   return { L, J, G, A, S, CL, ref, res, depart };
 }
 
 const PAQUET = 300;
 async function envoyer(type, fichier, rows) {
-  const tot = { integrees: 0, deja: 0, refuses: [] };
+  const tot = { integrees: 0, deja: 0, refuses: [], brouillons: [] };
   for (let i = 0; i < rows.length; i += PAQUET) {
     const out = await App.api.call('import.run', { type, mode: 'courant', fichier, rows: rows.slice(i, i + PAQUET), stats: { classeur_circuit: true } });
-    tot.integrees += out.integrees.length; tot.deja += out.deja?.length || 0; tot.refuses.push(...out.refuses);
+    tot.integrees += out.integrees.length; tot.deja += out.deja?.length || 0; tot.refuses.push(...out.refuses); tot.brouillons.push(...(out.brouillons || []));
   }
   return tot;
 }
@@ -214,7 +276,7 @@ async function envoyer(type, fichier, rows) {
 // Enregistrement dans l'ordre : référentiels, mouvements, ventes, versements, remboursements
 export async function appliquerCircuit(wb, fname, etape = () => {}) {
   let A = analyseCircuit(wb);
-  const out = { refs: 0, refus: [] };
+  const out = { refs: 0, refus: [], brouillons: [] };
   const sauver = async (table, rows, lib) => {
     if (!rows.length) return;
     etape(lib);
@@ -267,7 +329,16 @@ export async function appliquerCircuit(wb, fname, etape = () => {}) {
     const parRef = new Map((App.D.ventes || []).filter((v) => v.ref_externe).map((v) => [v.ref_externe, v.id]));
     R.remb = await envoyer('remboursements', `${fname} — 5-Versements (remboursements)`, nouv('remboursements').map((x) => ({ ligne: x.ligne, data: { vente_id: parRef.get(x.data.vref), date: x.data.d, montant: x.data.m, mode: 'Espèces', reference: x.ref, commentaire: `Classeur du circuit — vente ${t(x.data.r.numero)}`, lieu: x.data.lieuG ? 'grossiste' : 'caisse', lieu_grossiste_id: x.data.lieuG ? g(x.data.r.grossiste) : null, verse_par: ag(x.data.r.par) || null } })));
   }
+  if (nouv('depenses').length) {
+    etape('dépenses');
+    R.depenses = await envoyer('depenses', `${fname} — 7-Dépenses`, nouv('depenses').map((x) => { const { d, m, eq, cat, veh, r } = x.data; const piece = t(r.piece); const ben = t(r.beneficiaire);
+      return { ligne: x.ligne, occ: x.data.n, data: { date: d, categorie_id: cat.id, equipe_id: eq.id, zone_id: eq.zone_id || null, montant: m, beneficiaire: ben || null, vehicule_id: veh?.id || null, reference_piece: piece || null, sans_piece: true,
+        description: t(r.description) || `${cat.libelle}${ben ? ' — ' + ben : ''} (classeur journalier)` } }; }));
+  }
+  if (nouv('objectifs').length) { etape('objectifs'); R.objectifs = await envoyer('objectifs', `${fname} — 8-Objectifs`, nouv('objectifs').map((x) => ({ ligne: x.ligne, data: { mois: x.data.mo, axe: x.data.axe, cible_id: x.data.cible, objectif_cartons: x.data.q } }))); }
+  if (nouv('budgets').length) { etape('budgets'); R.budgets = await envoyer('budgets', `${fname} — 9-Budgets`, nouv('budgets').map((x) => ({ ligne: x.ligne, data: { mois: x.data.mo, equipe_id: x.data.eq.id, categorie_id: x.data.cat?.id || null, montant: x.data.m } }))); }
   for (const r of Object.values(R)) out.refus.push(...r.refuses.map((x) => `Ligne ${x.ligne} : ${x.erreur}`));
+  out.brouillons = R.depenses?.brouillons || [];
   await App.refresh(); App.rerender();
   return { ...out, R };
 }
@@ -283,7 +354,7 @@ function joursDuFichier(A) {
 const LIB_TABLES = { circuit_mvts: 'mouvement(s) de cartons', ventes: 'vente(s)', vente_lignes: null, remboursements: 'remboursement(s)', relances: null, stock_mouvements: null, versements: 'versement(s)' };
 export function ouvrirImportCircuit() {
   modal({ title: 'Import du classeur du circuit', wide: true,
-    body: `<ol class="steps-imp"><li><b>Choisissez le classeur du jour</b> (même format que le modèle : onglets Dépôts, Agents, Clients, Grossistes, 1-Appro grossistes, 2-Appro dépôts, 3-Remises agents, 4-Ventes, 5-Versements, 6-Transferts).</li>
+    body: `<ol class="steps-imp"><li><b>Choisissez le classeur du jour</b> (même format que le modèle : onglets Dépôts, Agents, Clients, Grossistes, 1-Appro grossistes, 2-Appro dépôts, 3-Remises agents, 4-Ventes, 5-Versements, 6-Transferts, 7-Dépenses, 8-Objectifs, 9-Budgets).</li>
       <li><b>Vérifiez le bilan</b> : les lignes déjà enregistrées sont reconnues, seules les nouvelles sont proposées.</li><li><b>Enregistrez</b> : rien n’est jamais enregistré deux fois.</li></ol>
       <div class="filters"><label class="btn primary"><input type="file" accept=".xlsx,.xls" hidden data-f>${icon('upload')} Choisir le classeur</label><button class="btn ghost" type="button" data-mod>${icon('download')} Modèle Excel</button></div><div data-b></div>`,
     onMount: (m) => {
@@ -291,7 +362,7 @@ export function ouvrirImportCircuit() {
       const peutEcraser = App.can('suppression', 'supprimer');
       const zone = $('[data-b]', m);
       $('[data-mod]', m).addEventListener('click', () => modeleCircuit());
-      const LIBS = [['appro', '1-Appro grossistes'], ['prise', '2-Appro dépôts'], ['dispatch', '3-Remises agents'], ['transfert', '6-Transferts entre dépôts'], ['ventes', '4-Ventes'], ['versements', '5-Versements (versements)'], ['remboursements', '5-Versements (remboursements)']];
+      const LIBS = [['appro', '1-Appro grossistes'], ['prise', '2-Appro dépôts'], ['dispatch', '3-Remises agents'], ['transfert', '6-Transferts entre dépôts'], ['ventes', '4-Ventes'], ['versements', '5-Versements (versements)'], ['remboursements', '5-Versements (remboursements)'], ['depenses', '7-Dépenses'], ['objectifs', '8-Objectifs'], ['budgets', '9-Budgets']];
       const afficher = () => {
         const A = analyseCircuit(wb);
         const c = (k, s) => A.res[k].filter((x) => x.statut === s).length;
@@ -324,7 +395,7 @@ export function ouvrirImportCircuit() {
             }
             const r = await appliquerCircuit(wb, fname, (txt) => { prog.innerHTML = `<div class="note">${esc(txt)}…</div>`; });
             const f = (x) => (x ? `${fmtN(x.integrees)} ajoutée(s)${x.deja ? `, ${fmtN(x.deja)} déjà présente(s)` : ''}` : '0');
-            zone.innerHTML = `<div class="note ok"><b>Import terminé.</b><ul><li>Référentiels créés ou mis à jour : ${r.refs}</li><li>Approvisionnements : ${f(r.R.appro)} · Prises : ${f(r.R.prise)} · Dispatch : ${f(r.R.dispatch)} · Transferts : ${f(r.R.transfert)}</li><li>Ventes comptant : ${f(r.R.comptant)} · Ventes à crédit : ${f(r.R.credit)}</li><li>Versements : ${f(r.R.versements)} · Remboursements : ${f(r.R.remb)}</li></ul>
+            zone.innerHTML = `<div class="note ok"><b>Import terminé.</b><ul><li>Référentiels créés ou mis à jour : ${r.refs}</li><li>Approvisionnements : ${f(r.R.appro)} · Prises : ${f(r.R.prise)} · Dispatch : ${f(r.R.dispatch)} · Transferts : ${f(r.R.transfert)}</li><li>Ventes comptant : ${f(r.R.comptant)} · Ventes à crédit : ${f(r.R.credit)}</li><li>Versements : ${f(r.R.versements)} · Remboursements : ${f(r.R.remb)}</li><li>Dépenses : ${f(r.R.depenses)} · Objectifs : ${f(r.R.objectifs)} · Budgets : ${f(r.R.budgets)}</li></ul>${r.brouillons.length ? `<p class="small">${r.brouillons.length} dépense(s) gardée(s) en brouillon (à compléter dans Logistique et charges) : ${r.brouillons.slice(0, 5).map((x) => esc(x.motif)).join(' ; ')}</p>` : ''}
               ${r.refus.length ? `<span class="t-crit">${r.refus.length} ligne(s) refusée(s) :</span><br><span class="small">${r.refus.slice(0, 15).map(esc).join('<br>')}</span>` : ''}</div><p class="muted small">Demain, réimportez le classeur complété : seules les nouvelles lignes seront ajoutées.</p>`;
             toast('Classeur du circuit importé.');
           } catch (e) { toast(e.message, 'err'); prog.innerHTML = `<div class="note warn">${esc(e.message)} — relancez l’import : les lignes déjà enregistrées ne seront pas reprises.</div>`; }
@@ -371,5 +442,8 @@ export function modeleCircuit() {
   add('4-Ventes', 'Ventes aux clients', 'Une ligne par vente. Crédit : client et échéance obligatoires.', ['Date', 'Vendeur (dépôt ou agent)', 'Client', 'Produit', 'Cartons', 'Prix carton (FCFA)', 'Mode (Comptant / Crédit)', 'Échéance (si crédit)', 'N° vente'], [], [12, 26, 26, 22, 9, 13, 13, 14, 10]);
   add('5-Versements', 'Versements et remboursements', 'Argent versé à la caisse Oriba ou chez le grossiste.', ['Date', 'Versé par', 'Objet', 'N° vente (si remboursement)', 'Lieu du versement', 'Grossiste (si versé chez lui)', 'Montant (FCFA)', 'Argent pour (Oriba Food / Oriba Rice)'], [], [12, 26, 22, 14, 18, 20, 15, 18]);
   add('6-Transferts', 'Transferts entre dépôts', 'Cartons envoyés d’un dépôt à un autre.', ['Date', 'Dépôt qui envoie', 'Dépôt qui reçoit', 'Produit', 'Cartons', 'Observation'], [], [12, 18, 18, 22, 10, 26]);
+  add('7-Dépenses', 'Dépenses', 'Une ligne par dépense. Nature : Salaires et rémunérations, Carburant, Réparations et entretien, Vidange, Assurance…', ['Date', 'Équipe ou dépôt', 'Nature de la dépense', 'Montant (FCFA)', 'Bénéficiaire', 'Véhicule (immatriculation)', 'N° pièce', 'Description / motif'], [], [12, 20, 26, 14, 22, 16, 12, 30]);
+  add('8-Objectifs', 'Objectifs de vente', 'Objectif du mois en cartons, par agent (ou par équipe).', ['Mois', 'Agent ou équipe', 'Objectif (cartons)'], (App.can('objectifs', 'modifier') ? D.objectifs || [] : []).filter((o) => o.actif !== false && !o.produit_id && o.mois >= today().slice(0, 7) && ['agent', 'equipe'].includes(o.axe)).map((o) => [`${o.mois.slice(5)}/${o.mois.slice(0, 4)}`, o.axe === 'agent' ? nomDe(o.cible_id) : (D.equipes || []).find((e) => e.id === o.cible_id)?.nom || '', o.objectif_cartons]), [10, 30, 16]);
+  add('9-Budgets', 'Budgets du mois', 'Budget mensuel par équipe et nature de dépense.', ['Mois', 'Équipe', 'Nature de la dépense', 'Budget (FCFA)'], (App.can('budgets', 'modifier') ? D.budgets || [] : []).filter((b) => b.actif !== false && b.mois >= today().slice(0, 7) && !b.vehicule_id).map((b) => [`${b.mois.slice(5)}/${b.mois.slice(0, 4)}`, (D.equipes || []).find((e) => e.id === b.equipe_id)?.nom || '', (D.categories_depense || []).find((c) => c.id === b.categorie_id)?.libelle || '', Number(b.montant)]), [10, 22, 28, 14]);
   saveBlob(`Classeur_circuit_ORIBA_${today()}.xlsx`, new Blob([X.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
 }

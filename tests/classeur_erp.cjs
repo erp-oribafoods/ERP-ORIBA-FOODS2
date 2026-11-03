@@ -1,0 +1,37 @@
+// Classeur journalier complet : onglets 7-Dépenses, 8-Objectifs, 9-Budgets lus, enregistrés, puis reconnus au réimport.
+const { chromium } = require('playwright'); const fs = require('fs'); const path = require('path');
+const CDN = process.env.CDN_DIR, OUT = process.env.OUT_DIR, FICHIER = process.env.CLASSEUR_ERP;
+const map = { 'chart.umd.min.js': 'chart.js/dist/chart.umd.js', 'xlsx.full.min.js': 'xlsx/dist/xlsx.full.min.js', 'jspdf.umd.min.js': 'jspdf/dist/jspdf.umd.min.js', 'jspdf.plugin.autotable.min.js': 'jspdf-autotable/dist/jspdf.plugin.autotable.min.js' };
+let echecs = 0; const verif = (ok, msg) => { console.log(`${ok ? '✓' : '✗'} ${msg}`); if (!ok) echecs++; };
+(async () => {
+  const html = '<!doctype html><html lang="fr"><head><meta charset="utf-8"></head><body>' + fs.readFileSync(path.join(__dirname, '../dist/demo.html'), 'utf8') + '</body></html>';
+  const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width: 1440, height: 1000 } }); const errs = [];
+  await ctx.route('**/*', (r) => { const u = r.request().url(); if (u.startsWith('http://erp.test/')) return r.fulfill({ contentType: 'text/html', body: html }); const f = Object.keys(map).find((k) => u.endsWith(k)); if (f) return r.fulfill({ path: path.join(CDN, 'node_modules', map[f]) }); return r.continue(); });
+  const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message));
+  await p.goto('http://erp.test/'); await p.waitForSelector('#lf', { timeout: 180000 });
+  await p.fill('[name=identifiant]', 'commercial'); await p.fill('[name=password]', 'Demo2026'); await p.click('#lf button[type=submit]'); await p.waitForSelector('.layout');
+  const bilan = async () => { await p.evaluate(() => { location.hash = 'saisie-rapide'; }); await p.waitForTimeout(800); await p.click('#f-circ'); await p.setInputFiles('.modal [data-f]', FICHIER); await p.waitForSelector('.modal .maj-t', { timeout: 60000 });
+    return Object.fromEntries(await p.$$eval('.modal .maj-t tbody tr', (rs) => rs.map((r) => [r.children[0].textContent.trim(), [...r.children].slice(1).map((c) => Number(c.textContent.replace(/\D/g, '')))]))); };
+  let B = await bilan(); console.log(JSON.stringify(B));
+  verif(B['7-Dépenses']?.[0] === 39, `7-Dépenses : 39 à ajouter (${B['7-Dépenses']})`);
+  verif(B['8-Objectifs']?.[0] + B['8-Objectifs']?.[1] === 88 && B['8-Objectifs'][2] === 0, `8-Objectifs : 88 lignes lues, aucune rejetée (${B['8-Objectifs']})`);
+  verif(B['9-Budgets']?.[0] + B['9-Budgets']?.[1] + B['9-Budgets']?.[2] === 76, `9-Budgets : 76 lignes lues (${B['9-Budgets']} — rejetées si le profil démo n’a pas le droit budgets)`);
+  verif(B['4-Ventes']?.[0] === 1, `4-Ventes : 1 vente (${B['4-Ventes']})`);
+  const rej = await p.$eval('.modal', (m) => m.querySelector('details')?.textContent || '');
+  console.log('   rejets :', rej.slice(0, 600));
+  await p.click('.modal [data-go]'); await p.waitForSelector('.modal .note.ok b, .modal [data-p] .note.warn', { timeout: 240000 }).catch(() => {}); console.log('   erreurs :', errs.join(' | '), await p.textContent('.modal [data-p]').catch(() => '-'));
+  const fin = await p.textContent('.modal [data-b]'); console.log('   ', fin.replace(/\s+/g, ' ').slice(0, 900));
+  verif(/Dépenses : 39 ajoutée/.test(fin), 'Dépenses enregistrées');
+  verif(/Objectifs : 88 ajoutée/.test(fin), 'Objectifs enregistrés');
+  verif(/1 dépense\(s\) gardée|10 dépense\(s\) gardée/.test(fin), 'Seules les vidanges sans véhicule restent en brouillon');
+  await p.keyboard.press('Escape'); await p.waitForTimeout(500);
+  B = await bilan(); console.log(JSON.stringify(B));
+  verif(['8-Objectifs', '4-Ventes'].every((k) => B[k][0] === 0), 'Réimport : ventes et objectifs reconnus');
+  await p.click('.modal [data-go]'); await p.waitForSelector('.modal .note.ok b', { timeout: 240000 });
+  const fin2 = await p.textContent('.modal [data-b]'); console.log('   ', fin2.replace(/\s+/g, ' ').slice(0, 300));
+  verif(/Dépenses : 0 ajoutée\(s\), 10 déjà présente/.test(fin2), 'Réimport : dépenses (même non visibles) jamais en double');
+  const dep = await p.evaluate(() => (window.App?.D?.depenses || []).filter((d) => /tournée/.test(d.description || '')).map((d) => [d.statut, d.montant, d.reference_piece]));
+  console.log('   dépense test :', JSON.stringify(dep));
+  verif(!errs.length, `Aucune erreur JS ${errs.slice(0, 3).join(' | ')}`);
+  await b.close(); console.log(echecs ? `\n${echecs} échec(s)` : '\nTout est conforme.'); process.exit(echecs ? 1 : 0);
+})();

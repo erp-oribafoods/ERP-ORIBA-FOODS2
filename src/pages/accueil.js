@@ -197,7 +197,7 @@ export function renderSaisieRapide(root) {
       ${tuile('s-remise', 'users', 'Remise à un agent', 'Cartons donnés par le dépôt à un de ses agents')}
       ${tuile('s-transf', 'truck', 'Transfert entre dépôts', 'Cartons envoyés d’un dépôt à un autre')}</section>
      <h2 class="sec-t">Importer les fichiers Excel</h2>
-     <section class="fichiers">${fichier('f-circ', 'Classeur du jour (dépôts)', 'Approvisionnements, remises, transferts, ventes et versements des dépôts. Seules les nouvelles lignes sont ajoutées.', can)}
+     <section class="fichiers">${fichier('f-circ', 'Classeur du jour (dépôts)', 'Approvisionnements, remises, transferts, ventes, versements, dépenses, objectifs et budgets. Seules les nouvelles lignes sont ajoutées.', can)}
      ${fichier('f-tb', 'Fichiers « TB » des équipes', 'Ventes, crédits et remboursements des fichiers TB de chaque zone. Seules les nouvelles lignes sont ajoutées.', peutMettreAJour())}
      ${fichier('f-obj', 'Objectifs des agents', 'Fichier « Liste des agents et objectif de vente » (Agent, Équipe, Fonction, Objectif).', peutImporter('objectifs'))}</section>
      <p class="muted small">Imports plus rares (historiques, référentiels, dépenses, budgets…) : <a href="#saisie">Imports avancés</a>, dans « Autres modules ».</p>`;

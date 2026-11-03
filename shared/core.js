@@ -1037,7 +1037,11 @@ A['import.run'] = async ({ t, user, perms, payload, ip }) => {
   const SRC_REF = { ventes_comptant: 'ventes', ventes_credit: 'ventes', circuit_appro: 'circuit_mvts', circuit_prise: 'circuit_mvts', circuit_dispatch: 'circuit_mvts', circuit_transfert: 'circuit_mvts', versements: 'versements' };
   const refsVentes = SRC_REF[type] ? new Set((await t.select(SRC_REF[type])).map((v) => v.ref_externe).filter(Boolean))
     : type === 'remboursements' ? new Set((await t.select('remboursements')).filter((x) => x.statut === 'valide').map((x) => x.reference).filter((x) => x && x.startsWith('CIRC|'))) : null;
+  // Dépenses du classeur journalier : la n-ième ligne identique du fichier (date, nature, équipe, montant, bénéficiaire) n'est ajoutée que si la plateforme en a moins de n
+  const cleDep = (d) => [d.date, d.categorie_id, d.equipe_id, round2(d.montant), String(clean(d.beneficiaire) || '').toLowerCase()].join('|');
+  const depEx = type === 'depenses' && rows.some((r) => r.occ) ? (await t.select('depenses')).filter((d) => !['annulee', 'rejetee'].includes(d.statut)).reduce((m, d) => m.set(cleDep(d), (m.get(cleDep(d)) || 0) + 1), new Map()) : null;
   for (const [i, r] of rows.entries()) {
+    if (depEx && r.occ && r.occ <= (depEx.get(cleDep(r.data || {})) || 0)) { deja.push(r.ligne ?? i + 1); continue; }
     const cleLigne = type === 'remboursements' ? (r.data?.reference?.startsWith('CIRC|') ? r.data.reference : null) : r.data?.ref_externe;
     if (refsVentes && cleLigne && refsVentes.has(cleLigne)) { deja.push(r.ligne ?? i + 1); continue; }
     if (type === 'remboursements' && r.data?.cumul !== undefined && r.data?.cumul !== null) {

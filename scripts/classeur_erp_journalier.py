@@ -1,0 +1,253 @@
+# Classeur journalier ORIBA ERP : saisie quotidienne de toutes les données de l'ERP, importable tel quel
+# (Saisie rapide > « Classeur du jour (dépôts) » > Importer). Listes reprises du fichier ERP_Base_de_données1,
+# objectifs du fichier DONNEES_FORCE_DE_VENTE, budgets et dépenses du 03/11 tels qu'enregistrés dans l'ERP.
+# Usage : python3 build_erp.py BASE.xlsx FORCE_DE_VENTE.xlsx SORTIE.xlsx
+import datetime as dt, sys
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.utils import get_column_letter as L
+
+BASE, FDV, OUT = sys.argv[1:4]
+VERT, VERT_F, VIOLET, GRIS, BLANC, BLEU = '2E7D32', '1B5E20', '5B3E96', 'F2F7EE', 'FFFFFF', 'E8F0FE'
+LIGNES = 400
+DEPART = dt.date(2026, 11, 4)
+
+src = load_workbook(BASE, data_only=True)
+def lignes(nom, n):
+    out = []
+    for r in src[nom].iter_rows(min_row=5, values_only=True):
+        r = list(r[:n]) + [None] * max(0, n - len(r))
+        if r[1] not in (None, ''): out.append([x.strip() if isinstance(x, str) else x for x in r])
+    return out
+DEPOTS, AGENTS, CLIENTS, GROSSISTES = lignes('Dépôts', 9), lignes('Agents', 7), lignes('Clients', 6), lignes('Grossistes', 7)
+for g in GROSSISTES:
+    if not g[3]: g[3] = 'Oriba Food'
+PRODUITS = [('Arôme DADI Épicé', 'Arôme', 13250), ('Arôme DADI Poulet', 'Arôme', 12250), ('Mayonnaise Délice', 'Mayonnaise', 9500), ('Mayonnaise Oriba 1000 ml', 'Mayonnaise', 9500),
+            ('Mayonnaise Oriba 500 ml', 'Mayonnaise', 9500), ('Mayonnaise Oriba 250 ml', 'Mayonnaise', 7500), ('Mayonnaise Aïda', 'Mayonnaise', 11000)]
+
+# Objectifs des agents (DONNEES_FORCE_DE_VENTE) pour novembre et décembre
+fdv = load_workbook(FDV, data_only=True).active
+OBJ_AG = [(str(r[2]).strip(), r[4]) for r in fdv.iter_rows(min_row=4, values_only=True) if r[2] and isinstance(r[4], (int, float))]
+OBJ_EQ = [('Dosso', 1500), ('Équipe Mayonnaise', 2000)]  # équipes sans objectif par agent dans le fichier
+# Budgets mensuels (fichier Budget Équipes Commerciales, tels qu'enregistrés dans l'ERP)
+BUD = {'Niamey 1': (390000, 89000, 125000, 1245000), 'Niamey 2': (60000, 25000, 80000, 620000), 'Maradi': (300000, 48000, 160000, 910000),
+       'Tahoua': (150000, 45000, 100000, 550000), 'Konni': (130000, 24000, 100000, 275000), 'Dosso': (None, 46000, None, 170000),
+       'Balleyara': (200000, 46000, 60000, 210000), 'Zinder': (120000, 24000, 60000, 150000), 'Équipe Mayonnaise': (130000, 46000, 60000, 160000),
+       'Équipe Contrôleur': (60000, 21000, 15000, 360000)}
+NATURES_B = ['Carburant', 'Vidange', 'Réparations et entretien', 'Salaires et rémunérations agents']
+NATURES = ['Salaires et rémunérations agents', 'Carburant', 'Réparations et entretien', 'Vidange', 'Assurance', 'Filtres moteur', 'Vignette', 'Visite technique',
+           'Patente', 'Autorisations', 'Frais d’insalubrité territoriale', 'Gadgets et supports promotionnels', 'Caisse / cachet annuel', 'Autres frais autorisés']
+EQUIPES = ['Niamey 1', 'Niamey 2', 'Maradi', 'Tahoua', 'Konni', 'Dosso', 'Balleyara', 'Zinder', 'Équipe Mayonnaise', 'Équipe Contrôleur']
+VEHICULES = ['CE 3280', 'BZ-5609']
+
+wb = Workbook()
+fin = Side(style='thin', color='CFE3C4')
+BORD = Border(left=fin, right=fin, top=fin, bottom=fin)
+
+def feuille(nom, titre, sous_titre, entetes, largeurs, rows=(), vides=0, couleur=VERT, dates=(), nombres=(), calc=()):
+    ws = wb.create_sheet(nom)
+    ws['A1'] = titre; ws['A1'].font = Font(bold=True, size=14, color=couleur)
+    ws['A2'] = sous_titre; ws['A2'].font = Font(italic=True, color='5A5670')
+    for j, (h, w) in enumerate(zip(entetes, largeurs), 1):
+        c = ws.cell(row=4, column=j, value=h); c.font = Font(bold=True, color=BLANC); c.fill = PatternFill('solid', fgColor=couleur)
+        c.alignment = Alignment(wrap_text=True, vertical='center'); c.border = BORD
+        ws.column_dimensions[L(j)].width = w
+    ws.row_dimensions[4].height = 34
+    for i in range(len(rows) + vides):
+        r = 5 + i
+        val = rows[i] if i < len(rows) else [None] * len(entetes)
+        for j in range(1, len(entetes) + 1):
+            c = ws.cell(row=r, column=j, value=val[j - 1] if j - 1 < len(val) else None)
+            c.border = BORD
+            if i % 2: c.fill = PatternFill('solid', fgColor=GRIS)
+            if j in dates: c.number_format = 'DD/MM/YYYY'
+            if j in nombres: c.number_format = '# ##0'
+            if j in calc: c.fill = PatternFill('solid', fgColor=BLEU); c.font = Font(color='37474F')
+    ws.freeze_panes = 'A5'
+    return ws
+
+def liste(ws, col, plage, n, message):
+    dv = DataValidation(type='list', formula1=plage, allow_blank=True, showErrorMessage=False, showInputMessage=True, promptTitle='Choisir ou écrire', prompt=message)
+    ws.add_data_validation(dv); dv.add(f'{col}5:{col}{4 + n}')
+
+def montant(ws, col_res, a, b, n):  # Montant = cartons × prix (case calculée, rien à saisir)
+    for r in range(5, 5 + n): ws[f'{col_res}{r}'] = f'=IF(OR({a}{r}="",{b}{r}=""),"",{a}{r}*{b}{r})'
+
+# ---------- Lisez-moi
+ws = wb.active; ws.title = 'Lisez-moi'
+txt = [
+    ('ORIBA ERP — classeur de saisie journalière', Font(bold=True, size=16, color=VERT_F)),
+    ('Toutes les opérations de la force de vente, à importer dans l’ERP : Saisie rapide > « Classeur du jour (dépôts) » > Importer.', Font(italic=True, color='5A5670')),
+    ('', None),
+    ('CHAQUE JOUR', Font(bold=True, color=VIOLET)),
+    ('1. Ajoutez les opérations de la journée à la suite, dans les onglets 1 à 7 (une ligne par opération). Ne supprimez pas les lignes des jours précédents.', None),
+    ('2. Dans les cases à liste, cliquez la petite flèche pour choisir, ou écrivez directement le nom (majuscules et accents ne comptent pas).', None),
+    ('3. Les cases bleues se calculent seules (montants) : ne les remplissez pas.', None),
+    ('4. Enregistrez puis importez le fichier dans l’ERP. Un contrôle s’affiche avant l’enregistrement : lignes nouvelles, déjà présentes, refusées (avec la raison).', None),
+    ('   Réimporter le même fichier ne crée aucun doublon : seules les lignes nouvelles sont ajoutées.', None),
+    ('5. Onglet « Tableau du jour » : choisissez une date en haut pour voir les totaux de la journée et du mois.', None),
+    ('', None),
+    ('LES ONGLETS DE SAISIE', Font(bold=True, color=VIOLET)),
+    ('4-Ventes : ventes au comptant ou à crédit, par un dépôt ou un agent. Crédit : client, échéance et N° de vente (ex. V001) obligatoires.', None),
+    ('5-Versements : argent versé (Ventes comptant), remboursement d’un crédit (avec le N° de la vente), ou règlement d’un grossiste. Indiquez pour Oriba Food ou Oriba Rice.', None),
+    ('2-Appro dépôts : cartons reçus par un dépôt, d’Oriba Food, d’Oriba Rice ou d’un grossiste.', None),
+    ('3-Remises agents : cartons donnés par un dépôt à un de ses agents.', None),
+    ('6-Transferts : cartons envoyés d’un dépôt à un autre dépôt.', None),
+    ('1-Appro grossistes : cartons reçus par un grossiste, d’Oriba Food ou d’Oriba Rice.', None),
+    ('7-Dépenses : une ligne par dépense (salaires, carburant, réparations, vidanges, assurances…). Sans N° de pièce, la dépense est enregistrée « sans pièce ».', None),
+    ('8-Objectifs : objectif du mois en cartons par agent (ou par équipe). Déjà rempli pour novembre et décembre 2026 ; modifiez un chiffre puis réimportez.', None),
+    ('9-Budgets : budget mensuel par équipe et nature de dépense. Déjà rempli pour novembre et décembre 2026.', None),
+    ('', None),
+    ('LES LISTES', Font(bold=True, color=VIOLET)),
+    ('Dépôts, Agents, Clients, Grossistes : reprises de votre base de données. Un nouveau client, agent ou grossiste ? Ajoutez-le d’abord dans sa liste : il sera créé à l’import.', None),
+    ('Dépôts : stock et reste à encaisser (Oriba Food / Oriba Rice) au départ du 04/11/2026. Ne les modifiez que pour corriger la situation de départ.', None),
+    ('Paramètres : produits, prix de référence et date de départ.', None),
+    ('', None),
+    ('RÈGLES', Font(bold=True, color=VIOLET)),
+    ('• Dates au format JJ/MM/AAAA (ex. 04/11/2026). Mois au format MM/AAAA (ex. 11/2026).', None),
+    ('• Mode : Comptant ou Crédit.   • Lieu du versement : Caisse Oriba ou Chez le grossiste.   • Argent pour : Oriba Food ou Oriba Rice.', None),
+    ('• Les ventes, approvisionnements et dépenses déjà enregistrés avant le 04/11/2026 (reprise des fichiers) sont déjà dans l’ERP : pas besoin de les ressaisir.', None),
+]
+for i, (t, f) in enumerate(txt, 1):
+    c = ws.cell(row=i, column=1, value=t)
+    if f: c.font = f
+ws.column_dimensions['A'].width = 150
+
+# ---------- Listes
+feuille('Paramètres', 'Paramètres', 'Produits et prix de référence (FCFA le carton), date de départ du suivi.', ['Produit', 'Catégorie', 'Prix de référence (FCFA)'], [30, 14, 22],
+        [list(p) for p in PRODUITS] + [[None, None, None], ['Date des stocks initiaux', None, DEPART]], nombres=(3,))
+wb['Paramètres'].cell(row=5 + len(PRODUITS) + 1, column=2, value=DEPART).number_format = 'DD/MM/YYYY'
+wb['Paramètres'].cell(row=5 + len(PRODUITS) + 1, column=3).value = None
+feuille('Dépôts', 'Dépôts', 'Un dépôt par zone. Situation au départ (04/11/2026) : stock restant et reste à encaisser, repris de votre base de données.',
+        ['Code', 'Nom', 'Zone', 'Grossiste habituel', 'Téléphone', 'Stock initial (cartons)', 'Prix du carton (FCFA)', 'Reste à encaisser au départ — Oriba Food (FCFA)', 'Reste à encaisser au départ — Oriba Rice (FCFA)'],
+        [10, 22, 18, 18, 14, 14, 14, 22, 22], DEPOTS, vides=10, nombres=(6, 7, 8, 9))
+feuille('Agents', 'Agents des dépôts', 'Chaque agent est rattaché à un dépôt.', ['Code', 'Nom', 'Dépôt', 'Fonction', 'Localité / marché', 'Téléphone', 'Stock initial (cartons)'],
+        [10, 32, 18, 30, 18, 14, 14], AGENTS, vides=40, nombres=(7,))
+liste(wb['Agents'], 'C', '=Choix!$A$2:$A$40', len(AGENTS) + 40, 'Dépôt de l’agent')
+feuille('Clients', 'Clients', 'Clients des dépôts et des agents. Ajoutez ici tout nouveau client.', ['Code', 'Nom', 'Vendeur rattaché', 'Localité', 'Téléphone', 'Plafond (cartons)'],
+        [10, 32, 22, 18, 14, 12], CLIENTS, vides=150)
+feuille('Grossistes', 'Grossistes', 'Les grossistes ne s’approvisionnent que chez Oriba Food ou Oriba Rice. Ajoutez-les ici.',
+        ['Code', 'Nom', 'Localité', 'Fournisseur habituel', 'Téléphone', 'Stock initial (cartons)', 'Solde dû au départ (FCFA)'], [10, 30, 18, 20, 14, 14, 18], GROSSISTES, vides=60, nombres=(6, 7))
+liste(wb['Grossistes'], 'D', '=Choix!$J$2:$J$3', len(GROSSISTES) + 60, 'Oriba Food ou Oriba Rice')
+
+# ---------- Journaux
+j1 = feuille('1-Appro grossistes', '1 · Approvisionnement des grossistes', 'Cartons reçus par les grossistes, d’Oriba Food ou d’Oriba Rice.',
+             ['Date', 'Grossiste', 'Fournisseur (Oriba Food / Oriba Rice)', 'Produit', 'Cartons', 'Prix carton (FCFA)', 'Observation', 'Montant (calculé)'], [13, 28, 22, 22, 10, 15, 28, 16],
+             vides=LIGNES, couleur=VIOLET, dates=(1,), nombres=(6, 8), calc=(8,))
+montant(j1, 'H', 'E', 'F', LIGNES)
+liste(j1, 'B', '=Choix!$F$2:$F$101', LIGNES, 'Grossiste'); liste(j1, 'C', '=Choix!$J$2:$J$3', LIGNES, 'Oriba Food ou Oriba Rice'); liste(j1, 'D', '=Choix!$E$2:$E$20', LIGNES, 'Produit')
+j2 = feuille('2-Appro dépôts', '2 · Approvisionnement des dépôts', 'Cartons reçus par les dépôts : d’Oriba Food, d’Oriba Rice ou d’un grossiste.',
+             ['Date', 'Dépôt', 'Source (Oriba Food, Oriba Rice ou grossiste)', 'Produit', 'Cartons', 'Prix carton (FCFA)', 'Mode de paiement (Comptant / Crédit)', 'Observation', 'Montant (calculé)'],
+             [13, 20, 28, 22, 10, 15, 18, 26, 16], vides=LIGNES, couleur=VIOLET, dates=(1,), nombres=(6, 9), calc=(9,))
+montant(j2, 'I', 'E', 'F', LIGNES)
+liste(j2, 'B', '=Choix!$A$2:$A$40', LIGNES, 'Dépôt'); liste(j2, 'C', '=Choix!$G$2:$G$103', LIGNES, 'Oriba Food, Oriba Rice ou un grossiste')
+liste(j2, 'D', '=Choix!$E$2:$E$20', LIGNES, 'Produit'); liste(j2, 'G', '=Choix!$H$2:$H$3', LIGNES, 'Comptant ou Crédit')
+j3 = feuille('3-Remises agents', '3 · Remises de cartons aux agents', 'Cartons donnés par un dépôt à un de ses agents.',
+             ['Date', 'Dépôt', 'Agent', 'Produit', 'Cartons', 'Observation'], [13, 20, 32, 22, 10, 30], vides=LIGNES, couleur=VIOLET, dates=(1,))
+liste(j3, 'B', '=Choix!$A$2:$A$40', LIGNES, 'Dépôt'); liste(j3, 'C', '=Choix!$B$2:$B$151', LIGNES, 'Agent'); liste(j3, 'D', '=Choix!$E$2:$E$20', LIGNES, 'Produit')
+j4 = feuille('4-Ventes', '4 · Ventes aux clients', 'Une ligne par vente. Crédit : client, échéance et N° de vente obligatoires.',
+             ['Date', 'Vendeur (dépôt ou agent)', 'Client', 'Produit', 'Cartons', 'Prix carton (FCFA)', 'Mode (Comptant / Crédit)', 'Échéance (si crédit)', 'N° vente', 'Montant (calculé)'],
+             [13, 32, 30, 22, 9, 14, 14, 14, 11, 16], vides=LIGNES, dates=(1, 8), nombres=(6, 10), calc=(10,))
+montant(j4, 'J', 'E', 'F', LIGNES)
+liste(j4, 'B', '=Choix!$C$2:$C$191', LIGNES, 'Dépôt ou agent qui a vendu'); liste(j4, 'C', '=Choix!$D$2:$D$401', LIGNES, 'Client')
+liste(j4, 'D', '=Choix!$E$2:$E$20', LIGNES, 'Produit'); liste(j4, 'G', '=Choix!$H$2:$H$3', LIGNES, 'Comptant ou Crédit')
+j5 = feuille('5-Versements', '5 · Versements et remboursements', 'Argent versé à la caisse Oriba ou chez le grossiste ; remboursements de crédits ; règlements des grossistes.',
+             ['Date', 'Versé par', 'Objet', 'N° vente (si remboursement)', 'Lieu du versement', 'Grossiste (si versé chez lui)', 'Montant (FCFA)', 'Argent pour (Oriba Food / Oriba Rice)'],
+             [13, 32, 22, 14, 18, 26, 15, 18], vides=LIGNES, dates=(1,), nombres=(7,))
+liste(j5, 'B', '=Choix!$K$2:$K$291', LIGNES, 'Dépôt, agent ou grossiste qui verse'); liste(j5, 'C', '=Choix!$I$2:$I$4', LIGNES, 'Objet du versement')
+liste(j5, 'E', '=Choix!$L$2:$L$3', LIGNES, 'Caisse Oriba ou Chez le grossiste'); liste(j5, 'F', '=Choix!$F$2:$F$101', LIGNES, 'Grossiste'); liste(j5, 'H', '=Choix!$J$2:$J$3', LIGNES, 'Oriba Food ou Oriba Rice')
+j6 = feuille('6-Transferts', '6 · Transferts entre dépôts', 'Cartons envoyés d’un dépôt à un autre (ex. Dépôt Niamey 1 → Dépôt Niamey 2).',
+             ['Date', 'Dépôt qui envoie', 'Dépôt qui reçoit', 'Produit', 'Cartons', 'Observation'], [13, 22, 22, 22, 10, 30], vides=LIGNES, couleur=VIOLET, dates=(1,))
+liste(j6, 'B', '=Choix!$A$2:$A$40', LIGNES, 'Dépôt qui envoie'); liste(j6, 'C', '=Choix!$A$2:$A$40', LIGNES, 'Dépôt qui reçoit'); liste(j6, 'D', '=Choix!$E$2:$E$20', LIGNES, 'Produit')
+# Dépenses : celles du 03/11/2026 (reprise du fichier Budget) déjà enregistrées dans l'ERP — reconnues à l'import, jamais en double
+J03 = dt.date(2026, 11, 3)
+dep_rows = [[J03, e, n, v, None, None, None, f'Reprise du fichier Budget Équipes Commerciales — {e} — {n}'] for e, vals in BUD.items() for n, v in zip(NATURES_B, vals) if v]
+j7 = feuille('7-Dépenses', '7 · Dépenses', 'Une ligne par dépense. Les lignes du 03/11/2026 sont la reprise déjà enregistrée dans l’ERP ; ajoutez les nouvelles à la suite.',
+             ['Date', 'Équipe ou dépôt', 'Nature de la dépense', 'Montant (FCFA)', 'Bénéficiaire', 'Véhicule (immatriculation)', 'N° pièce', 'Description / motif'],
+             [13, 22, 30, 15, 24, 16, 12, 46], dep_rows, vides=LIGNES, couleur=VIOLET, dates=(1,), nombres=(4,))
+n7 = len(dep_rows) + LIGNES
+liste(j7, 'B', '=Choix!$M$2:$M$60', n7, 'Équipe (ou dépôt)'); liste(j7, 'C', '=Choix!$N$2:$N$20', n7, 'Nature de la dépense'); liste(j7, 'F', '=Choix!$O$2:$O$20', n7, 'Véhicule')
+obj_rows = [[m, a, q] for m in ('11/2026', '12/2026') for a, q in OBJ_AG + OBJ_EQ]
+j8 = feuille('8-Objectifs', '8 · Objectifs de vente', 'Objectif du mois en cartons par agent (ou par équipe), repris de votre fichier « Données force de vente ».',
+             ['Mois', 'Agent ou équipe', 'Objectif (cartons)'], [12, 34, 16], obj_rows, vides=150, nombres=(3,))
+for r in range(5, 5 + len(obj_rows) + 150): j8[f'A{r}'].number_format = '@'
+liste(j8, 'B', '=Choix!$P$2:$P$220', len(obj_rows) + 150, 'Agent ou équipe')
+bud_rows = [[m, e, n, v] for m in ('11/2026', '12/2026') for e, vals in BUD.items() for n, v in zip(NATURES_B, vals) if v]
+j9 = feuille('9-Budgets', '9 · Budgets du mois', 'Budget mensuel par équipe et nature, repris du fichier Budget Équipes Commerciales.',
+             ['Mois', 'Équipe', 'Nature de la dépense', 'Budget (FCFA)'], [12, 22, 30, 16], bud_rows, vides=120, couleur=VIOLET, nombres=(4,))
+for r in range(5, 5 + len(bud_rows) + 120): j9[f'A{r}'].number_format = '@'
+liste(j9, 'B', '=Choix!$M$2:$M$11', len(bud_rows) + 120, 'Équipe'); liste(j9, 'C', '=Choix!$N$2:$N$20', len(bud_rows) + 120, 'Nature de la dépense')
+
+# ---------- Tableau du jour (rien à saisir sauf la date)
+tb = wb.create_sheet('Tableau du jour')
+tb['A1'] = 'Tableau du jour'; tb['A1'].font = Font(bold=True, size=15, color=VERT_F)
+tb['A2'] = 'Choisissez la date en B4 : les totaux se calculent à partir des onglets de saisie.'; tb['A2'].font = Font(italic=True, color='5A5670')
+tb['A4'] = 'Date'; tb['A4'].font = Font(bold=True)
+tb['B4'] = dt.date(2026, 11, 4); tb['B4'].number_format = 'DD/MM/YYYY'; tb['B4'].fill = PatternFill('solid', fgColor='FFF8E1'); tb['B4'].font = Font(bold=True, size=12)
+for j, h in enumerate(['Indicateur', 'Ce jour', 'Depuis le 1er du mois', 'Unité'], 1):
+    c = tb.cell(row=6, column=j, value=h); c.font = Font(bold=True, color=BLANC); c.fill = PatternFill('solid', fgColor=VERT); c.border = BORD
+D1 = 'DATE(YEAR($B$4),MONTH($B$4),1)'
+def jour(f, col, crit=''):
+    return f"=SUMIFS('{f}'!{col}:{col},'{f}'!A:A,$B$4{crit})"
+def mois(f, col, crit=''):
+    return f"=SUMIFS('{f}'!{col}:{col},'{f}'!A:A,\">=\"&{D1},'{f}'!A:A,\"<=\"&$B$4{crit})"
+IND = [
+    ('Ventes au comptant', '4-Ventes', 'J', ",'4-Ventes'!G:G,\"Comptant\"", 'FCFA'),
+    ('Ventes à crédit', '4-Ventes', 'J', ",'4-Ventes'!G:G,\"Crédit\"", 'FCFA'),
+    ('Cartons vendus', '4-Ventes', 'E', '', 'cartons'),
+    ('Versements (ventes comptant)', '5-Versements', 'G', ",'5-Versements'!C:C,\"Ventes comptant\"", 'FCFA'),
+    ('  dont pour Oriba Food', '5-Versements', 'G', ",'5-Versements'!C:C,\"Ventes comptant\",'5-Versements'!H:H,\"Oriba Food\"", 'FCFA'),
+    ('  dont pour Oriba Rice', '5-Versements', 'G', ",'5-Versements'!C:C,\"Ventes comptant\",'5-Versements'!H:H,\"Oriba Rice\"", 'FCFA'),
+    ('Remboursements de crédits', '5-Versements', 'G', ",'5-Versements'!C:C,\"Remboursement crédit\"", 'FCFA'),
+    ('Règlements des grossistes', '5-Versements', 'G', ",'5-Versements'!C:C,\"Règlement grossiste\"", 'FCFA'),
+    ('Cartons reçus par les dépôts', '2-Appro dépôts', 'E', '', 'cartons'),
+    ('Cartons remis aux agents', '3-Remises agents', 'E', '', 'cartons'),
+    ('Cartons transférés entre dépôts', '6-Transferts', 'E', '', 'cartons'),
+    ('Cartons reçus par les grossistes', '1-Appro grossistes', 'E', '', 'cartons'),
+    ('Dépenses', '7-Dépenses', 'D', '', 'FCFA'),
+]
+for i, (lib, f, col, crit, u) in enumerate(IND, 7):
+    tb.cell(row=i, column=1, value=lib).border = BORD
+    for j, fx in ((2, jour(f, col, crit)), (3, mois(f, col, crit))):
+        c = tb.cell(row=i, column=j, value=fx); c.number_format = '# ##0'; c.border = BORD; c.fill = PatternFill('solid', fgColor=BLEU)
+    tb.cell(row=i, column=4, value=u).border = BORD
+    if lib.startswith('  '): tb.cell(row=i, column=1).font = Font(italic=True, color='5A5670')
+tb.column_dimensions['A'].width = 36; tb.column_dimensions['B'].width = 18; tb.column_dimensions['C'].width = 22; tb.column_dimensions['D'].width = 10
+
+# ---------- Choix (feuille cachée) : les listes déroulantes suivent les onglets de listes
+ch = wb.create_sheet('Choix')
+ref = lambda f, r: f'=IF(\'{f}\'!B{r}="","",\'{f}\'!B{r})'
+cols = {'A': 'Dépôts', 'B': 'Agents', 'C': 'Vendeurs', 'D': 'Clients', 'E': 'Produits', 'F': 'Grossistes', 'G': 'Sources', 'H': 'Modes', 'I': 'Objets', 'J': 'Fournisseurs',
+        'K': 'Versé par', 'L': 'Lieux', 'M': 'Équipes', 'N': 'Natures', 'O': 'Véhicules', 'P': 'Agents et équipes'}
+for c, t in cols.items(): ch[f'{c}1'] = t
+for i in range(39): ch[f'A{2 + i}'] = ref('Dépôts', 5 + i)
+for i in range(150): ch[f'B{2 + i}'] = ref('Agents', 5 + i)
+for i in range(40): ch[f'C{2 + i}'] = ref('Dépôts', 5 + i)
+for i in range(150): ch[f'C{42 + i}'] = ref('Agents', 5 + i)
+for i in range(400): ch[f'D{2 + i}'] = ref('Clients', 5 + i)
+for i, p in enumerate(PRODUITS): ch[f'E{2 + i}'] = p[0]
+for i in range(100): ch[f'F{2 + i}'] = ref('Grossistes', 5 + i)
+ch['G2'], ch['G3'] = 'Oriba Food', 'Oriba Rice'
+for i in range(100): ch[f'G{4 + i}'] = ref('Grossistes', 5 + i)
+ch['H2'], ch['H3'] = 'Comptant', 'Crédit'
+ch['I2'], ch['I3'], ch['I4'] = 'Ventes comptant', 'Remboursement crédit', 'Règlement grossiste'
+ch['J2'], ch['J3'] = 'Oriba Food', 'Oriba Rice'
+for i in range(190): ch[f'K{2 + i}'] = f'=Choix!C{2 + i}'
+for i in range(100): ch[f'K{192 + i}'] = f'=Choix!F{2 + i}'
+ch['L2'], ch['L3'] = 'Caisse Oriba', 'Chez le grossiste'
+for i, e in enumerate(EQUIPES): ch[f'M{2 + i}'] = e
+for i in range(40): ch[f'M{2 + len(EQUIPES) + i}'] = ref('Dépôts', 5 + i)
+for i, n in enumerate(NATURES): ch[f'N{2 + i}'] = n
+for i, v in enumerate(VEHICULES): ch[f'O{2 + i}'] = v
+for i in range(150): ch[f'P{2 + i}'] = ref('Agents', 5 + i)
+for i, e in enumerate(EQUIPES): ch[f'P{152 + i}'] = e
+ch.sheet_state = 'hidden'
+
+ordre = ['Lisez-moi', 'Tableau du jour', '4-Ventes', '5-Versements', '2-Appro dépôts', '3-Remises agents', '6-Transferts', '1-Appro grossistes', '7-Dépenses', '8-Objectifs', '9-Budgets',
+         'Dépôts', 'Agents', 'Clients', 'Grossistes', 'Paramètres', 'Choix']
+wb._sheets = [wb[n] for n in ordre]
+wb.active = 2
+for n in ordre: wb[n].sheet_view.tabSelected = (n == '4-Ventes')
+wb.save(OUT)
+print(OUT, len(DEPOTS), len(AGENTS), len(CLIENTS), len(GROSSISTES), len(obj_rows), len(bud_rows), len(dep_rows))

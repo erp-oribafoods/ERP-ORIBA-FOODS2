@@ -13,7 +13,8 @@ LIGNES = 400  # lignes préparées dans chaque journal
 DEPOTS = [  # code, nom, zone (équipe), prix du carton
     ('DEP-KON', 'Dépôt Konni', 'Konni', 14000), ('DEP-MAR', 'Dépôt Maradi', 'Maradi', None), ('DEP-NY1', 'Dépôt Niamey 1', 'Niamey 1', 13250),
     ('DEP-NY2', 'Dépôt Niamey 2', 'Niamey 2', 13250), ('DEP-TAH', 'Dépôt Tahoua', 'Tahoua', 13000), ('DEP-TIL', 'Dépôt Tillabéri', 'Balleyara', 13250),
-    ('DEP-ZIN', 'Dépôt Zinder', 'Zinder', None)]
+    ('DEP-ZIN', 'Dépôt Zinder', 'Zinder', None), ('DEP-DOS', 'Dépôt Dosso', 'Dosso', None), ('DEP-MAY', 'Dépôt Mayonnaise', 'Équipe Mayonnaise', None)]
+STOCKS = {}
 AGENTS = [  # code, nom, dépôt, fonction
     ('BAL-01', 'Zouera Harouna', 'Dépôt Tillabéri', "Chef d'équipe"),
     ('KON-01', 'Abdoul Magid Kamal', 'Dépôt Konni', "Chef d'équipe"), ('KON-02', 'Ali Bammo', 'Dépôt Konni', 'Agent de Vente'), ('KON-03', 'Aissa Daouda', 'Dépôt Konni', 'Agent Commercial'),
@@ -32,15 +33,19 @@ AGENTS = [  # code, nom, dépôt, fonction
     ('TAH-01', 'Ramatou Mohamed', 'Dépôt Tahoua', 'Agent Commercial'), ('TAH-02', 'Ramatou Abdourahmane', 'Dépôt Tahoua', 'Agent Commercial'), ('TAH-03', 'Ramatou Adamou', 'Dépôt Tahoua', 'Agent Commercial'),
     ('TAH-04', 'Aminata Mohamed', 'Dépôt Tahoua', 'Agent Commercial'), ('TAH-05', 'Moussa Balogie', 'Dépôt Tahoua', 'Agent Commercial'), ('TAH-06', 'Mariama Souleymane', 'Dépôt Tahoua', 'Agent Commercial'),
     ('TAH-07', 'Mohamedine Youssouf', 'Dépôt Tahoua', "Chef d'équipe"), ('TAH-08', 'Mahamane Salissou Laouali', 'Dépôt Tahoua', 'Agent de Vente'),
-    ('ZIN-01', 'Malam Abdou Adamou', 'Dépôt Zinder', "Chef d'équipe"), ('ZIN-02', 'Mijitapha Nafiou', 'Dépôt Zinder', 'Agent Commercial')]
+    ('ZIN-01', 'Malam Abdou Adamou', 'Dépôt Zinder', "Chef d'équipe"), ('ZIN-02', 'Mijitapha Nafiou', 'Dépôt Zinder', 'Agent Commercial'),
+    ('DOS-01', 'Mahamane Laouali Moussa', 'Dépôt Dosso', "Chef d'équipe")]
 CLIENTS = [  # code, nom, téléphone
     ('BAL-A', 'Elh Sabitou', ''), ('BAL-B', 'Elh Ibrahim', ''), ('BAL-C', 'Elh Hassoumi', ''), ('BAL-D', 'Ancien', ''), ('BAL-E', 'Détaillants divers (Balleyara)', ''),
     ('KON-A', 'Elh Hamadgaicha', ''), ('KON-B', 'Elh Assoumane Dogo', ''), ('KON-C', 'Elh Bassirou', ''), ('KON-D', 'Hachimou', ''), ('KON-E', 'Détaillants divers (Konni)', ''), ('KON-F', 'Andoum', ''),
     ('TAH-A', 'Elh Nasser', '96 14 90 35'), ('TAH-B', 'Elh Awal', '97 01 23 82'), ('TAH-C', 'Elh Souleymane', '96 12 28 79'), ('TAH-D', 'Abdoul Hak', '88 66 66 64'), ('TAH-E', 'Abdoul Kader', '98 84 49 85'),
     ('TAH-E2', 'Elh Mohamed', '96 15 28 45'), ('TAH-F', 'Détaillants divers (Tahoua)', ''), ('TAH-G', 'Elh Issa', '89 33 10 46'), ('TAH-H', 'Elh Alka', '96 01 17 44'), ('TAH-I', 'Elh Ambo', '96 23 98 07'),
     ('TAH-J', 'Elh Sanoussi Abalak', '96 00 78 45'), ('TAH-K', 'Elh Tole Bleu Abalak', '99 19 13 86'), ('TAH-L', 'Malan Tahoua', ''), ('TAH-M', 'Abdoulaye Tahoua', ''), ('TAH-N', 'Abalak', '')]
-PRODUITS = [('Arôme DADI Poulet', 13000), ('Arôme DADI Épicé', 13250)]
-DATE_STOCKS = dt.date(2026, 11, 1)
+PRODUITS = [('Arôme DADI Poulet', 12250), ('Arôme DADI Épicé', 13250), ('Mayonnaise Délice', 9500), ('Mayonnaise Oriba 1000 ml', 9500), ('Mayonnaise Oriba 500 ml', 9500), ('Mayonnaise Oriba 250 ml', 7500), ('Mayonnaise Aïda', 11000)]
+GROSSISTES = [('G01', 'Boubacar Colege Mariama', 'Grand Marché', 809), ('G02', 'Elh Zangui', 'Grand Marché', 70), ('G03', 'Ets Zarafi', 'Grand Marché', 125), ('G04', 'Elh Moumouni Douka', 'Grand Marché', 150),
+    ('G05', 'Alhassane Gabora', 'Grand Marché', 375), ('G06', 'Abdallah Mohamed', 'Grand Marché', 0), ('G07', 'Ahmed Badi', 'Grand Marché', 480), ('G08', 'Ousmane Yantala', 'Yantala', 229), ('G09', 'Boubacar Bako', 'Dolé', 300),
+    ('G10', 'Dépôt Abdoullaye Indinga', 'Dolé', 1687), ('G11', 'Dépôt Abdoullahi Dolé', 'Dolé', 0), ('G12', 'Abdallah Oustaz', None, 0)]
+DATE_STOCKS = dt.date(2026, 11, 3)
 
 wb = Workbook()
 fin = Side(style='thin', color='D9D4E8')
@@ -112,14 +117,15 @@ feuille('Paramètres', 'Paramètres', 'Produits, prix de référence et date des
 wb['Paramètres'].cell(row=5 + len(PRODUITS) + 1, column=2).number_format = 'DD/MM/YYYY'
 feuille('Dépôts', 'Dépôts', 'Un dépôt par zone. Stock initial = cartons au dépôt à la date des stocks initiaux (voir Paramètres).',
         ['Code', 'Nom', 'Zone', 'Grossiste habituel', 'Téléphone', 'Stock initial (cartons)', 'Prix du carton (FCFA)'], [10, 22, 14, 18, 14, 14, 14],
-        [[c, n, z, None, None, 0, p] for c, n, z, p in DEPOTS], vides=10, nombres=(6, 7))
+        [[c, n, z, None, None, STOCKS.get(c, 0), p] for c, n, z, p in DEPOTS], vides=10, nombres=(6, 7))
 feuille('Agents', 'Agents des dépôts', 'Chaque agent est rattaché à un dépôt.', ['Code', 'Nom', 'Dépôt', 'Fonction', 'Localité / marché', 'Téléphone', 'Stock initial (cartons)'],
         [10, 32, 18, 30, 18, 14, 14], [[c, n, d, f, None, None, 0] for c, n, d, f in AGENTS], vides=30, nombres=(7,))
 liste(wb['Agents'], 'C', '=Choix!$A$2:$A$40', len(AGENTS) + 30, 'Dépôt de l’agent')
 feuille('Clients', 'Clients', 'Clients des dépôts et des agents. Ajoutez ici tout nouveau client.', ['Code', 'Nom', 'Vendeur rattaché', 'Localité', 'Téléphone', 'Plafond (cartons)'],
         [10, 32, 22, 18, 14, 12], [[c, n, None, None, t or None, None] for c, n, t in CLIENTS], vides=150)
 feuille('Grossistes', 'Grossistes', 'Les grossistes ne s’approvisionnent que chez Oriba Food ou Oriba Rice. Ajoutez-les ici.',
-        ['Code', 'Nom', 'Localité', 'Fournisseur habituel', 'Téléphone', 'Stock initial (cartons)', 'Solde dû au départ (FCFA)'], [10, 30, 18, 20, 14, 14, 18], vides=60, nombres=(6, 7))
+        ['Code', 'Nom', 'Localité', 'Fournisseur habituel', 'Téléphone', 'Stock initial (cartons)', 'Solde dû au départ (FCFA)'], [10, 30, 18, 20, 14, 14, 18],
+        [[c, n, l, None, None, st, 0] for c, n, l, st in GROSSISTES], vides=60, nombres=(6, 7))
 liste(wb['Grossistes'], 'D', '=Choix!$J$2:$J$3', 60, 'Oriba Food ou Oriba Rice')
 
 # ---------- Journaux

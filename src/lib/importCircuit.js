@@ -43,7 +43,7 @@ function lire(wb, re, cols) {
 }
 const C_LISTES = {
   grossistes: { code: ['code'], nom: ['nom'], localite: ['localite'], fournisseur: ['fournisseur'], telephone: ['telephone'], stock: ['stock_initial'], solde: ['solde'] },
-  depots: { code: ['code'], nom: ['nom'], zone: ['zone', 'equipe'], grossiste: ['grossiste'], telephone: ['telephone'], stock: ['stock_initial'], prix: ['prix'] },
+  depots: { code: ['code'], nom: ['nom'], zone: ['zone', 'equipe'], grossiste: ['grossiste'], telephone: ['telephone'], stock: ['stock_initial'], prix: ['prix'], soldeF: ['reste_a_encaisser_au_depart_oriba_food', 'solde_food'], soldeR: ['reste_a_encaisser_au_depart_oriba_rice', 'solde_rice'] },
   sous: { code: ['code'], nom: ['nom'], depot: ['agent_depot', 'depot', 'agent'], fonction: ['fonction'], localite: ['localite'], telephone: ['telephone'], stock: ['stock_initial'] },
   clients: { code: ['code'], nom: ['nom'], vendeur: ['vendeur'], localite: ['localite'], telephone: ['telephone'], plafond: ['plafond'] },
 };
@@ -91,10 +91,16 @@ export function analyseCircuit(wb) {
     const eq = R.equipe(a.zone);
     if (!eq) { ref.rejets.push({ feuille: 'Agents-dépôts', ligne: a._ligne, msg: `Zone « ${t(a.zone)} » inconnue : créez l’équipe/zone ou corrigez le nom` }); continue; }
     const ex = R.parCode(R.D.agents, a.code) || trouverAgent(a.nom, (R.D.agents || []).filter((x) => x.actif !== false), eq.id);
-    const data = { code: t(a.code) || null, nom: t(a.nom), equipe_id: eq.id, zone_id: eq.zone_id, telephone: t(a.telephone) || null, role_circuit: 'depot', stock_initial: num(a.stock) || 0, ...(num(a.prix) > 0 ? { prix_carton: num(a.prix) } : {}), fonction: 'Dépôt' };
+    const data = { code: t(a.code) || null, nom: t(a.nom), equipe_id: eq.id, zone_id: eq.zone_id, telephone: t(a.telephone) || null, role_circuit: 'depot', stock_initial: num(a.stock) || 0, ...(num(a.prix) > 0 ? { prix_carton: num(a.prix) } : {}), ...(num(a.soldeF) > 0 ? { solde_initial_food: num(a.soldeF) } : {}), ...(num(a.soldeR) > 0 ? { solde_initial_rice: num(a.soldeR) } : {}), fonction: 'Dépôt' };
     A.set(K(a.code || a.nom), ex ? { id: ex.id, ex, eq } : { data, eq }); alias(A, a);
     if (!ex) ref.creer.depots.push(data);
-    else if (ex.role_circuit !== 'depot' || Number(ex.stock_initial || 0) !== data.stock_initial) ref.maj.push({ table: 'agents', row: { id: ex.id, role_circuit: 'depot', depot_id: null, stock_initial: data.stock_initial }, lib: `${ex.nom} : agent-dépôt de ${eq.nom}` });
+    else {
+      // Reste à encaisser au départ : repris seulement si la colonne est remplie dans le classeur
+      const sol = {};
+      if (!vide(a.soldeF) && Number(ex.solde_initial_food || 0) !== num(a.soldeF)) sol.solde_initial_food = num(a.soldeF) || 0;
+      if (!vide(a.soldeR) && Number(ex.solde_initial_rice || 0) !== num(a.soldeR)) sol.solde_initial_rice = num(a.soldeR) || 0;
+      if (ex.role_circuit !== 'depot' || Number(ex.stock_initial || 0) !== data.stock_initial || Object.keys(sol).length) ref.maj.push({ table: 'agents', row: { id: ex.id, role_circuit: 'depot', depot_id: null, stock_initial: data.stock_initial, ...sol }, lib: `${ex.nom} : dépôt de ${eq.nom}${Object.keys(sol).length ? ' (reste à encaisser au départ)' : ''}` });
+    }
   }
   // Sous-agents
   const S = new Map();
@@ -355,7 +361,7 @@ export function modeleCircuit() {
     ['4. Dates au format JJ/MM/AAAA. Mode : Comptant ou Crédit. Pour un crédit, le client et l’échéance sont obligatoires ; donnez un N° à la vente pour pouvoir enregistrer son remboursement.'],
     ['5. Versements : Objet = Ventes comptant, Remboursement crédit (avec le N° de la vente) ou Règlement grossiste ; Lieu = Caisse Oriba ou Chez le grossiste ; Argent pour = Oriba Food ou Oriba Rice.']]), 'Lisez-moi');
   add('Paramètres', 'Paramètres', 'Date à laquelle les stocks initiaux ont été comptés.', ['Produit', 'Prix de référence (FCFA)'], [...(D.produits || []).filter((p) => p.actif !== false).map((p) => [p.nom, p.prix_ref || '']), [], ['Date des stocks initiaux', fd(App.I.p.circuit_date_depart?.date) || j]], [30, 22]);
-  add('Dépôts', 'Dépôts', 'Un dépôt par zone. Stock initial = cartons présents au dépôt à la date des stocks initiaux.', ['Code', 'Nom', 'Zone', 'Grossiste habituel', 'Téléphone', 'Stock initial (cartons)', 'Prix du carton (FCFA)'], depots.map((a) => [a.code || '', a.nom, nm.equipe(a.equipe_id), '', a.telephone || '', a.stock_initial || 0, a.prix_carton || '']), [10, 22, 14, 16, 14, 14, 14]);
+  add('Dépôts', 'Dépôts', 'Un dépôt par zone. Stock initial = cartons présents au dépôt à la date des stocks initiaux.', ['Code', 'Nom', 'Zone', 'Grossiste habituel', 'Téléphone', 'Stock initial (cartons)', 'Prix du carton (FCFA)', 'Reste à encaisser au départ — Oriba Food (FCFA)', 'Reste à encaisser au départ — Oriba Rice (FCFA)'], depots.map((a) => [a.code || '', a.nom, nm.equipe(a.equipe_id), '', a.telephone || '', a.stock_initial || 0, a.prix_carton || '', a.solde_initial_food || 0, a.solde_initial_rice || 0]), [10, 22, 14, 16, 14, 14, 14, 20, 20]);
   add('Agents', 'Agents des dépôts', 'Agents commerciaux de chaque dépôt.', ['Code', 'Nom', 'Dépôt', 'Fonction', 'Localité / marché', 'Téléphone', 'Stock initial (cartons)'], sous.map((a) => [a.code || '', a.nom, nomDe(a.depot_id), a.fonction || '', '', a.telephone || '', a.stock_initial || 0]), [10, 28, 18, 22, 18, 14, 14]);
   add('Clients', 'Clients', 'Clients des dépôts et des agents.', ['Code', 'Nom', 'Vendeur rattaché', 'Localité', 'Téléphone', 'Plafond (cartons)'], (D.clients || []).filter((c) => c.actif !== false).map((c) => [c.code || '', c.nom, '', '', c.telephone || '', c.plafond_cartons || '']), [9, 30, 16, 18, 14, 12]);
   add('Grossistes', 'Grossistes', 'Les grossistes ne s’approvisionnent que chez Oriba Food ou Oriba Rice.', ['Code', 'Nom', 'Localité', 'Fournisseur habituel', 'Téléphone', 'Stock initial (cartons)', 'Solde dû au départ (FCFA)'], (D.grossistes || []).filter((g) => g.actif !== false).map((g) => [g.code || '', g.nom, g.localite || '', g.fournisseur || '', g.telephone || '', g.stock_initial || 0, g.solde_initial || 0]), [9, 28, 18, 18, 14, 14, 18]);

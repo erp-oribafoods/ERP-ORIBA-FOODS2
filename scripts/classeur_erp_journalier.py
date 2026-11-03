@@ -185,7 +185,7 @@ def feuille(nom, titre, sous_titre, entetes, largeurs, rows=(), vides=0, couleur
             c.border = BORD
             if i % 2: c.fill = PatternFill('solid', fgColor=GRIS)
             if j in dates: c.number_format = 'DD/MM/YYYY'
-            if j in nombres: c.number_format = '# ##0'
+            if j in nombres: c.number_format = '#,##0'
             if j in calc: c.fill = PatternFill('solid', fgColor=BLEU); c.font = Font(color='37474F')
     ws.freeze_panes = 'A5'
     return ws
@@ -279,8 +279,8 @@ liste(j3, 'B', '=Choix!$A$2:$A$40', LIGNES, 'Dépôt'); liste(j3, 'C', '=Choix!$
 NV = len(HIST_V) + 800
 j4 = feuille('4-Ventes', '4 · Ventes aux clients (comptant et crédit)', 'Une ligne par vente. Crédit : client, date promesse (échéance) et N° de vente obligatoires. Les cases bleues se calculent seules.' + (f' Lignes de mai à octobre 2026 : reprise des fichiers {TB_NOM}.' if TB_NOM else ''),
              ['Date', 'Vendeur (dépôt ou agent)', 'Marché / village', 'Client / acheteur', 'Produit', 'Unité (Carton / Pack)', 'Quantité', 'Prix unitaire (FCFA)', 'Mode (Comptant / Crédit)', 'Échéance / date promesse (si crédit)', 'N° vente', 'Observation',
-              'Montant (calculé)', 'Remboursé (calculé)', 'Solde restant (calculé)', 'Jours de retard (calculé)', 'Statut (calculé)', 'Mois (calculé)', 'Cartons (calculé)', 'Quantité restant à verser (calculé)'],
-             [12, 28, 18, 28, 20, 10, 9, 12, 12, 14, 11, 20, 14, 14, 14, 10, 20, 10, 10, 12], HIST_V, vides=NV - len(HIST_V), dates=(1, 10), nombres=(8, 13, 14, 15), calc=(13, 14, 15, 16, 17, 18, 19, 20))
+              'Montant (calculé)', 'Remboursé (calculé)', 'Solde restant (calculé)', 'Jours de retard (calculé)', 'Statut (calculé)', 'Mois (calculé)', 'Cartons (calculé)', 'Quantité restant à verser (calculé)', 'Dépôt / équipe (calculé)'],
+             [12, 28, 18, 28, 20, 10, 9, 12, 12, 14, 11, 20, 14, 14, 14, 10, 20, 10, 10, 12, 20], HIST_V, vides=NV - len(HIST_V), dates=(1, 10), nombres=(8, 13, 14, 15), calc=(13, 14, 15, 16, 17, 18, 19, 20, 21))
 for r in range(5, 5 + NV):
     j4[f'M{r}'] = f'=IF(OR(G{r}="",H{r}=""),"",G{r}*H{r})'
     j4[f'N{r}'] = f'=IF(OR(K{r}="",I{r}<>"Crédit"),"",SUMIFS(\'5-Versements\'!$G:$G,\'5-Versements\'!$D:$D,K{r},\'5-Versements\'!$C:$C,"Remboursement crédit"))'
@@ -290,7 +290,8 @@ for r in range(5, 5 + NV):
     j4[f'R{r}'] = f'=IF(A{r}="","",YEAR(A{r})&"-"&TEXT(MONTH(A{r}),"00"))'
     j4[f'S{r}'] = f'=IF(G{r}="","",IF(F{r}="Pack",G{r}/12,G{r}))'
     j4[f'T{r}'] = f'=IF(N(O{r})>0,O{r}/H{r},"")'
-j4.auto_filter.ref = f'A4:T{4 + NV}'
+    j4[f'U{r}'] = f'=IF(B{r}="","",IF(COUNTIF(Dépôts!$B$5:$B$40,B{r})>0,B{r},IFERROR(VLOOKUP(B{r},Agents!$B$5:$C$300,2,FALSE),"")))'
+j4.auto_filter.ref = f'A4:U{4 + NV}'
 liste(j4, 'B', '=Choix!$C$2:$C$191', NV, 'Dépôt ou agent qui a vendu'); liste(j4, 'C', '=Choix!$Q$2:$Q$80', NV, 'Marché / village de la vente'); liste(j4, 'D', '=Choix!$D$2:$D$401', NV, 'Client')
 liste(j4, 'E', '=Choix!$E$2:$E$20', NV, 'Produit'); liste(j4, 'F', '=Choix!$R$2:$R$3', NV, 'Carton ou Pack'); liste(j4, 'I', '=Choix!$H$2:$H$3', NV, 'Comptant ou Crédit')
 from openpyxl.formatting.rule import FormulaRule
@@ -355,97 +356,209 @@ IND = [
 for i, (lib, f, col, crit, u) in enumerate(IND, 7):
     tb.cell(row=i, column=1, value=lib).border = BORD
     for j, fx in ((2, jour(f, col, crit)), (3, mois(f, col, crit))):
-        c = tb.cell(row=i, column=j, value=fx); c.number_format = '# ##0'; c.border = BORD; c.fill = PatternFill('solid', fgColor=BLEU)
+        c = tb.cell(row=i, column=j, value=fx); c.number_format = '#,##0'; c.border = BORD; c.fill = PatternFill('solid', fgColor=BLEU)
     tb.cell(row=i, column=4, value=u).border = BORD
     if lib.startswith('  '): tb.cell(row=i, column=1).font = Font(italic=True, color='5A5670')
 tb.column_dimensions['A'].width = 36; tb.column_dimensions['B'].width = 18; tb.column_dimensions['C'].width = 22; tb.column_dimensions['D'].width = 10
 
-# ---------- Tableau de bord (comme le TB de l'équipe : rien à saisir, sauf la période et le plafond)
+# ---------- Tableau de bord (présentation du TB des équipes : bandeau, cartes de couleur, tableaux, graphiques)
+from openpyxl.formatting.rule import FormulaRule, DataBarRule, CellIsRule
+from openpyxl.chart import BarChart, PieChart, LineChart, Reference
+from openpyxl.chart.label import DataLabelList
+NAVY, VERT2, ROUGE, AMBRE, VIOL2, BLEU2, GRIS2, CLAIR = '1F4E79', '548235', 'C00000', 'FFC000', '9B59B6', '2E75B6', '404040', 'F2F2F2'
+JAUNE = PatternFill('solid', fgColor='FFF2CC')
+def P(c): return PatternFill('solid', fgColor=c)
+def bandeau(ws, r, c1, c2, texte, couleur, taille=12, h=None, align='left'):
+    ws.merge_cells(start_row=r, start_column=c1, end_row=r, end_column=c2)
+    c = ws.cell(row=r, column=c1, value=texte); c.font = Font(bold=True, size=taille, color=BLANC); c.alignment = Alignment(horizontal=align, vertical='center', indent=1 if align == 'left' else 0)
+    for j in range(c1, c2 + 1): ws.cell(row=r, column=j).fill = P(couleur)
+    if h: ws.row_dimensions[r].height = h
+def carte(ws, r, c1, lib, f, couleur, fmt='#,##0', texte=BLANC, taille=18):
+    for rr, v, sz in ((r, lib, 10), (r + 1, f, taille)):
+        ws.merge_cells(start_row=rr, start_column=c1, end_row=rr, end_column=c1 + 1)
+        c = ws.cell(row=rr, column=c1, value=v); c.font = Font(bold=True, size=sz, color=texte); c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        if rr == r + 1: c.number_format = fmt
+        for j in (c1, c1 + 1): ws.cell(row=rr, column=j).fill = P(couleur); ws.cell(row=rr, column=j).border = Border(left=Side(style='thin', color=BLANC), right=Side(style='thin', color=BLANC))
+def entete(ws, r, c1, hs, couleur=NAVY):
+    for j, h in enumerate(hs, c1):
+        c = ws.cell(row=r, column=j, value=h); c.font = Font(bold=True, color=BLANC, size=10); c.fill = P(couleur); c.border = BORD; c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    ws.row_dimensions[r].height = 30
+def cell(ws, r, j, v, fmt='#,##0', band=False, bold=False, couleur=None):
+    c = ws.cell(row=r, column=j, value=v); c.number_format = fmt; c.border = BORD; c.font = Font(size=10, bold=bold, color=couleur or '000000')
+    if band: c.fill = P('DDEBF7')
+    return c
+fin2 = Side(style='thin', color='BFBFBF'); BORD = Border(left=fin2, right=fin2, top=fin2, bottom=fin2)
+
 TBD = wb.create_sheet('Tableau de bord')
-def titre(ws, r, t):
-    c = ws.cell(row=r, column=1, value=t); c.font = Font(bold=True, size=12, color=VIOLET)
-def entete(ws, r, hs):
-    for j, h in enumerate(hs, 1):
-        c = ws.cell(row=r, column=j, value=h); c.font = Font(bold=True, color=BLANC); c.fill = PatternFill('solid', fgColor=VERT); c.border = BORD; c.alignment = Alignment(wrap_text=True, vertical='center')
-def calc(ws, r, j, f, fmt='# ##0'):
-    c = ws.cell(row=r, column=j, value=f); c.number_format = fmt; c.border = BORD; c.fill = PatternFill('solid', fgColor=BLEU); return c
-TBD['A1'] = 'TABLEAU DE BORD — VENTES, CRÉANCES ET ENCAISSEMENTS'; TBD['A1'].font = Font(bold=True, size=15, color=VERT_F)
-TBD['A2'] = 'Tout se calcule à partir des onglets 4-Ventes et 5-Versements. Choisissez la période (cases jaunes) ; les créances en cours ne dépendent pas de la période.'; TBD['A2'].font = Font(italic=True, color='5A5670')
-JAUNE = PatternFill('solid', fgColor='FFF8E1')
-for r, (lib, v) in enumerate([('Du', dt.date(2026, 5, 1)), ('Au', '=TODAY()'), ('Plafond cumul créances (cartons)', sum(p for _, p in PLAF) or 1000), ('Seuil d’alerte créance (jours)', 7)], 4):
-    TBD.cell(row=r, column=1, value=lib).font = Font(bold=True)
-    c = TBD.cell(row=r, column=2, value=v); c.fill = JAUNE; c.font = Font(bold=True); c.border = BORD
-    if r <= 5: c.number_format = 'DD/MM/YYYY'
-TBD['C6'] = ' + '.join(f'{z} {p:,.0f}'.replace(',', ' ') for z, p in PLAF) + ' (plafonds des TB)'; TBD['C6'].font = Font(italic=True, color='5A5670')
+TBD.sheet_view.showGridLines = False; TBD.sheet_properties.tabColor = NAVY
+for j in range(1, 15): TBD.column_dimensions[L(j)].width = 14.5
+TBD.column_dimensions['A'].width = 30; TBD.column_dimensions['B'].width = 26
+bandeau(TBD, 1, 1, 14, 'TABLEAU DE BORD — ORIBA FOODS · FORCE DE VENTE (TOUTES LES ÉQUIPES)', NAVY, 18, 40, 'center')
+TBD['A2'] = 'Mis à jour le'; TBD['A2'].font = Font(color='666666', italic=True); TBD['B2'] = '=TODAY()'; TBD['B2'].number_format = 'DD/MM/YYYY'; TBD['B2'].font = Font(color='666666', italic=True)
+TBD['D2'] = 'Tout se calcule à partir des onglets 4-Ventes et 5-Versements. Seules les cases jaunes se modifient.'; TBD['D2'].font = Font(color='666666', italic=True)
+TBD['A3'] = 'Période du'; TBD['B3'] = dt.date(2026, 5, 1); TBD['C3'] = 'au'; TBD['D3'] = '=TODAY()'
+TBD['F3'] = 'Plafond des créances (cartons)'; TBD['H3'] = sum(p for _, p in PLAF) or 1000; TBD['J3'] = 'Seuil d’alerte (jours)'; TBD['L3'] = 7
+for k in ('A3', 'C3', 'F3', 'J3'): TBD[k].font = Font(bold=True, color=NAVY); TBD[k].alignment = Alignment(horizontal='right')
+for k, fmt in (('B3', 'DD/MM/YYYY'), ('D3', 'DD/MM/YYYY'), ('H3', '#,##0'), ('L3', '0')):
+    TBD[k].fill = JAUNE; TBD[k].font = Font(bold=True, color='0000FF'); TBD[k].number_format = fmt; TBD[k].border = BORD; TBD[k].alignment = Alignment(horizontal='center')
+TBD['M3'] = ' + '.join(f'{z} {p:,.0f}'.replace(',', ' ') for z, p in PLAF); TBD['M3'].font = Font(italic=True, size=8, color='666666')
+TBD.row_dimensions[3].height = 22
 V = "'4-Ventes'"; VS = "'5-Versements'"
-PER = f',{V}!$A:$A,">="&$B$4,{V}!$A:$A,"<="&$B$5'
-PERV = f',{VS}!$A:$A,">="&$B$4,{VS}!$A:$A,"<="&$B$5'
-titre(TBD, 9, 'Indicateurs clés'); entete(TBD, 10, ['Indicateur', 'Valeur', 'Commentaire'])
-KPI = [('CA total (FCFA)', f'=SUMIFS({V}!$M:$M{PER})', 'ventes comptant + crédit de la période'),
-       ('Ventes au comptant (FCFA)', f'=SUMIFS({V}!$M:$M,{V}!$I:$I,"Comptant"{PER})', ''),
-       ('Ventes à crédit (FCFA)', f'=SUMIFS({V}!$M:$M,{V}!$I:$I,"Crédit"{PER})', ''),
-       ('Cartons vendus', f'=SUMIFS({V}!$S:$S{PER})', 'les packs comptent pour 1/12 de carton'),
-       ('Montant encaissé (FCFA)', f'=SUMIFS({VS}!$G:$G,{VS}!$C:$C,"Ventes comptant"{PERV})+SUMIFS({VS}!$G:$G,{VS}!$C:$C,"Remboursement crédit"{PERV})', 'versements des ventes comptant + remboursements de crédits'),
-       ('Solde des créances en cours (FCFA)', f'=SUM({V}!$O:$O)', 'toutes dates'),
-       ('Quantité en créance (cartons)', f'=SUM({V}!$T:$T)', ''),
-       ('% d’utilisation du plafond', '=IF($B$6>0,B17/$B$6,0)', ''),
-       ('Statut du plafond', '=IF(B18>=1,"🚨 Plafond dépassé",IF(B18>=0.8,"⚠️ Proche du plafond","✅ Normal"))', ''),
-       ('Créances en retard (nombre)', f'=COUNTIF({V}!$Q:$Q,"En retard")', ''),
-       ('Créances en retard de plus que le seuil (nombre)', f'=COUNTIFS({V}!$Q:$Q,"En retard",{V}!$P:$P,">"&$B$7)', ''),
-       ('Clients débiteurs actifs', '=COUNTIF(C:C,">0")-COUNTIF(C1:C40,">0")', 'clients avec un solde à rembourser')]
-for i, (lib, f, com) in enumerate(KPI, 11):
-    TBD.cell(row=i, column=1, value=lib).border = BORD
-    calc(TBD, i, 2, f, '0 %' if '%' in lib else '# ##0'); TBD.cell(row=i, column=3, value=com).font = Font(italic=True, color='5A5670')
-r0 = 25
-titre(TBD, r0, 'Ventes par vendeur (dépôt / chef d’équipe et agents)'); entete(TBD, r0 + 1, ['Vendeur', 'Qté comptant', 'Qté crédit', 'Qté totale', 'CA comptant (FCFA)', 'CA crédit (FCFA)', 'CA total (FCFA)'])
-NVd = len(DEPOTS) + len(AGENTS) + 20
-for i in range(NVd):
-    nd = len(DEPOTS) + 5; r = r0 + 2 + i; src = f'Choix!C{2 + i}' if i < nd else f'Choix!C{42 + i - nd}'
-    TBD.cell(row=r, column=1, value=f'={src}&""').border = BORD
-    k = f'{V}!$B:$B,$A{r}'
-    calc(TBD, r, 2, f'=IF($A{r}="","",SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Comptant"{PER}))'); calc(TBD, r, 3, f'=IF($A{r}="","",SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Crédit"{PER}))')
-    calc(TBD, r, 4, f'=IF($A{r}="","",N(B{r})+N(C{r}))'); calc(TBD, r, 5, f'=IF($A{r}="","",SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Comptant"{PER}))')
-    calc(TBD, r, 6, f'=IF($A{r}="","",SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Crédit"{PER}))'); calc(TBD, r, 7, f'=IF($A{r}="","",N(E{r})+N(F{r}))')
-r1 = r0 + 3 + NVd
-titre(TBD, r1, 'Ventes par marché'); entete(TBD, r1 + 1, ['Marché / village', 'Qté comptant', 'Qté crédit', 'Qté totale', 'CA comptant (FCFA)', 'CA crédit (FCFA)', 'CA total (FCFA)'])
-for i, m in enumerate(LISTE_MARCHES + ['(marché non renseigné)']):
-    r = r1 + 2 + i
-    TBD.cell(row=r, column=1, value=m).border = BORD
+PER = f',{V}!$A:$A,">="&$B$3,{V}!$A:$A,"<="&$D$3'
+PERV = f',{VS}!$A:$A,">="&$B$3,{VS}!$A:$A,"<="&$D$3'
+# Cartes principales
+TBD.row_dimensions[5].height = 26; TBD.row_dimensions[6].height = 44
+carte(TBD, 5, 1, 'CA TOTAL (FCFA)', f'=SUMIFS({V}!$M:$M{PER})', NAVY)
+carte(TBD, 5, 3, 'VENTES COMPTANT (FCFA)', f'=SUMIFS({V}!$M:$M,{V}!$I:$I,"Comptant"{PER})', VERT2)
+carte(TBD, 5, 5, 'VENTES CRÉDIT (FCFA)', f'=SUMIFS({V}!$M:$M,{V}!$I:$I,"Crédit"{PER})', ROUGE)
+carte(TBD, 5, 7, 'MONTANT ENCAISSÉ (FCFA)', f'=SUMIFS({VS}!$G:$G,{VS}!$C:$C,"Ventes comptant"{PERV})+SUMIFS({VS}!$G:$G,{VS}!$C:$C,"Remboursement crédit"{PERV})', BLEU2)
+carte(TBD, 5, 9, 'SOLDE DES CRÉANCES (FCFA)', f'=SUM({V}!$O:$O)', AMBRE, texte='000000')
+carte(TBD, 5, 11, 'QTÉ EN CRÉANCE (CARTONS)', f'=SUM({V}!$T:$T)', VIOL2)
+carte(TBD, 5, 13, 'CARTONS VENDUS', f'=SUMIFS({V}!$S:$S{PER})', GRIS2)
+# Cartes de contrôle (fond gris clair)
+TBD.row_dimensions[8].height = 26; TBD.row_dimensions[9].height = 40
+carte(TBD, 8, 1, 'PLAFOND DES CRÉANCES', '=H3', CLAIR, texte='000000', taille=16)
+carte(TBD, 8, 3, '% UTILISATION DU PLAFOND', '=IF($H$3>0,K6/$H$3,0)', CLAIR, '0.0 %', texte='000000', taille=16)
+carte(TBD, 8, 5, 'STATUT DU PLAFOND', '=IF(C9>=1,"🚨 Dépassé",IF(C9>=0.8,"⚠️ Proche","✅ Normal"))', CLAIR, '@', texte='000000', taille=14)
+carte(TBD, 8, 7, 'CRÉANCES EN RETARD', f'=COUNTIF({V}!$Q:$Q,"En retard")', CLAIR, texte=ROUGE, taille=16)
+carte(TBD, 8, 9, 'RETARD > SEUIL', f'=COUNTIFS({V}!$Q:$Q,"En retard",{V}!$P:$P,">"&$L$3)', CLAIR, texte=ROUGE, taille=16)
+carte(TBD, 8, 11, 'CLIENTS DÉBITEURS ACTIFS', "=COUNTIF('Créances par client'!D5:D254,\">0\")", CLAIR, texte='000000', taille=16)
+carte(TBD, 8, 13, 'NOMBRE DE VENTES', f'=COUNTIFS({V}!$M:$M,">0"{PER})', CLAIR, texte='000000', taille=16)
+TBD.conditional_formatting.add('C9', CellIsRule(operator='greaterThanOrEqual', formula=['0.8'], font=Font(bold=True, color=ROUGE, size=16)))
+# Ventes par équipe (dépôt = chef d'équipe)
+r0 = 11
+bandeau(TBD, r0, 1, 11, 'VENTES PAR ÉQUIPE  ·  DÉPÔT = CHEF D’ÉQUIPE', BLEU2, 12, 22)
+entete(TBD, r0 + 1, 1, ['Dépôt', 'Chef d’équipe', 'Qté comptant (ctn)', 'Qté crédit (ctn)', 'Qté totale (ctn)', 'CA comptant (FCFA)', 'CA crédit (FCFA)', 'CA total (FCFA)', 'Part du CA', 'Créances en cours (FCFA)', 'Crédits en retard'])
+NEQ = len(DEPOTS) + 2
+for i in range(NEQ):
+    r = r0 + 2 + i; b = i % 2 == 1
+    cell(TBD, r, 1, f'=Dépôts!B{5 + i}&""', '@', b, True); cell(TBD, r, 2, f'=Dépôts!J{5 + i}&""', '@', b)
+    k = f'{V}!$U:$U,$A{r}'
+    cell(TBD, r, 3, f'=IF($A{r}="","",SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Comptant"{PER}))', '#,##0', b); cell(TBD, r, 4, f'=IF($A{r}="","",SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Crédit"{PER}))', '#,##0', b)
+    cell(TBD, r, 5, f'=IF($A{r}="","",N(C{r})+N(D{r}))', '#,##0', b, True)
+    cell(TBD, r, 6, f'=IF($A{r}="","",SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Comptant"{PER}))', '#,##0', b); cell(TBD, r, 7, f'=IF($A{r}="","",SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Crédit"{PER}))', '#,##0', b)
+    cell(TBD, r, 8, f'=IF($A{r}="","",N(F{r})+N(G{r}))', '#,##0', b, True); cell(TBD, r, 9, f'=IF(OR($A{r}="",$A$6=0),"",H{r}/$A$6)', '0.0 %', b)
+    cell(TBD, r, 10, f'=IF($A{r}="","",SUMIFS({V}!$O:$O,{k}))', '#,##0', b, couleur=ROUGE); cell(TBD, r, 11, f'=IF($A{r}="","",COUNTIFS({k},{V}!$Q:$Q,"En retard"))', '0', b)
+rt = r0 + 2 + NEQ
+cell(TBD, rt, 1, 'TOTAL', '@', bold=True)
+for j in (3, 4, 5, 6, 7, 8, 10, 11):
+    cell(TBD, rt, j, f'=SUM({L(j)}{r0 + 2}:{L(j)}{rt - 1})', '#,##0', bold=True)
+for j in range(1, 12): TBD.cell(row=rt, column=j).fill = P('BDD7EE')
+TBD.conditional_formatting.add(f'H{r0 + 2}:H{rt - 1}', DataBarRule(start_type='num', start_value=0, end_type='max', color='5B9BD5'))
+# Graphiques : CA par équipe (comptant / crédit) et répartition par marché
+g1 = rt + 2
+ch = BarChart(); ch.type = 'col'; ch.grouping = 'stacked'; ch.overlap = 100; ch.title = 'Chiffre d’affaires par équipe (FCFA)'; ch.y_axis.title = 'FCFA'; ch.height = 8; ch.width = 17
+ch.add_data(Reference(TBD, min_col=6, max_col=7, min_row=r0 + 1, max_row=r0 + 1 + len(DEPOTS)), titles_from_data=True); ch.set_categories(Reference(TBD, min_col=1, min_row=r0 + 2, max_row=r0 + 1 + len(DEPOTS)))
+ch.series[0].graphicalProperties.solidFill = VERT2; ch.series[1].graphicalProperties.solidFill = ROUGE; ch.legend.position = 'b'
+TBD.add_chart(ch, f'A{g1}')
+# Ventes par marché (tableau + top 8 pour le camembert)
+r1 = g1 + 18
+bandeau(TBD, r1, 1, 8, 'VENTES PAR MARCHÉ / VILLAGE', VERT2, 12, 22)
+entete(TBD, r1 + 1, 1, ['Marché / village', 'Qté comptant (ctn)', 'Qté crédit (ctn)', 'Qté totale (ctn)', 'CA comptant (FCFA)', 'CA crédit (FCFA)', 'CA total (FCFA)', 'Part du CA'], VERT2)
+MKS = LISTE_MARCHES + ['(sans marché)']
+for i, m in enumerate(MKS):
+    r = r1 + 2 + i; b = i % 2 == 1
+    cell(TBD, r, 1, m, '@', b, True)
     k = f'{V}!$C:$C,{"$A" + str(r) if i < len(LISTE_MARCHES) else chr(34) + chr(34)}'
-    calc(TBD, r, 2, f'=SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Comptant"{PER})'); calc(TBD, r, 3, f'=SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Crédit"{PER})')
-    calc(TBD, r, 4, f'=B{r}+C{r}'); calc(TBD, r, 5, f'=SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Comptant"{PER})'); calc(TBD, r, 6, f'=SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Crédit"{PER})'); calc(TBD, r, 7, f'=E{r}+F{r}')
-r2 = r1 + 4 + len(LISTE_MARCHES)
-titre(TBD, r2, 'Ventes par produit'); entete(TBD, r2 + 1, ['Produit', 'Quantité (cartons)', 'CA (FCFA)'])
-for i, p in enumerate(PRODUITS):
-    r = r2 + 2 + i; TBD.cell(row=r, column=1, value=p[0]).border = BORD
-    calc(TBD, r, 2, f'=SUMIFS({V}!$S:$S,{V}!$E:$E,$A{r}{PER})'); calc(TBD, r, 3, f'=SUMIFS({V}!$M:$M,{V}!$E:$E,$A{r}{PER})')
-r3 = r2 + 3 + len(PRODUITS)
-titre(TBD, r3, 'Évolution mensuelle'); entete(TBD, r3 + 1, ['Mois', 'CA comptant (FCFA)', 'CA crédit (FCFA)', 'CA total (FCFA)', 'Quantité (cartons)'])
-for i in range(14):
-    y, m = 2026 + (4 + i) // 12, (4 + i) % 12 + 1; mo = f'{y}-{m:02d}'; r = r3 + 2 + i
-    TBD.cell(row=r, column=1, value=mo).border = BORD
-    calc(TBD, r, 2, f'=SUMIFS({V}!$M:$M,{V}!$R:$R,$A{r},{V}!$I:$I,"Comptant")'); calc(TBD, r, 3, f'=SUMIFS({V}!$M:$M,{V}!$R:$R,$A{r},{V}!$I:$I,"Crédit")')
-    calc(TBD, r, 4, f'=B{r}+C{r}'); calc(TBD, r, 5, f'=SUMIFS({V}!$S:$S,{V}!$R:$R,$A{r})')
-for c, w in zip('ABCDEFG', [44, 16, 16, 14, 18, 18, 18]): TBD.column_dimensions[c].width = w
-TBD.freeze_panes = 'A9'
-# Créances par client (onglet à part)
+    cell(TBD, r, 2, f'=SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Comptant"{PER})', '#,##0', b); cell(TBD, r, 3, f'=SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Crédit"{PER})', '#,##0', b)
+    cell(TBD, r, 4, f'=B{r}+C{r}', '#,##0', b, True); cell(TBD, r, 5, f'=SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Comptant"{PER})', '#,##0', b); cell(TBD, r, 6, f'=SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Crédit"{PER})', '#,##0', b)
+    cell(TBD, r, 7, f'=E{r}+F{r}', '#,##0', b, True); cell(TBD, r, 8, f'=IF($A$6=0,"",G{r}/$A$6)', '0.0 %', b)
+    TBD.cell(row=r, column=16, value=f'=G{r}+ROW()/1000000')          # clé de tri (colonne masquée)
+rm2 = r1 + 1 + len(MKS)
+TBD.conditional_formatting.add(f'G{r1 + 2}:G{rm2}', DataBarRule(start_type='num', start_value=0, end_type='max', color='70AD47'))
+TBD.column_dimensions['P'].hidden = True
+# Top 8 marchés + autres
+bandeau(TBD, r1, 10, 12, 'TOP 8 DES MARCHÉS', VERT2, 11, 22)
+entete(TBD, r1 + 1, 10, ['Marché', 'CA total (FCFA)', 'Part'], VERT2)
+rng = f'$P${r1 + 2}:$P${rm2}'
+for k in range(1, 9):
+    r = r1 + 1 + k
+    cell(TBD, r, 10, f'=IF(LARGE({rng},{k})<1,"",INDEX($A${r1 + 2}:$A${rm2},MATCH(LARGE({rng},{k}),{rng},0)))', '@', k % 2 == 0, True)
+    cell(TBD, r, 11, f'=IF(J{r}="",0,INDEX($G${r1 + 2}:$G${rm2},MATCH(LARGE({rng},{k}),{rng},0)))', '#,##0', k % 2 == 0)
+    cell(TBD, r, 12, f'=IF($A$6=0,"",K{r}/$A$6)', '0.0 %', k % 2 == 0)
+r = r1 + 10
+cell(TBD, r, 10, 'Autres marchés', '@', bold=True); cell(TBD, r, 11, f'=MAX(0,$A$6-SUM(K{r1 + 2}:K{r1 + 9}))', '#,##0'); cell(TBD, r, 12, f'=IF($A$6=0,"",K{r}/$A$6)', '0.0 %')
+pie = PieChart(); pie.title = 'Répartition du CA par marché'; pie.height = 8; pie.width = 12
+pie.add_data(Reference(TBD, min_col=11, min_row=r1 + 1, max_row=r1 + 10), titles_from_data=True); pie.set_categories(Reference(TBD, min_col=10, min_row=r1 + 2, max_row=r1 + 10))
+pie.dataLabels = DataLabelList(); pie.dataLabels.showPercent = True; pie.dataLabels.showVal = False; pie.dataLabels.showCatName = False; pie.dataLabels.showSerName = False; pie.dataLabels.showLegendKey = False; pie.legend.position = 'r'
+TBD.add_chart(pie, f'H{g1}')
+# Évolution mensuelle + ventes par produit
+r3 = rm2 + 3
+bandeau(TBD, r3, 1, 6, 'ÉVOLUTION MENSUELLE', NAVY, 12, 22)
+entete(TBD, r3 + 1, 1, ['Mois', 'CA comptant (FCFA)', 'CA crédit (FCFA)', 'CA total (FCFA)', 'Quantité (ctn)', 'Encaissé (FCFA)'])
+MOIS_FR = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
+NM = 14
+for i in range(NM):
+    y, m = 2026 + (4 + i) // 12, (4 + i) % 12 + 1; mo = f'{y}-{m:02d}'; r = r3 + 2 + i; b = i % 2 == 1
+    cell(TBD, r, 1, f'{MOIS_FR[m - 1]} {y}', '@', b, True); TBD.cell(row=r, column=17, value=mo)
+    cell(TBD, r, 2, f'=SUMIFS({V}!$M:$M,{V}!$R:$R,$Q{r},{V}!$I:$I,"Comptant")', '#,##0', b); cell(TBD, r, 3, f'=SUMIFS({V}!$M:$M,{V}!$R:$R,$Q{r},{V}!$I:$I,"Crédit")', '#,##0', b)
+    cell(TBD, r, 4, f'=B{r}+C{r}', '#,##0', b, True); cell(TBD, r, 5, f'=SUMIFS({V}!$S:$S,{V}!$R:$R,$Q{r})', '#,##0', b)
+    d0, d1 = f'DATE({y},{m},1)', f'DATE({y + (m == 12)},{m % 12 + 1},1)'
+    cell(TBD, r, 6, f'=SUMIFS({VS}!$G:$G,{VS}!$A:$A,">="&{d0},{VS}!$A:$A,"<"&{d1},{VS}!$C:$C,"<>Règlement grossiste")', '#,##0', b)
+TBD.column_dimensions['Q'].hidden = True
+lc = LineChart(); lc.title = 'Évolution mensuelle du chiffre d’affaires (FCFA)'; lc.height = 8; lc.width = 17; lc.legend.position = 'b'
+lc.add_data(Reference(TBD, min_col=2, max_col=4, min_row=r3 + 1, max_row=r3 + 1 + NM), titles_from_data=True); lc.set_categories(Reference(TBD, min_col=1, min_row=r3 + 2, max_row=r3 + 1 + NM))
+for s_, c_ in zip(lc.series, (VERT2, ROUGE, NAVY)): s_.graphicalProperties.line.solidFill = c_; s_.graphicalProperties.line.width = 28000; s_.smooth = False
+TBD.add_chart(lc, f'H{r3}')
+r4 = r3 + 3 + NM
+bandeau(TBD, r4, 1, 4, 'VENTES PAR PRODUIT', VIOL2, 12, 22)
+entete(TBD, r4 + 1, 1, ['Produit', 'Quantité (ctn)', 'CA (FCFA)', 'Part du CA'], VIOL2)
+for i, p_ in enumerate(PRODUITS):
+    r = r4 + 2 + i; b = i % 2 == 1
+    cell(TBD, r, 1, p_[0], '@', b, True); cell(TBD, r, 2, f'=SUMIFS({V}!$S:$S,{V}!$E:$E,$A{r}{PER})', '#,##0', b)
+    cell(TBD, r, 3, f'=SUMIFS({V}!$M:$M,{V}!$E:$E,$A{r}{PER})', '#,##0', b, True); cell(TBD, r, 4, f'=IF($A$6=0,"",C{r}/$A$6)', '0.0 %', b)
+# Ventes par vendeur
+r5 = r4 + 4 + len(PRODUITS)
+bandeau(TBD, r5, 1, 8, 'VENTES PAR VENDEUR  ·  CHEFS D’ÉQUIPE (DÉPÔTS) ET AGENTS', BLEU2, 12, 22)
+entete(TBD, r5 + 1, 1, ['Vendeur', 'Dépôt / équipe', 'Qté comptant (ctn)', 'Qté crédit (ctn)', 'Qté totale (ctn)', 'CA comptant (FCFA)', 'CA crédit (FCFA)', 'CA total (FCFA)'])
+nd = len(DEPOTS) + 3; NVd = nd + len(AGENTS) + 15
+for i in range(NVd):
+    r = r5 + 2 + i; b = i % 2 == 1
+    src = f'Choix!C{2 + i}' if i < nd else f'Choix!C{42 + i - nd}'
+    cell(TBD, r, 1, f'={src}&""', '@', b, True)
+    cell(TBD, r, 2, f'=IF($A{r}="","",IF(COUNTIF(Dépôts!$B$5:$B$40,$A{r})>0,$A{r},IFERROR(VLOOKUP($A{r},Agents!$B$5:$C$300,2,FALSE),"")))', '@', b)
+    k = f'{V}!$B:$B,$A{r}'
+    cell(TBD, r, 3, f'=IF($A{r}="","",SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Comptant"{PER}))', '#,##0', b); cell(TBD, r, 4, f'=IF($A{r}="","",SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Crédit"{PER}))', '#,##0', b)
+    cell(TBD, r, 5, f'=IF($A{r}="","",N(C{r})+N(D{r}))', '#,##0', b, True); cell(TBD, r, 6, f'=IF($A{r}="","",SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Comptant"{PER}))', '#,##0', b)
+    cell(TBD, r, 7, f'=IF($A{r}="","",SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Crédit"{PER}))', '#,##0', b); cell(TBD, r, 8, f'=IF($A{r}="","",N(F{r})+N(G{r}))', '#,##0', b, True)
+TBD.conditional_formatting.add(f'H{r5 + 2}:H{r5 + 1 + NVd}', DataBarRule(start_type='num', start_value=0, end_type='max', color='5B9BD5'))
+TBD.freeze_panes = 'A4'
+for ws_ in (TBD,):
+    ws_.page_setup.orientation = 'landscape'; ws_.page_setup.fitToWidth = 1; ws_.page_setup.fitToHeight = 0; ws_.sheet_properties.pageSetUpPr.fitToPage = True
+
+# ---------- Créances par client (présentation du « Suivi des créances » du TB)
 CRC = wb.create_sheet('Créances par client')
-CRC['A1'] = 'CRÉANCES PAR CLIENT'; CRC['A1'].font = Font(bold=True, size=15, color=VERT_F)
-CRC['A2'] = 'Ventes à crédit et remboursements de chaque client (toutes dates). Rien à saisir.'; CRC['A2'].font = Font(italic=True, color='5A5670')
-entete(CRC, 4, ['Client', 'Crédits accordés (FCFA)', 'Remboursé (FCFA)', 'Montant dû (FCFA)', 'Qté en créance (cartons)', 'Taux de remboursement', 'Créances en retard'])
+CRC.sheet_view.showGridLines = False; CRC.sheet_properties.tabColor = ROUGE
+bandeau(CRC, 1, 1, 8, 'SUIVI DES CRÉANCES PAR CLIENT', ROUGE, 16, 34, 'center')
+CRC['A2'] = 'Ventes à crédit et remboursements de chaque client, toutes dates. Rien à saisir : tout vient de 4-Ventes et 5-Versements.'; CRC['A2'].font = Font(italic=True, color='666666')
+entete(CRC, 4, 1, ['Client', 'Crédits accordés (FCFA)', 'Remboursé (FCFA)', 'Montant dû (FCFA)', 'Qté en créance (ctn)', 'Taux de remboursement', 'Crédits en retard', ''], ROUGE)
+CRC.cell(row=4, column=8).fill = P(BLANC); CRC.cell(row=4, column=8).border = Border()
 for i in range(250):
-    r = 5 + i
-    CRC.cell(row=r, column=1, value=f'=Choix!D{2 + i}&""').border = BORD
+    r = 5 + i; b = i % 2 == 1
+    cell(CRC, r, 1, f'=Choix!D{2 + i}&""', '@', b, True)
     k = f'{V}!$D:$D,$A{r}'
-    calc(CRC, r, 2, f'=IF($A{r}="","",SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Crédit"))'); calc(CRC, r, 3, f'=IF($A{r}="","",SUMIFS({V}!$N:$N,{k}))')
-    calc(CRC, r, 4, f'=IF($A{r}="","",SUMIFS({V}!$O:$O,{k}))'); calc(CRC, r, 5, f'=IF($A{r}="","",SUMIFS({V}!$T:$T,{k}))')
-    calc(CRC, r, 6, f'=IF(OR($A{r}="",N(B{r})=0),"",C{r}/B{r})', '0 %'); calc(CRC, r, 7, f'=IF($A{r}="","",COUNTIFS({k},{V}!$Q:$Q,"En retard"))')
-CRC.conditional_formatting.add('D5:D254', FormulaRule(formula=['N($G5)>0'], font=Font(bold=True, color='B71C1C')))
-for c, w in zip('ABCDEFG', [34, 18, 16, 16, 14, 14, 12]): CRC.column_dimensions[c].width = w
-CRC.freeze_panes = 'A5'
-CRC.auto_filter.ref = 'A4:G254'
-TBD['B22'] = "=COUNTIF('Créances par client'!D5:D254,\">0\")"
-TBD['B22'].number_format = '# ##0'; TBD['B22'].fill = PatternFill('solid', fgColor=BLEU); TBD['B22'].border = BORD
+    cell(CRC, r, 2, f'=IF($A{r}="","",SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Crédit"))', '#,##0', b); cell(CRC, r, 3, f'=IF($A{r}="","",SUMIFS({V}!$N:$N,{k}))', '#,##0', b)
+    cell(CRC, r, 4, f'=IF($A{r}="","",SUMIFS({V}!$O:$O,{k}))', '#,##0', b, True); cell(CRC, r, 5, f'=IF($A{r}="","",SUMIFS({V}!$T:$T,{k}))', '#,##0', b)
+    cell(CRC, r, 6, f'=IF(OR($A{r}="",N(B{r})=0),"",C{r}/B{r})', '0 %', b); cell(CRC, r, 7, f'=IF($A{r}="","",COUNTIFS({k},{V}!$Q:$Q,"En retard"))', '0', b)
+    CRC.cell(row=r, column=16, value=f'=N(D{r})+ROW()/1000000')
+CRC.column_dimensions['P'].hidden = True
+CRC.conditional_formatting.add('D5:D254', FormulaRule(formula=['N($G5)>0'], font=Font(bold=True, color=ROUGE), fill=P('FDE7E7')))
+CRC.conditional_formatting.add('F5:F254', DataBarRule(start_type='num', start_value=0, end_type='num', end_value=1, color='70AD47'))
+for c_, w in zip('ABCDEFG', [34, 18, 16, 16, 14, 14, 12]): CRC.column_dimensions[c_].width = w
+CRC.freeze_panes = 'A5'; CRC.auto_filter.ref = 'A4:G254'
+# Top 10 des débiteurs + graphique
+bandeau(CRC, 3, 10, 12, 'TOP 10 DES CLIENTS DÉBITEURS', ROUGE, 11, 22)
+entete(CRC, 4, 10, ['Client', 'Montant dû (FCFA)', 'Crédits en retard'], ROUGE)
+for k in range(1, 11):
+    r = 4 + k; b = k % 2 == 0
+    cell(CRC, r, 10, f'=IF(LARGE($P$5:$P$254,{k})<1,"",INDEX($A$5:$A$254,MATCH(LARGE($P$5:$P$254,{k}),$P$5:$P$254,0)))', '@', b, True)
+    cell(CRC, r, 11, f'=IF(J{r}="",0,INDEX($D$5:$D$254,MATCH(LARGE($P$5:$P$254,{k}),$P$5:$P$254,0)))', '#,##0', b, couleur=ROUGE)
+    cell(CRC, r, 12, f'=IF(J{r}="","",INDEX($G$5:$G$254,MATCH(LARGE($P$5:$P$254,{k}),$P$5:$P$254,0)))', '0', b)
+CRC.column_dimensions['J'].width = 30; CRC.column_dimensions['K'].width = 18; CRC.column_dimensions['L'].width = 14
+bc = BarChart(); bc.type = 'bar'; bc.title = 'Top clients — créances en cours (FCFA)'; bc.height = 9; bc.width = 19; bc.legend = None
+bc.add_data(Reference(CRC, min_col=11, min_row=4, max_row=14), titles_from_data=True); bc.set_categories(Reference(CRC, min_col=10, min_row=5, max_row=14))
+bc.series[0].graphicalProperties.solidFill = ROUGE; bc.y_axis.scaling.orientation = 'minMax'; bc.x_axis.scaling.orientation = 'maxMin'
+CRC.add_chart(bc, 'J17')
 
 # ---------- Choix (feuille cachée) : les listes déroulantes suivent les onglets de listes
 ch = wb.create_sheet('Choix')
@@ -480,6 +593,79 @@ for i, m in enumerate(LISTE_MARCHES): ch[f'Q{2 + i}'] = m
 ch['R2'], ch['R3'] = 'Carton', 'Pack'
 ch.sheet_state = 'hidden'
 
+# ---------- Habillage : couleurs par onglet (comme les TB) — bandeau de titre, en-têtes, lignes alternées, cases calculées
+def eclaircir(hexa, t=0.85):
+    r, g, b = (int(hexa[i:i + 2], 16) for i in (0, 2, 4))
+    return '%02X%02X%02X' % tuple(int(x + (255 - x) * t) for x in (r, g, b))
+COUL = {'4-Ventes': NAVY, '5-Versements': VERT2, '2-Appro dépôts': BLEU2, '3-Remises agents': BLEU2, '6-Transferts': BLEU2, '1-Appro grossistes': '2F5597',
+        '7-Dépenses': ROUGE, '8-Objectifs': '7030A0', '9-Budgets': 'BF8F00', 'Dépôts': 'BF8F00', 'Agents': 'BF8F00', 'Clients': 'BF8F00', 'Grossistes': 'BF8F00', 'Paramètres': 'BF8F00'}
+fin3 = Side(style='thin', color='D9D9D9'); B3 = Border(left=fin3, right=fin3, top=fin3, bottom=fin3)
+for nom, col in COUL.items():
+    ws = wb[nom]; ws.sheet_view.showGridLines = False; ws.sheet_properties.tabColor = col; ws.sheet_view.zoomScale = 90
+    nc = max(c.column for c in ws[4] if c.value) if any(c.value for c in ws[4]) else 8
+    t1, t2 = ws['A1'].value, ws['A2'].value
+    bandeau(ws, 1, 1, nc, t1, col, 15, 30)
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=nc)
+    ws['A2'] = t2; ws['A2'].font = Font(italic=True, size=10, color='595959'); ws['A2'].alignment = Alignment(wrap_text=True, vertical='center', indent=1)
+    for j in range(1, nc + 1): ws.cell(row=2, column=j).fill = P(eclaircir(col, 0.9))
+    ws.row_dimensions[2].height = 30; ws.row_dimensions[3].height = 6
+    calc = [c.column for c in ws[4] if c.value and 'calcul' in str(c.value).lower()]
+    for c in ws[4]:
+        if not c.value: continue
+        c.fill = P('595959' if c.column in calc else col); c.font = Font(bold=True, size=10, color=BLANC)
+        c.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True); c.border = B3
+    ws.row_dimensions[4].height = 40
+    band = P(eclaircir(col, 0.9)); calcf = P('EDEDED'); calc2 = P('E2E2E2')
+    for row in ws.iter_rows(min_row=5, max_row=ws.max_row, max_col=nc):
+        alt = row[0].row % 2 == 0
+        for c in row:
+            c.border = B3
+            if c.column in calc: c.fill = calc2 if alt else calcf; c.font = Font(size=10, italic=True, color='404040')
+            else: c.fill = band if alt else P(BLANC); c.font = Font(size=10, color='000000', bold=c.column == 2 and nom in ('Dépôts', 'Agents', 'Clients', 'Grossistes'))
+# Tableau du jour
+tj = wb['Tableau du jour']; tj.sheet_view.showGridLines = False; tj.sheet_properties.tabColor = VERT2
+bandeau(tj, 1, 1, 4, 'TABLEAU DU JOUR', VERT2, 15, 30, 'center')
+tj['A2'].font = Font(italic=True, color='595959')
+tj['A4'].font = Font(bold=True, color=VERT2); tj['B4'].fill = JAUNE; tj['B4'].font = Font(bold=True, size=12, color='0000FF'); tj['B4'].border = B3
+for c in tj[6]:
+    if c.value: c.fill = P(VERT2); c.font = Font(bold=True, color=BLANC); c.alignment = Alignment(horizontal='center')
+for r in range(7, 7 + len(IND)):
+    for j in range(1, 5):
+        c = tj.cell(row=r, column=j); c.border = B3; c.fill = P(eclaircir(VERT2, 0.88) if r % 2 == 0 else BLANC)
+        if j in (2, 3): c.font = Font(bold=True, size=11, color=NAVY)
+# Lisez-moi : bandeau, sommaire avec liens, rubriques colorées
+lm = wb['Lisez-moi']; lm.sheet_view.showGridLines = False; lm.sheet_properties.tabColor = NAVY
+textes = [lm.cell(row=i, column=1).value for i in range(1, lm.max_row + 1)]
+for i in range(1, lm.max_row + 1): lm.cell(row=i, column=1).value = None
+lm.column_dimensions['A'].width = 4
+for j, w in zip('BCDEFG', [26, 60, 4, 26, 60, 4]): lm.column_dimensions[j].width = w
+bandeau(lm, 1, 1, 6, 'ORIBA FOODS — ERP · CLASSEUR DE SAISIE ET DE SUIVI', NAVY, 18, 40, 'center')
+lm.merge_cells('A2:F2'); lm['A2'] = 'Oriba Food / Oriba Rice  →  Grossistes  →  Dépôts (chefs d’équipe)  →  Agents  →  Marchés'; lm['A2'].font = Font(bold=True, size=12, color=NAVY); lm['A2'].alignment = Alignment(horizontal='center')
+lm.row_dimensions[2].height = 24
+bandeau(lm, 4, 1, 6, 'SOMMAIRE  ·  cliquez sur un onglet pour l’ouvrir', BLEU2, 12, 22)
+TUILES = [('Tableau de bord', NAVY, 'CA, encaissements, créances, plafond, équipes, marchés, produits, mois'), ('Créances par client', ROUGE, 'Ce que chaque client doit encore, top 10 des débiteurs'),
+          ('Tableau du jour', VERT2, 'Les totaux d’une journée et du mois'), ('4-Ventes', NAVY, 'Ventes au comptant et à crédit (à saisir chaque jour)'),
+          ('5-Versements', VERT2, 'Versements, remboursements de crédits, règlements des grossistes'), ('2-Appro dépôts', BLEU2, 'Cartons reçus par les dépôts'),
+          ('3-Remises agents', BLEU2, 'Cartons confiés aux agents'), ('6-Transferts', BLEU2, 'Cartons envoyés d’un dépôt à un autre'),
+          ('1-Appro grossistes', '2F5597', 'Cartons reçus par les grossistes'), ('7-Dépenses', ROUGE, 'Salaires, carburant, réparations, vidanges, assurances…'),
+          ('8-Objectifs', '7030A0', 'Objectifs du mois par agent ou équipe'), ('9-Budgets', 'BF8F00', 'Budgets du mois par équipe et nature'),
+          ('Dépôts', 'BF8F00', 'Les dépôts et leur chef d’équipe'), ('Agents', 'BF8F00', 'Les agents et leur marché'), ('Clients', 'BF8F00', 'Les clients'), ('Grossistes', 'BF8F00', 'Les grossistes')]
+for k, (n, c_, d) in enumerate(TUILES):
+    r = 5 + k // 2; j = 2 if k % 2 == 0 else 5
+    t = lm.cell(row=r, column=j, value=n); t.hyperlink = f"#'{n}'!A1"; t.fill = P(c_); t.font = Font(bold=True, color=BLANC, underline='single'); t.alignment = Alignment(horizontal='center', vertical='center'); t.border = B3
+    e = lm.cell(row=r, column=j + 1, value=d); e.fill = P(eclaircir(c_, 0.88)); e.font = Font(size=10, color='262626'); e.alignment = Alignment(vertical='center', indent=1); e.border = B3
+    lm.row_dimensions[r].height = 24
+r = 5 + (len(TUILES) + 1) // 2 + 1
+for t in textes[2:]:
+    if t is None or t == '': r += 1; continue
+    if t.isupper() or t in ('LE CIRCUIT', 'CHAQUE JOUR', 'LES ONGLETS DE SAISIE', 'LES LISTES', 'RÈGLES'):
+        if t == 'LE CIRCUIT': continue
+        bandeau(lm, r, 1, 6, t, BLEU2 if t != 'RÈGLES' else ROUGE, 11, 20)
+    else:
+        lm.merge_cells(start_row=r, start_column=2, end_row=r, end_column=6)
+        c = lm.cell(row=r, column=2, value=t); c.alignment = Alignment(wrap_text=True, vertical='top'); c.font = Font(size=10)
+        lm.row_dimensions[r].height = 30 if len(t) > 140 else 16
+    r += 1
 ordre = ['Lisez-moi', 'Tableau de bord', 'Tableau du jour', 'Créances par client', '4-Ventes', '5-Versements', '2-Appro dépôts', '3-Remises agents', '6-Transferts', '1-Appro grossistes', '7-Dépenses', '8-Objectifs', '9-Budgets',
          'Dépôts', 'Agents', 'Clients', 'Grossistes', 'Paramètres', 'Choix']
 wb._sheets = [wb[n] for n in ordre]

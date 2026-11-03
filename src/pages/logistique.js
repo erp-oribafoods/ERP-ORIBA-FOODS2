@@ -116,21 +116,30 @@ function drawCharges(root) {
   const budgetCat = new Map(); for (const b of budg) budgetCat.set(b.categorie_id, (budgetCat.get(b.categorie_id) || 0) + num(b.montant));
   const objCtn = (App.D.objectifs || []).filter((o) => o.actif !== false && o.mois === F.mois && !o.produit_id && o.axe === 'equipe' && dansPerimetre(o.cible_id)).reduce((s, o) => s + num(o.objectif_cartons), 0);
   const host = $('#lg', root);
-  host.innerHTML = `<section class="kpis">
-      ${[['Dépenses totales engagées', fmtF(cur.eng), `${moisLabel(F.mois)} · validées et en cours de validation`, ''], ['Dont validées', fmtF(cur.val), `${fmtF(cur.eng - cur.val)} en attente`, ''],
-        ['Cartons vendus', `${fmtN(cur.ctn, 2)} ctn`, 'ventes validées du mois, même périmètre', ''],
-        ['Coût par carton', cpc(cur, 'eng') !== null ? fmtF(cpc(cur, 'eng')) : '—', 'dépenses totales engagées ÷ cartons vendus', ''],
-        ['Coût par carton (validé)', cpc(cur, 'val') !== null ? fmtF(cpc(cur, 'val')) : '—', prev.ctn && cpc(prev, 'val') !== null ? `mois précédent : ${fmtF(cpc(prev, 'val'))}` : '', ''],
-        ['Budget du mois', fmtF(budgetTot), budgetTot ? `consommé ${fmtN((cur.eng / budgetTot) * 100, 0)} % · reste ${fmtF(budgetTot - cur.eng)}` : 'aucun budget pour ce mois', budgetTot && cur.eng > budgetTot ? 'crit' : ''],
-        ['Coût par carton prévu', budgetTot && objCtn ? fmtF(budgetTot / objCtn) : '—', objCtn ? `budget ÷ objectif de vente (${fmtN(objCtn)} ctn)` : 'objectif de vente non défini', '']]
-        .map(([l, v, s, c]) => `<div class="kpi static ${c}"><span class="kpi-l">${l}</span><span class="kpi-v">${v}</span>${s ? `<span class="kpi-s">${s}</span>` : ''}</div>`).join('')}</section>
+  // Chiffres clés : dépenses totales, cartons, coût par carton, puis les 5 dépenses les plus courantes du mois
+  const RECURRENTES = [['SALA', 'Salaires et rémunérations'], ['CARB', 'Carburant'], ['REPA', 'Réparations et entretien'], ['VIDA', 'Vidanges'], ['ASSU', 'Assurances']];
+  const catId = (code) => App.D.categories_depense.find((c) => c.code === code)?.id;
+  const engCat = (code) => cur.byCat.get(catId(code))?.eng || 0;
+  const pctDe = (v) => (cur.eng ? `${fmtN((v / cur.eng) * 100, 0)} % des dépenses` : '');
+  host.innerHTML = `<section class="kpis k4">
+      ${[['Dépenses totales engagées', fmtF(cur.eng), `${moisLabel(F.mois)} · validées et en cours de validation`, 't-violet'],
+        ['Cartons vendus', `${fmtN(cur.ctn, 2)} ctn`, 'ventes validées du mois, même périmètre', 't-vert'],
+        ['Coût par carton', cpc(cur, 'eng') !== null ? fmtF(cpc(cur, 'eng')) : '—', 'dépenses totales ÷ cartons vendus', 't-ambre'],
+        ...RECURRENTES.map(([code, l]) => [l, fmtF(engCat(code)), pctDe(engCat(code)), 't-vert'])]
+        .map(([l, v, s2, c]) => `<div class="kpi static ${c}"><span class="kpi-l">${l}</span><span class="kpi-v">${v}</span>${s2 ? `<span class="kpi-s">${s2}</span>` : ''}</div>`).join('')}</section>
     <p class="note">Formule du cahier des charges : <b>coût commercial par carton = dépenses totales ÷ nombre de cartons vendus</b> sur le même mois et le même périmètre. Exemple : 1 200 000 FCFA ÷ 4 000 cartons = 300 FCFA par carton.</p>
     <article class="card"><header><h3>Charges de ${moisLabel(F.mois)} par nature</h3></header><div id="c-tab"></div></article>
     <section class="grid g2"><article class="card"><header><h3>Charges et coût par carton, mois par mois</h3></header><div class="cv h260"><canvas id="c-ch"></canvas></div></article>
       <article class="card"><header><h3>Répartition des charges du mois</h3></header><div class="cv h260"><canvas id="c-pie"></canvas></div></article></section>
     <article class="card"><header><h3>Évolution depuis janvier</h3></header><div id="c-hist"></div></article>`;
   const cats = App.D.categories_depense.slice().sort((a, b) => DEFAULT_ORDER(a) - DEFAULT_ORDER(b));
-  const rows = cats.map((c) => { const o = cur.byCat.get(c.id) || { eng: 0, val: 0 }; const p = prev.byCat.get(c.id)?.val || 0; return { id: c.id, nature: c.libelle, budget: budgetCat.get(c.id) || 0, reste: (budgetCat.get(c.id) || 0) - o.eng, eng: o.eng, val: o.val, prev: p, var: o.val - p, part: cur.eng ? (o.eng / cur.eng) * 100 : 0, cumul: cumulCat.get(c.id) || 0, parCarton: cur.ctn ? o.eng / cur.ctn : 0 }; });
+  const ligne = (c) => { const o = cur.byCat.get(c.id) || { eng: 0, val: 0 }; const p = prev.byCat.get(c.id)?.val || 0; return { id: c.id, nature: c.libelle, budget: budgetCat.get(c.id) || 0, reste: (budgetCat.get(c.id) || 0) - o.eng, eng: o.eng, val: o.val, prev: p, var: o.val - p, part: cur.eng ? (o.eng / cur.eng) * 100 : 0, cumul: cumulCat.get(c.id) || 0, parCarton: cur.ctn ? o.eng / cur.ctn : 0 }; };
+  const codesRec = RECURRENTES.map(([code]) => code);
+  const recs = RECURRENTES.map(([code]) => cats.find((c) => c.code === code)).filter(Boolean).map((c) => ({ ...ligne(c), nature: RECURRENTES.find(([code]) => code === c.code)[1] }));
+  const autresL = cats.filter((c) => !codesRec.includes(c.code)).map(ligne);
+  const somme2 = (k) => autresL.reduce((x, r) => x + num(r[k]), 0);
+  const autres = { id: 'autres', nature: 'Autres charges', budget: somme2('budget'), reste: somme2('reste'), eng: somme2('eng'), val: somme2('val'), prev: somme2('prev'), var: somme2('var'), part: cur.eng ? (somme2('eng') / cur.eng) * 100 : 0, cumul: somme2('cumul'), parCarton: cur.ctn ? somme2('eng') / cur.ctn : 0 };
+  const rows = [...recs, autres];
   new Table({ title: `Charges ${F.mois}`, rows, pageSize: 30, sort: null, meta: () => `Mois : ${moisLabel(F.mois)}${F.equipe_id ? ' · équipe ' + nm.equipe(F.equipe_id) : ''}${F.zone_id ? ' · zone ' + nm.zone(F.zone_id) : ''} · cartons vendus : ${fmtN(cur.ctn, 2)}`,
     foot: (c, rs) => ({ nature: '<b>Dépenses totales</b>', budget: `<b>${fmtN(budgetTot)}</b>`, reste: `<b>${fmtN(budgetTot - cur.eng)}</b>`, eng: `<b>${fmtN(cur.eng)}</b>`, val: `<b>${fmtN(cur.val)}</b>`, prev: `<b>${fmtN(prev.val)}</b>`, var: `<b>${fmtN(cur.val - prev.val)}</b>`, part: '<b>100 %</b>', cumul: `<b>${fmtN(rs.reduce((s, r) => s + r.cumul, 0))}</b>`, parCarton: `<b>${cur.ctn ? fmtN(cur.eng / cur.ctn) : '—'}</b>` }[c.k] ?? ''),
     cols: [{ k: 'nature', l: 'Nature de la charge' }, { k: 'budget', l: 'Budget du mois', num: 1, f: (r) => (r.budget ? fmtN(r.budget) : '—') }, { k: 'reste', l: 'Reste du budget', num: 1, f: (r) => (r.budget ? `<span class="${r.reste < 0 ? 't-crit' : ''}">${fmtN(r.reste)}</span>` : '—') }, { k: 'eng', l: 'Engagé du mois', num: 1, f: (r) => (r.eng ? `<b>${fmtN(r.eng)}</b>` : '—') }, { k: 'val', l: 'dont validé', num: 1, f: (r) => (r.val ? fmtN(r.val) : '—') },

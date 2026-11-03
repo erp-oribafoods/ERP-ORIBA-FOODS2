@@ -285,7 +285,7 @@ async function boot() {
   try {
     App.api = DEMO ? await demoApi((m) => { root.innerHTML = `<div class="loading-screen">${esc(m)}</div>`; }) : serverApi();
     // Illustration uniquement : accès aux données de démonstration pour les tests automatiques
-    if (DEMO) { window.__ERP_DEBUG__ = () => App.D; window.__ERP_DEBUG__.call = async (action, payload) => { const r = await App.api.call(action, payload); await App.refresh(); return r; }; }
+    if (DEMO) { window.__ERP_APP__ = App; window.__ERP_DEBUG__ = () => App.D; window.__ERP_DEBUG__.call = async (action, payload) => { const r = await App.api.call(action, payload); await App.refresh(); return r; }; }
   } catch (e) { root.innerHTML = `<div class="loading-screen err">Démarrage impossible : ${esc(e.message)}</div>`; return; }
   if (window.claude?.use) {
     window.claude.use('downloads').then((dl) => { if (dl) setSaver(async (filename, blob) => { await dl.save({ filename, data: blob }); return true; }); }).catch(() => {});

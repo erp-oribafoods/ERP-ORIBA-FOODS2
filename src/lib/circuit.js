@@ -47,7 +47,10 @@ function situationVendeur(C, agent, date, { depot }, au = date) {
   const vj = venduPar(jourJ);
   const vc = somme(vj.filter((x) => x.v.mode === 'comptant'), (x) => x.cartons);
   const vk = somme(vj.filter((x) => x.v.mode === 'credit'), (x) => x.cartons);
-  const sf = round2(si + recu + recuTransfert - transfere - disp - vc - vk);
+  // Stock de fin : seuls les mouvements à partir de la date de départ comptent (le stock initial est celui du départ)
+  const jd = (d) => jourJ(d) && d >= dep;
+  const sf = date >= dep ? round2(si + recu + recuTransfert - transfere - disp - vc - vk)
+    : round2(si + somme(entrees(jd), (m) => m.cartons) + somme(trIn(jd), (m) => m.cartons) - somme(trOut(jd), (m) => m.cartons) - somme(dispatchs(jd), (m) => m.cartons) - somme(venduPar(jd), (x) => x.cartons));
   const ids = depot ? C.reseau(agent.id) : new Set([agent.id]);
   const vReseau = C.ventes.filter((x) => ids.has(x.v.agent_id) && jourJ(x.v.date));
   const aVerser = somme(vReseau.filter((x) => x.v.mode === 'comptant'), (x) => x.montant);

@@ -117,7 +117,13 @@ export function grossistesSemaine(C, w0) {
     const valeur = round2(num(g.solde_initial) + somme(ap.filter((m) => m.date < w1), (m) => m.montant));
     const regl = C.vers.filter((v) => v.objet === 'reglement_grossiste' && v.grossiste_id === g.id);
     const regle = somme(regl.filter((v) => v.date < w1), (v) => v.montant);
-    return { id: g.id, code: g.code || '', nom: g.nom, localite: g.localite || '', fournisseur: g.fournisseur || '', si, usine, rice, pc, pk, sf: round2(si + usine + rice - pc - pk), valeur, regle, solde: round2(valeur - regle),
+    // Répartition Oriba Food / Oriba Rice : appro selon leur fournisseur, solde initial et règlements selon le bénéficiaire (à défaut le fournisseur du grossiste)
+    const estRice = (f) => /rice/i.test(f || '');
+    const gRice = estRice(g.fournisseur);
+    const valR = round2((gRice ? num(g.solde_initial) : 0) + somme(ap.filter((m) => m.date < w1 && estRice(m.fournisseur)), (m) => m.montant));
+    const regR = somme(regl.filter((v) => v.date < w1 && (v.beneficiaire ? estRice(v.beneficiaire) : gRice)), (v) => v.montant);
+    const soldeRice = round2(valR - regR);
+    return { soldeRice, soldeFood: round2(valeur - regle - soldeRice), id: g.id, code: g.code || '', nom: g.nom, localite: g.localite || '', fournisseur: g.fournisseur || '', si, usine, rice, pc, pk, sf: round2(si + usine + rice - pc - pk), valeur, regle, solde: round2(valeur - regle),
       regleSemaine: somme(sem(regl), (v) => v.montant), recuAgents: somme(C.vers.filter((v) => v.lieu === 'grossiste' && v.lieu_grossiste_id === g.id && entre(v.date, w0, w1)), (v) => v.montant) };
   });
 }

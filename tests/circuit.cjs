@@ -41,7 +41,7 @@ const n = (s) => Number(String(s).replace(/[^\d,-]/g, '').replace(',', '.')) || 
   // Grossistes, semaine du 26/10
   await aller('circuit-grossistes'); await dater('2026-10-31');
   const gk = await p.textContent('#gk');
-  verif(/3[\s  ]?500 ctn/.test(gk) && /27[\s  ]?925[\s  ]?000/.test(gk), `Grossistes : stock final 3 500 ctn, solde dû 27 925 000 FCFA → ${gk.replace(/\s+/g, ' ').slice(0, 160)}`);
+  verif(/3[\s  ]?500 ctn/.test(gk) && /Oriba Food\s*17\D?112\D?500/.test(gk) && /Oriba Rice\s*10\D?812\D?500/.test(gk), `Grossistes : stock final 3 500 ctn, solde dû Food 17 112 500 + Rice 10 812 500 → ${gk.replace(/\s+/g, ' ').slice(0, 400)}`);
   // Réimport du classeur de simulation : tout est déjà présent
   const imp = async (f) => {
     await p.keyboard.press('Escape').catch(() => {}); await aller('circuit');

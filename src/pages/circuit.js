@@ -118,19 +118,19 @@ function ficheDepot(id) {
 // ---------------------------------------------------------------- Grossistes
 export function renderGrossistes(root) {
   const can = App.can('referentiels', 'modifier');
-  root.innerHTML = pageHead('Grossistes', 'Stock de chaque grossiste semaine par semaine (approvisionnements de l’usine ou d’Oriba Rice, cartons pris par les agents) et montant dû à Oriba.',
+  root.innerHTML = pageHead('Grossistes', 'Stock de chaque grossiste semaine par semaine (approvisionnements de l’usine ou d’Oriba Rice, cartons pris par les agents) et montant dû à Oriba Food et à Oriba Rice.',
     `${actions()}${can ? `<button class="btn primary" id="g-new">${icon('plus')} Nouveau grossiste</button>` : ''}`) + barreDate(root, null, 'Semaine contenant le') + '<section class="kpis" id="gk"></section><article class="card" id="gt"></article>';
   lierActions(root);
   $('#g-new', root)?.addEventListener('click', () => refFormPublic('grossistes'));
   const draw = () => {
     const w0 = lundi(F().date), C = contexte(App.D, App.I), rows = grossistesSemaine(C, w0);
     const S = (k) => rows.reduce((s, x) => s + num(x[k]), 0);
-    $('#gk', root).innerHTML = [kpi('Semaine', `${fmtD(w0)} → ${fmtD(addDays(w0, 6))}`), kpi('Stock final', ctn(S('sf'))), kpi('Reçu (usine / Oriba Rice)', `${fmtQ(S('usine'))} / ${fmtQ(S('rice'))} ctn`), kpi('Vendu aux agents', ctn(S('pc') + S('pk')), `dont ${fmtQ(S('pk'))} à crédit`), kpi('Solde dû à Oriba', fmtF(S('solde')), `réglé cette semaine : ${fmtF(S('regleSemaine'))}`, S('solde') > 0 ? 'warn' : '')].join('');
-    new Table({ title: `Grossistes — semaine du ${fmtD(w0)}`, rows, sort: { k: 'nom', dir: 1 }, pageSize: 30, foot: foot(['si', 'usine', 'rice', 'pc', 'pk', 'sf', 'valeur', 'regle', 'solde', 'regleSemaine', 'recuAgents']), meta: () => `Semaine du ${fmtD(w0)} au ${fmtD(addDays(w0, 6))}`,
+    $('#gk', root).innerHTML = [kpi('Semaine', `${fmtD(w0)} → ${fmtD(addDays(w0, 6))}`), kpi('Stock final', ctn(S('sf'))), kpi('Reçu (usine / Oriba Rice)', `${fmtQ(S('usine'))} / ${fmtQ(S('rice'))} ctn`), kpi('Vendu aux agents', ctn(S('pc') + S('pk')), `dont ${fmtQ(S('pk'))} à crédit`), kpi('Solde dû à Oriba Food', fmtF(S('soldeFood')), `réglé cette semaine : ${fmtF(S('regleSemaine'))}`, S('soldeFood') > 0 ? 'warn' : ''), kpi('Solde dû à Oriba Rice', fmtF(S('soldeRice')), 'cumul depuis le départ', S('soldeRice') > 0 ? 'warn' : '')].join('');
+    new Table({ title: `Grossistes — semaine du ${fmtD(w0)}`, rows, sort: { k: 'nom', dir: 1 }, pageSize: 30, foot: foot(['si', 'usine', 'rice', 'pc', 'pk', 'sf', 'valeur', 'regle', 'soldeFood', 'soldeRice', 'regleSemaine', 'recuAgents']), meta: () => `Semaine du ${fmtD(w0)} au ${fmtD(addDays(w0, 6))}`,
       empty: 'Aucun grossiste : ajoutez-les ou importez le classeur du circuit.',
       cols: [{ k: 'code', l: 'Code' }, { k: 'nom', l: 'Grossiste' }, { k: 'localite', l: 'Localité' }, { k: 'si', l: 'Stock initial semaine', num: 1, f: (r) => fmtQ(r.si) }, { k: 'usine', l: 'Reçu de l’usine', num: 1, f: (r) => fmtQ(r.usine) }, { k: 'rice', l: 'Reçu d’Oriba Rice', num: 1, f: (r) => fmtQ(r.rice) },
         { k: 'pc', l: 'Vendu aux agents comptant', num: 1, f: (r) => fmtQ(r.pc) }, { k: 'pk', l: 'Vendu aux agents à crédit', num: 1, f: (r) => fmtQ(r.pk) }, { k: 'sf', l: 'Stock final semaine', num: 1, f: (r) => (r.sf < 0 ? `<b class="t-crit">${fmtQ(r.sf)}</b>` : `<b>${fmtQ(r.sf)}</b>`) },
-        { k: 'valeur', l: 'Valeur reçue cumulée (FCFA)', num: 1, f: (r) => fmtN(r.valeur) }, { k: 'regle', l: 'Réglé cumulé (FCFA)', num: 1, f: (r) => fmtN(r.regle) }, { k: 'solde', l: 'Solde dû à Oriba (FCFA)', num: 1, f: (r) => `<b>${fmtN(r.solde)}</b>` },
+        { k: 'valeur', l: 'Valeur reçue cumulée (FCFA)', num: 1, f: (r) => fmtN(r.valeur) }, { k: 'regle', l: 'Réglé cumulé (FCFA)', num: 1, f: (r) => fmtN(r.regle) }, { k: 'soldeFood', l: 'Solde dû à Oriba Food (FCFA)', num: 1, f: (r) => `<b>${fmtN(r.soldeFood)}</b>` }, { k: 'soldeRice', l: 'Solde dû à Oriba Rice (FCFA)', num: 1, f: (r) => `<b>${fmtN(r.soldeRice)}</b>` },
         { k: 'regleSemaine', l: 'Réglé cette semaine', num: 1, f: (r) => fmtN(r.regleSemaine) }, { k: 'recuAgents', l: 'Versements d’agents reçus', num: 1, f: (r) => fmtN(r.recuAgents) }] }).mount($('#gt', root));
   };
   lierDate(root, draw);

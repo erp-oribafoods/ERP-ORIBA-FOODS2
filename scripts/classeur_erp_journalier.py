@@ -42,8 +42,9 @@ def nom_client(c, zone):
     n = re.sub(r'^\s*Client\s+\w+\s*-\s*', '', str(c or '')).strip()
     n = re.sub(r'\s+', ' ', n)
     return (f'Détaillants divers ({zone})' if re.match(r'^d[ée]taill', n, re.I) else n) if n else None
-def unite(u, prix):  # « Pack » à prix de carton dans le TB = en réalité des cartons
-    return 'Carton' if not u or (str(u).lower().startswith('pack') and (prix or 0) >= 5000) else u
+def unite(u, prix):  # l'unité suit le prix : prix de carton = Carton, prix de pack (moins de 5 000 F) = Pack
+    if not prix: return u or 'Carton'
+    return 'Carton' if prix >= 5000 else 'Pack'
 def nom_marche(m): return re.sub(r'^\s*March[ée]\s+', '', str(m or '')).strip() or None
 def jour(v):
     if isinstance(v, dt.datetime): return v.date()
@@ -56,7 +57,14 @@ ZONE_DEP = {d[1]: d[2] for d in DEPOTS}
 for TB in TBS:
     tb_wb = load_workbook(TB, data_only=True)
     TB_NOMS.append(TB.rsplit('/', 1)[-1])
-    vend = lambda a: CHEF_DEP.get(str(a).strip(), str(a).strip())
+    def vend(a):
+        n = re.sub(r'\s+', ' ', str(a)).strip()
+        if n in CHEF_DEP: return CHEF_DEP[n]
+        if any(x[1] == n for x in AGENTS): return n
+        # nom abrégé dans le TB (ex. « Mahfouz » = Kamel Alalla Mahfouze)
+        c = [x[1] for x in AGENTS if any(w.lower().startswith(n.lower()) for w in x[1].split())]
+        if len(c) == 1: CORR.append(f'agent « {n} » du TB reconnu comme {c[0]}'); return c[0]
+        return n
     chef = next((str(r[1]).strip() for r in tb_wb['Journal Comptant'].iter_rows(min_row=3, values_only=True) if r[1] and str(r[1]).strip() in CHEF_DEP), None)
     dep = CHEF_DEP.get(chef, '')
     zone = ZONE_DEP.get(dep, dep.replace('Dépôt ', ''))
@@ -179,7 +187,7 @@ txt = [
     ('6. Crédit : dans 4-Ventes, la date promesse va dans « Échéance » ; chaque remboursement va dans 5-Versements avec le N° de la vente. Le solde, les jours de retard et le statut se calculent seuls.', None),
     ('', None),
     ('LES ONGLETS DE SAISIE', Font(bold=True, color=VIOLET)),
-    ('4-Ventes : ventes au comptant ou à crédit, par un dépôt ou un agent, avec le marché, le client, l’unité (carton ou pack). Crédit : client, date promesse et N° de vente (ex. V001) obligatoires. Déjà rempli avec l’historique des TB de Tahoua et de Balleyara (mai à octobre 2026).', None),
+    ('4-Ventes : ventes au comptant ou à crédit, par un dépôt ou un agent, avec le marché, le client, l’unité (carton ou pack). Crédit : client, date promesse et N° de vente (ex. V001) obligatoires. Déjà rempli avec l’historique des TB de Tahoua, Balleyara et Konni (mai à octobre 2026).', None),
     ('5-Versements : argent versé (Ventes comptant), remboursement d’un crédit (avec le N° de la vente), ou règlement d’un grossiste. Indiquez pour Oriba Food ou Oriba Rice.', None),
     ('2-Appro dépôts : cartons reçus par un dépôt, d’Oriba Food, d’Oriba Rice ou d’un grossiste.', None),
     ('3-Remises agents : cartons donnés par un dépôt à un de ses agents.', None),
@@ -333,11 +341,11 @@ def calc(ws, r, j, f, fmt='# ##0'):
 TBD['A1'] = 'TABLEAU DE BORD — VENTES, CRÉANCES ET ENCAISSEMENTS'; TBD['A1'].font = Font(bold=True, size=15, color=VERT_F)
 TBD['A2'] = 'Tout se calcule à partir des onglets 4-Ventes et 5-Versements. Choisissez la période (cases jaunes) ; les créances en cours ne dépendent pas de la période.'; TBD['A2'].font = Font(italic=True, color='5A5670')
 JAUNE = PatternFill('solid', fgColor='FFF8E1')
-for r, (lib, v) in enumerate([('Du', dt.date(2026, 5, 1)), ('Au', '=TODAY()'), ('Plafond cumul créances (cartons)', 1500), ('Seuil d’alerte créance (jours)', 7)], 4):
+for r, (lib, v) in enumerate([('Du', dt.date(2026, 5, 1)), ('Au', '=TODAY()'), ('Plafond cumul créances (cartons)', 1550), ('Seuil d’alerte créance (jours)', 7)], 4):
     TBD.cell(row=r, column=1, value=lib).font = Font(bold=True)
     c = TBD.cell(row=r, column=2, value=v); c.fill = JAUNE; c.font = Font(bold=True); c.border = BORD
     if r <= 5: c.number_format = 'DD/MM/YYYY'
-TBD['C6'] = 'Tahoua 1 000 + Balleyara 500 (plafonds des TB)'; TBD['C6'].font = Font(italic=True, color='5A5670')
+TBD['C6'] = 'Tahoua 1 000 + Balleyara 500 + Konni 50 (plafonds des TB)'; TBD['C6'].font = Font(italic=True, color='5A5670')
 V = "'4-Ventes'"; VS = "'5-Versements'"
 PER = f',{V}!$A:$A,">="&$B$4,{V}!$A:$A,"<="&$B$5'
 PERV = f',{VS}!$A:$A,">="&$B$4,{VS}!$A:$A,"<="&$B$5'

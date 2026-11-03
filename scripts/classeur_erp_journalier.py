@@ -21,6 +21,19 @@ def lignes(nom, n):
         if r[1] not in (None, ''): out.append([x.strip() if isinstance(x, str) else x for x in r])
     return out
 DEPOTS, AGENTS, CLIENTS, GROSSISTES = lignes('Dépôts', 9), lignes('Agents', 7), lignes('Clients', 6), lignes('Grossistes', 7)
+# Schéma du circuit : le chef d'équipe EST le dépôt (il n'est plus listé parmi les agents) ; chaque agent a son marché
+CHEFS = {'NY1-01': 'DEP-NY1', 'NY2-01': 'DEP-NY2', 'BAL-01': 'DEP-TIL', 'KON-01': 'DEP-KON', 'TAH-07': 'DEP-TAH', 'MAR-01': 'DEP-MAR', 'MAR-02': 'DEP-MAR', 'ZIN-01': 'DEP-ZIN', 'DOS-01': 'DEP-DOS'}
+MARCHES = {'DEP-NY1': 'Aéroport', 'NY1-02': 'Dolé', 'NY1-03': 'Koira Tégui', 'NY1-04': 'Dar es Salam', 'NY1-05': 'Yantala', 'DEP-NY2': 'Grand Marché', 'NY2-02': 'Petit Marché',
+           'NY2-03': 'Nouveau Marché', 'NY2-04': 'Wadata', 'NY2-05': 'Bonkaney', 'NY2-06': 'Katako', 'NY2-07': 'Gamkallé', 'DEP-TIL': 'Balleyara', 'DEP-KON': 'Konni Ville',
+           'KON-02': 'Gidan Ider', 'KON-03': 'Tunfafi', 'KON-06': 'Galmi', 'DEP-TAH': 'Badaguichiri', 'TAH-02': 'Abalak', 'TAH-06': 'Tahoua Ville', 'TAH-03': 'Tchinta', 'TAH-04': 'Bouza', 'TAH-01': 'Agadez'}
+NOM_AG = {a[0]: a[1] for a in AGENTS}
+NOM_DEP = {d[0]: d[1] for d in DEPOTS}
+RESP = {}
+for c, d in CHEFS.items(): RESP.setdefault(d, []).append(NOM_AG[c])
+for d in DEPOTS: d.append(' / '.join(RESP.get(d[0], [])) or None); d.append(MARCHES.get(d[0]))
+AGENTS = [a for a in AGENTS if a[0] not in CHEFS]
+for a in AGENTS: a[4] = MARCHES.get(a[0])
+CHEF_DEP = {NOM_AG[c]: NOM_DEP[d] for c, d in CHEFS.items()}
 for g in GROSSISTES:
     if not g[3]: g[3] = 'Oriba Food'
 PRODUITS = [('Arôme DADI Épicé', 'Arôme', 13250), ('Arôme DADI Poulet', 'Arôme', 12250), ('Mayonnaise Délice', 'Mayonnaise', 9500), ('Mayonnaise Oriba 1000 ml', 'Mayonnaise', 9500),
@@ -28,7 +41,14 @@ PRODUITS = [('Arôme DADI Épicé', 'Arôme', 13250), ('Arôme DADI Poulet', 'Ar
 
 # Objectifs des agents (DONNEES_FORCE_DE_VENTE) pour novembre et décembre
 fdv = load_workbook(FDV, data_only=True).active
-OBJ_AG = [(str(r[2]).strip(), r[4]) for r in fdv.iter_rows(min_row=4, values_only=True) if r[2] and isinstance(r[4], (int, float))]
+OBJ_AG = []
+for r in fdv.iter_rows(min_row=4, values_only=True):
+    if not (r[2] and isinstance(r[4], (int, float))): continue
+    n = CHEF_DEP.get(str(r[2]).strip(), str(r[2]).strip())   # objectif du chef = objectif de son dépôt
+    ex = next((o for o in OBJ_AG if o[0] == n), None)
+    if ex: ex[1] += r[4]
+    else: OBJ_AG.append([n, r[4]])
+OBJ_AG = [tuple(o) for o in OBJ_AG]
 OBJ_EQ = [('Dosso', 1500), ('Équipe Mayonnaise', 2000)]  # équipes sans objectif par agent dans le fichier
 # Budgets mensuels (fichier Budget Équipes Commerciales, tels qu'enregistrés dans l'ERP)
 BUD = {'Niamey 1': (390000, 89000, 125000, 1245000), 'Niamey 2': (60000, 25000, 80000, 620000), 'Maradi': (300000, 48000, 160000, 910000),
@@ -80,6 +100,10 @@ txt = [
     ('ORIBA ERP — classeur de saisie journalière', Font(bold=True, size=16, color=VERT_F)),
     ('Toutes les opérations de la force de vente, à importer dans l’ERP : Saisie rapide > « Classeur du jour (dépôts) » > Importer.', Font(italic=True, color='5A5670')),
     ('', None),
+    ('LE CIRCUIT', Font(bold=True, color=VIOLET)),
+    ('Oriba Food / Oriba Rice  →  Grossistes  →  Dépôts (chaque chef d’équipe est un dépôt)  →  Agents du dépôt  →  Marchés.', Font(bold=True)),
+    ('Les grossistes s’approvisionnent chez Oriba Food ou Oriba Rice ; les chefs d’équipe chez les grossistes ; les agents reçoivent leurs cartons de leur chef d’équipe et vendent sur leur marché.', None),
+    ('', None),
     ('CHAQUE JOUR', Font(bold=True, color=VIOLET)),
     ('1. Ajoutez les opérations de la journée à la suite, dans les onglets 1 à 7 (une ligne par opération). Ne supprimez pas les lignes des jours précédents.', None),
     ('2. Dans les cases à liste, cliquez la petite flèche pour choisir, ou écrivez directement le nom (majuscules et accents ne comptent pas).', None),
@@ -119,12 +143,13 @@ feuille('Paramètres', 'Paramètres', 'Produits et prix de référence (FCFA le 
         [list(p) for p in PRODUITS] + [[None, None, None], ['Date des stocks initiaux', None, DEPART]], nombres=(3,))
 wb['Paramètres'].cell(row=5 + len(PRODUITS) + 1, column=2, value=DEPART).number_format = 'DD/MM/YYYY'
 wb['Paramètres'].cell(row=5 + len(PRODUITS) + 1, column=3).value = None
-feuille('Dépôts', 'Dépôts', 'Un dépôt par zone. Situation au départ (04/11/2026) : stock restant et reste à encaisser, repris de votre base de données.',
-        ['Code', 'Nom', 'Zone', 'Grossiste habituel', 'Téléphone', 'Stock initial (cartons)', 'Prix du carton (FCFA)', 'Reste à encaisser au départ — Oriba Food (FCFA)', 'Reste à encaisser au départ — Oriba Rice (FCFA)'],
-        [10, 22, 18, 18, 14, 14, 14, 22, 22], DEPOTS, vides=10, nombres=(6, 7, 8, 9))
-feuille('Agents', 'Agents des dépôts', 'Chaque agent est rattaché à un dépôt.', ['Code', 'Nom', 'Dépôt', 'Fonction', 'Localité / marché', 'Téléphone', 'Stock initial (cartons)'],
+feuille('Dépôts', 'Dépôts (chefs d’équipe)', 'Chaque chef d’équipe est un dépôt : il s’approvisionne chez les grossistes et confie des cartons à ses agents. Situation au départ (04/11/2026).',
+        ['Code', 'Nom', 'Zone', 'Grossiste habituel', 'Téléphone', 'Stock initial (cartons)', 'Prix du carton (FCFA)', 'Reste à encaisser au départ — Oriba Food (FCFA)', 'Reste à encaisser au départ — Oriba Rice (FCFA)', 'Responsable (chef d’équipe)', 'Marché du chef d’équipe'],
+        [10, 22, 18, 18, 14, 14, 14, 22, 22, 32, 18], DEPOTS, vides=10, nombres=(6, 7, 8, 9))
+feuille('Agents', 'Agents des dépôts', 'Agents envoyés par chaque chef d’équipe (dépôt) sur les marchés. Colonne E : le marché de l’agent.', ['Code', 'Nom', 'Dépôt', 'Fonction', 'Localité / marché', 'Téléphone', 'Stock initial (cartons)'],
         [10, 32, 18, 30, 18, 14, 14], AGENTS, vides=40, nombres=(7,))
-liste(wb['Agents'], 'C', '=Choix!$A$2:$A$40', len(AGENTS) + 40, 'Dépôt de l’agent')
+liste(wb['Agents'], 'C', '=Choix!$A$2:$A$40', len(AGENTS) + 40, 'Dépôt (chef d’équipe) de l’agent'); liste(wb['Agents'], 'E', '=Choix!$Q$2:$Q$80', len(AGENTS) + 40, 'Marché de l’agent')
+liste(wb['Dépôts'], 'K', '=Choix!$Q$2:$Q$80', len(DEPOTS) + 10, 'Marché du chef d’équipe')
 feuille('Clients', 'Clients', 'Clients des dépôts et des agents. Ajoutez ici tout nouveau client.', ['Code', 'Nom', 'Vendeur rattaché', 'Localité', 'Téléphone', 'Plafond (cartons)'],
         [10, 32, 22, 18, 14, 12], CLIENTS, vides=150)
 feuille('Grossistes', 'Grossistes', 'Les grossistes ne s’approvisionnent que chez Oriba Food ou Oriba Rice. Ajoutez-les ici.',
@@ -219,7 +244,7 @@ tb.column_dimensions['A'].width = 36; tb.column_dimensions['B'].width = 18; tb.c
 ch = wb.create_sheet('Choix')
 ref = lambda f, r: f'=IF(\'{f}\'!B{r}="","",\'{f}\'!B{r})'
 cols = {'A': 'Dépôts', 'B': 'Agents', 'C': 'Vendeurs', 'D': 'Clients', 'E': 'Produits', 'F': 'Grossistes', 'G': 'Sources', 'H': 'Modes', 'I': 'Objets', 'J': 'Fournisseurs',
-        'K': 'Versé par', 'L': 'Lieux', 'M': 'Équipes', 'N': 'Natures', 'O': 'Véhicules', 'P': 'Agents et équipes'}
+        'K': 'Versé par', 'L': 'Lieux', 'M': 'Équipes', 'N': 'Natures', 'O': 'Véhicules', 'P': 'Agents et équipes', 'Q': 'Marchés'}
 for c, t in cols.items(): ch[f'{c}1'] = t
 for i in range(39): ch[f'A{2 + i}'] = ref('Dépôts', 5 + i)
 for i in range(150): ch[f'B{2 + i}'] = ref('Agents', 5 + i)
@@ -242,6 +267,11 @@ for i, n in enumerate(NATURES): ch[f'N{2 + i}'] = n
 for i, v in enumerate(VEHICULES): ch[f'O{2 + i}'] = v
 for i in range(150): ch[f'P{2 + i}'] = ref('Agents', 5 + i)
 for i, e in enumerate(EQUIPES): ch[f'P{152 + i}'] = e
+for i in range(40): ch[f'P{165 + i}'] = ref('Dépôts', 5 + i)
+LISTE_MARCHES = ['Aéroport', 'Dolé', 'Koira Tégui', 'Dar es Salam', 'Yantala', 'Grand Marché', 'Petit Marché', 'Nouveau Marché', 'Wadata', 'Bonkaney', 'Katako', 'Gamkallé',
+    'Balleyara', 'Loga', 'Gotheye', 'Hamdallahi', 'Ouallam', 'Konni Ville', 'Gidan Ider', 'Tunfafi', 'Galmi', 'Malbaza', 'Karofan', 'Madaoua', 'Tsernaoua', 'Massalata', 'Dossey', 'Dibissou',
+    'Tahoua Ville', 'Badaguichiri', 'Abalak', 'Tchinta', 'Bouza', 'Agadez']
+for i, m in enumerate(LISTE_MARCHES): ch[f'Q{2 + i}'] = m
 ch.sheet_state = 'hidden'
 
 ordre = ['Lisez-moi', 'Tableau du jour', '4-Ventes', '5-Versements', '2-Appro dépôts', '3-Remises agents', '6-Transferts', '1-Appro grossistes', '7-Dépenses', '8-Objectifs', '9-Budgets',

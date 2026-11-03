@@ -21,9 +21,9 @@ const map = { 'chart.umd.min.js': 'chart.js/dist/chart.umd.js', 'xlsx.full.min.j
     for (let i = 0; i < btns.length; i++) {
       await page.evaluate(() => { location.hash = 'saisie'; }); await page.waitForTimeout(400);
       const b = (await page.$$('[data-s]'))[i]; const lib = (await b.textContent()).trim();
-      await b.click(); await page.waitForTimeout(900);
+      if (process.env.DBG) console.log("   clic", user, lib,); await b.click(); await page.waitForTimeout(900);
       if (await page.$('.modal')) opened++; else errors.push(`${user} : « ${lib} » n’a pas ouvert de formulaire`);
-      await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+      for (let k = 0; k < 4 && (await page.$('.overlay')); k++) { await page.keyboard.press('Escape'); await page.waitForTimeout(250); }
     }
     console.log(user, vw, ':', n, 'rubriques,', opened, '/', btns.length, 'formulaires ouverts');
     await ctx.close();

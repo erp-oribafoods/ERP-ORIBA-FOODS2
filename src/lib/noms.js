@@ -17,6 +17,9 @@ export function trouverAgent(nom, agents, equipeId) {
   const exacts = agents.filter((a) => cleNom(a.nom) === k);
   const ex = exacts.find((a) => a.equipe_id === equipeId) || (exacts.length === 1 ? exacts[0] : null);
   if (ex) return ex;
+  // Le chef d'équipe est le dépôt : son nom (ou « Dépôt X · Chef ») désigne le dépôt
+  const chefs = agents.filter((a) => a.responsable && (String(a.responsable).split('/').some((n) => cleNom(n) === k) || cleNom(`${a.nom} · ${a.responsable}`) === k));
+  if (chefs.length === 1) return chefs[0];
   if (!equipeId) return null;
   const proches = agents.filter((a) => a.equipe_id === equipeId && nomsProches(a.nom, nom));
   return proches.length === 1 ? proches[0] : null;

@@ -23,7 +23,7 @@ export const App = {
 
 // Libellés
 export const nm = {
-  agent: (id) => App.I.agents.get(id)?.nom || '—',
+  agent: (id) => { const a = App.I.agents.get(id); return a ? (a.responsable ? `${a.nom} · ${a.responsable}` : a.nom) : '—'; },
   grossiste: (id) => (App.D.grossistes || []).find((g) => g.id === id)?.nom || '—',
   marche: (id) => App.I.marches.get(id)?.nom || '—',
   client: (id) => App.I.clients.get(id)?.nom || '—',
@@ -36,7 +36,7 @@ export const nm = {
 };
 
 export const opts = (table, label = 'nom', { all = false, filter } = {}) => Object.assign(
-  (App.D[table] || []).filter((r) => (all || r.actif !== false) && (!filter || filter(r))).slice().sort((a, b) => String(a[label]).localeCompare(String(b[label]), 'fr')).map((r) => ({ v: r.id, l: r[label] + (r.actif === false ? ' (archivé)' : '') })), { table });
+  (App.D[table] || []).filter((r) => (all || r.actif !== false) && (!filter || filter(r))).slice().sort((a, b) => String(a[label]).localeCompare(String(b[label]), 'fr')).map((r) => ({ v: r.id, l: r[label] + (table === 'agents' && label === 'nom' && r.responsable ? ` · ${r.responsable}` : '') + (r.actif === false ? ' (archivé)' : '') })), { table });
 
 // Barre de filtres réutilisable
 const FILTER_DEFS = {

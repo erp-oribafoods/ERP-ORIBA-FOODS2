@@ -66,8 +66,11 @@ function situationVendeur(C, agent, date, { depot }, au = date) {
   // Sans objectifs par agent, le dépôt reprend l'objectif de son équipe
   if (!objectif && depot && agent.equipe_id) objectif = somme((C.D.objectifs || []).filter((o) => o.actif !== false && o.axe === 'equipe' && o.mois === mois && !o.produit_id && o.cible_id === agent.equipe_id), (o) => o.objectif_cartons);
   const venduMois = somme(C.ventes.filter((x) => ids.has(x.v.agent_id) && x.v.date >= `${mois}-01` && x.v.date <= au), (x) => x.cartons);
+  // Part propre du dépôt (le chef d'équipe vend lui-même) : son objectif et ses ventes, hors agents
+  const objPropre = somme((C.D.objectifs || []).filter((o) => o.actif !== false && o.axe === 'agent' && o.mois === mois && !o.produit_id && o.cible_id === agent.id), (o) => o.objectif_cartons);
+  const venduMoisPropre = somme(C.ventes.filter((x) => x.v.agent_id === agent.id && x.v.date >= `${mois}-01` && x.v.date <= au), (x) => x.cartons);
   const enCours = somme(credits, (c) => c.solde), enRetard = somme(credits.filter((c) => c.statut === 'En retard'), (c) => c.solde);
-  return { id: agent.id, code: agent.code || '', nom: agent.nom, fonction: agent.fonction || '', equipe_id: agent.equipe_id, depot_id: agent.depot_id || null, prix: num(agent.prix_carton) || null, si, recu, recuFoods, recuRice, recuGross, recuTransfert, transfere, disp, vc, vk, sf, ca, aVerser, verse, verseGrossiste, ecart: round2(aVerser - verse), remb, enCours, enRetard, objectif, venduMois, taux: objectif > 0 ? (venduMois / objectif) * 100 : null };
+  return { id: agent.id, code: agent.code || '', nom: agent.nom, responsable: agent.responsable || '', marche_id: agent.marche_id || null, fonction: agent.fonction || '', equipe_id: agent.equipe_id, depot_id: agent.depot_id || null, prix: num(agent.prix_carton) || null, si, recu, recuFoods, recuRice, recuGross, recuTransfert, transfere, disp, vc, vk, sf, ca, aVerser, verse, verseGrossiste, ecart: round2(aVerser - verse), remb, enCours, enRetard, objectif, venduMois, objPropre, venduMoisPropre, taux: objectif > 0 ? (venduMois / objectif) * 100 : null };
 }
 
 // Part des cartons du dépôt venant d'Oriba Rice (le reste : Oriba Food), d'après ses approvisionnements
@@ -102,6 +105,27 @@ export function situationDepots(C, date, au = date) {
   });
 }
 export function situationSous(C, date, au = date) { return C.sous.map((s) => situationVendeur(C, s, date, { depot: false }, au)); }
+
+// Stock des grossistes à la fin du jour « au » (stock de départ + approvisionnements − cartons pris par les dépôts)
+export function stockGrossistes(C, au) {
+  const dep = C.depart, ok = (m) => m.date >= dep && m.date <= au;
+  return round2(C.grossistes.reduce((s, g) => s + num(g.stock_initial) + somme(C.mv.filter((m) => m.type === 'appro' && m.grossiste_id === g.id && ok(m)), (m) => m.cartons)
+    - somme(C.mv.filter((m) => m.type === 'prise' && m.grossiste_id === g.id && ok(m)), (m) => m.cartons), 0));
+}
+// Ventes par marché : marché de la vente, à défaut celui du vendeur (agent ou dépôt)
+export function ventesParMarche(C, du, au) {
+  const ag = (id) => C.D.agents.find((a) => a.id === id);
+  const m = new Map();
+  for (const x of C.ventes) {
+    if (x.v.date < du || x.v.date > au) continue;
+    const a = ag(x.v.agent_id), mid = x.v.marche_id || a?.marche_id || '';
+    const o = m.get(mid) || { marche_id: mid, cartons: 0, comptant: 0, credit: 0, total: 0, nb: 0, vendeurs: new Set(), equipes: new Set() };
+    o.cartons += num(x.cartons); o.total += num(x.montant); o[x.v.mode === 'credit' ? 'credit' : 'comptant'] += num(x.montant); o.nb++;
+    if (a) { o.vendeurs.add(a.responsable || a.nom); if (a.equipe_id) o.equipes.add(a.equipe_id); }
+    m.set(mid, o);
+  }
+  return [...m.values()].map((o) => ({ ...o, vendeurs: [...o.vendeurs], equipes: [...o.equipes] }));
+}
 
 // Semaine du lundi w0 au dimanche (w0 + 6)
 export const lundi = (d) => { const j = new Date(d + 'T00:00:00Z').getUTCDay(); return addDays(d, -((j + 6) % 7)); };

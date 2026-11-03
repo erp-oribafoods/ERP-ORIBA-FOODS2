@@ -17,7 +17,7 @@ const RUBRIQUES = [
   ['Terrain', [
     ['objectifs', 'objectifs', '#saisie', ['objectifs', 'modifier'], 'Saisir les objectifs du mois'],
     ['suivi_agents', 'suivi-agents', '#saisie', ['suivi', 'modifier'], 'Saisir les fiches du mois'],
-    ['agents', 'agents', '#add', ['referentiels', 'modifier'], 'Nouvel agent'],
+    ['agents', 'agents', '#add', ['referentiels', 'modifier'], 'Nouvel agent', () => { App.filters.agentsOnglet = { o: 'agents' }; }],
     ['clients', 'clients', '#add', ['referentiels', 'modifier'], 'Nouveau client'],
   ]],
   ['Dépenses et logistique', [

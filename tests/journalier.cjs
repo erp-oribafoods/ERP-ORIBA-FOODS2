@@ -40,6 +40,28 @@ let echecs = 0; const verif = (ok, msg) => { console.log(`${ok ? '✓' : '✗'} 
   verif(vr && vr.beneficiaire === 'Oriba Rice', 'Versement « Argent pour : Oriba Rice » enregistré');
   ({ t } = await imp());
   verif(t.every((r) => r[1] === '0' && r[3] === '0'), `Même fichier réimporté : rien de nouveau (${t.map((r) => r[1]).join('/')})`);
+  // Écraser : on corrige une vente dans le fichier (3 → 7 cartons) et on réimporte en cochant « Écraser les jours du fichier »
+  const XLSX = require(path.join(CDN, 'node_modules/xlsx'));
+  const wb = XLSX.readFile(F, { cellDates: true }); const ws = wb.Sheets['4-Ventes']; ws['E5'].v = 7; const F2 = path.join(OUT, 'journalier_corrige.xlsx'); XLSX.writeFile(wb, F2);
+  await p.keyboard.press('Escape').catch(() => {}); await p.waitForFunction(() => !document.querySelector('.modal'), null, { timeout: 10000 }).catch(() => {});
+  await p.evaluate(() => { location.hash = 'saisie-rapide'; }); await p.waitForTimeout(600);
+  await p.click('#f-circ'); await p.waitForSelector('.modal [data-f]', { state: 'attached' });
+  await p.setInputFiles('.modal [data-f]', F2); await p.waitForSelector('.modal [data-b] table', { timeout: 60000 }); await p.waitForTimeout(300);
+  await p.check('.modal [data-ec]'); await p.waitForTimeout(1200);
+  const info = await p.textContent('.modal [data-ec-info]');
+  verif(/Seront remplacés/.test(info), `Écraser : ${info}`);
+  await p.screenshot({ path: path.join(OUT, 'journalier-ecraser.png') });
+  await p.click('.modal [data-go]'); await p.waitForSelector('.modal [data-ok]'); await p.click('.modal [data-ok]');
+  await p.waitForSelector('.modal .note.ok', { timeout: 120000 });
+  const fin = await D();
+  const sidiV = fin.ventes.filter((v) => v.agent_id === sidi.id && v.statut === 'validee');
+  const ctn = (v) => (v.lignes || fin.vente_lignes?.filter((l) => l.vente_id === v.id) || []).reduce((s2, l) => s2 + Number(l.quantite), 0);
+  const jour = sidiV[0]?.date;
+  const duJour = fin.ventes.filter((v) => v.date === jour && !String(v.ref_externe || '').startsWith('TB|'));
+  const lignes = (fin.vente_lignes || []).filter((l) => l.vente_id === sidiV[0]?.id);
+  verif(duJour.length === 3 && sidiV.length === 1, `Après écrasement : ${duJour.length} ventes ce jour-là, celles du fichier (pas de doublon)`);
+  verif(lignes.length ? Number(lignes[0].quantite) === 7 : true, `Vente corrigée dans le fichier : ${lignes.map((l) => l.quantite).join(',') || '(lignes non chargées)'} cartons`);
+  verif(fin.circuit_mvts.length === apres.circuit_mvts.length && fin.versements.length === apres.versements.length, 'Mouvements et versements remplacés à l’identique (même nombre)');
   verif(!errs.length, errs.length ? 'Erreurs : ' + errs.slice(0, 3).join(' | ') : 'Aucune erreur dans la page');
   await b.close(); console.log(echecs ? `${echecs} échec(s)` : 'Tous les contrôles sont réussis'); process.exit(echecs ? 1 : 0);
 })();

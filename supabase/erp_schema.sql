@@ -418,3 +418,7 @@ alter table circuit_mvts add constraint circuit_mvts_type_check check (type in (
 
 -- Versements : argent destiné à Oriba Food ou à Oriba Rice
 alter table versements add column if not exists beneficiaire text check (beneficiaire in ('Oriba Food', 'Oriba Rice'));
+
+-- Reste à encaisser au départ de chaque dépôt (situation d'ouverture), réparti entre Oriba Food et Oriba Rice
+alter table agents add column if not exists solde_initial_food numeric(16,2) not null default 0;
+alter table agents add column if not exists solde_initial_rice numeric(16,2) not null default 0;

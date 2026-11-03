@@ -1227,7 +1227,10 @@ A['versement.cancel'] = async ({ t, user, perms, payload, ip }) => {
 export const CIBLES_SUPPRESSION = {
   ventes_comptant: 'Ventes au comptant (et lignes)', ventes_credit: 'Ventes à crédit (avec remboursements et relances)', remboursements: 'Remboursements',
   stock: 'Stock confié (lots et mouvements)', circuit: 'Circuit de distribution (approvisionnements, prises, dispatch, versements)', depenses: 'Dépenses (avec validations et répartitions)', demandes: 'Demandes carburant et vidange',
-  objectifs: 'Objectifs', suivi_agents: 'Fiches des agents terrain', budgets: 'Budgets', import: 'Tout ce qu’un import a créé', tout: 'Toutes les données (opérations et référentiels agents, clients, marchés, véhicules)',
+  objectifs: 'Objectifs', suivi_agents: 'Fiches des agents terrain', budgets: 'Budgets', import: 'Tout ce qu’un import a créé',
+  mouvements: 'Mouvements de cartons (approvisionnements, remises, transferts)', versements: 'Versements',
+  operations: 'Toutes les opérations (ventes, crédits, remboursements, mouvements, versements, objectifs, dépenses) — on garde dépôts, agents, clients, grossistes, produits',
+  tout: 'Toutes les données (opérations et référentiels agents, clients, marchés, véhicules)',
 };
 async function planSuppression(t, user, p) {
   const { cible } = p;
@@ -1241,7 +1244,7 @@ async function planSuppression(t, user, p) {
   const okEq = (e) => !p.equipe_id || e === p.equipe_id;
   const P = {};
   const add = (tb, ids) => { P[tb] = [...new Set([...(P[tb] || []), ...ids])]; };
-  const tout = cible === 'tout', imp = cible === 'import' ? p.import_id : null;
+  const tout = cible === 'tout' || cible === 'operations', imp = cible === 'import' ? p.import_id : null;
   const ventes = await t.select('ventes');
   const choisirVentes = (mode) => ventes.filter((v) => (imp ? v.import_id === imp : (!mode || v.mode === mode) && enPeriode(v.date) && okEq(eqVente(v))));
   let vs = [];
@@ -1263,10 +1266,8 @@ async function planSuppression(t, user, p) {
     const lots = new Set(mv.filter((m) => m.type === 'remise' && (tout || (imp ? m.import_id === imp : enPeriode(m.date)))).map((m) => m.id));
     add('stock_mouvements', mv.filter((m) => lots.has(m.id) || lots.has(m.lot_id) || (!imp && !tout && m.type !== 'remise' && enPeriode(m.date))).map((m) => m.id));
   }
-  if (tout || cible === 'circuit' || imp) {
-    add('circuit_mvts', (await t.select('circuit_mvts')).filter((m) => tout || (imp ? m.import_id === imp : enPeriode(m.date))).map((m) => m.id));
-    add('versements', (await t.select('versements')).filter((v) => tout || (imp ? v.import_id === imp : enPeriode(v.date))).map((v) => v.id));
-  }
+  if (tout || ['circuit', 'mouvements'].includes(cible) || imp) add('circuit_mvts', (await t.select('circuit_mvts')).filter((m) => tout || (imp ? m.import_id === imp : enPeriode(m.date))).map((m) => m.id));
+  if (tout || ['circuit', 'versements'].includes(cible) || imp) add('versements', (await t.select('versements')).filter((v) => tout || (imp ? v.import_id === imp : enPeriode(v.date))).map((v) => v.id));
   if (tout || cible === 'depenses' || imp) {
     const ds = (await t.select('depenses')).filter((d) => tout || (imp ? d.import_id === imp : enPeriode(d.date) && okEq(d.equipe_id)));
     const ids = new Set(ds.map((d) => d.id));
@@ -1274,19 +1275,73 @@ async function planSuppression(t, user, p) {
     add('depense_validations', (await t.select('depense_validations')).filter((x) => ids.has(x.depense_id)).map((x) => x.id));
     add('depense_repartitions', (await t.select('depense_repartitions')).filter((x) => ids.has(x.depense_id)).map((x) => x.id));
   }
-  if (tout || cible === 'demandes') add('demandes', (await t.select('demandes')).filter((d) => tout || (enPeriode(d.date) && okEq(d.equipe_id))).map((d) => d.id));
+  if (cible === 'tout' || cible === 'demandes') add('demandes', (await t.select('demandes')).filter((d) => tout || (enPeriode(d.date) && okEq(d.equipe_id))).map((d) => d.id));
   const moisOk = (m) => (!p.du || m >= du.slice(0, 7)) && (!p.au || m <= au.slice(0, 7));
   if (tout || cible === 'objectifs') add('objectifs', (await t.select('objectifs')).filter((o) => tout || moisOk(o.mois)).map((o) => o.id));
   if (tout || cible === 'suivi_agents') add('suivi_agents', (await t.select('suivi_agents')).filter((o) => tout || (moisOk(o.mois) && okEq(agents.get(o.agent_id)?.equipe_id))).map((o) => o.id));
-  if (tout || cible === 'budgets') add('budgets', (await t.select('budgets')).filter((b) => tout || (moisOk(b.mois) && okEq(b.equipe_id))).map((b) => b.id));
+  if (cible === 'tout' || cible === 'budgets') add('budgets', (await t.select('budgets')).filter((b) => tout || (moisOk(b.mois) && okEq(b.equipe_id))).map((b) => b.id));
   if (imp) add('imports', [imp]);
-  if (tout) {
-    for (const tb of ['clotures', 'anomalies', 'imports', 'agents', 'clients', 'marches', 'vehicules', 'grossistes']) add(tb, (await t.select(tb)).map((r) => r.id));
-  }
+  if (tout) for (const tb of ['clotures', 'anomalies', 'imports']) add(tb, (await t.select(tb)).map((r) => r.id));
+  if (cible === 'tout') for (const tb of ['agents', 'clients', 'marches', 'vehicules', 'grossistes']) add(tb, (await t.select(tb)).map((r) => r.id));
   // Une dépense supprimée ne doit plus être liée à une demande
   return P;
 }
 const ORDRE_SUPPRESSION = ['depense_validations', 'depense_repartitions', 'demandes', 'depenses', 'relances', 'remboursements', 'stock_mouvements', 'versements', 'circuit_mvts', 'vente_lignes', 'ventes', 'suivi_agents', 'objectifs', 'budgets', 'clotures', 'anomalies', 'imports', 'agents', 'clients', 'marches', 'vehicules', 'grossistes'];
+// Suppression en cascade d'un plan { table: [ids] } (ordre : enfants d'abord)
+async function executerSuppression(t, P, tout = false) {
+  const compte = {};
+  if (P.ventes?.length) await t.updateWhere('ventes', { id: P.ventes }, { lot_id: null });
+  if (P.depenses?.length) { const dem = (await t.select('demandes')).filter((d) => d.depense_id && P.depenses.includes(d.depense_id) && !(P.demandes || []).includes(d.id)); for (const d of dem) await t.update('demandes', d.id, { depense_id: null }); }
+  if (P.stock_mouvements?.length) { const vl = (await t.select('ventes')).filter((v) => v.lot_id && P.stock_mouvements.includes(v.lot_id)); for (const v of vl) await t.update('ventes', v.id, { lot_id: null }); }
+  if (tout) { for (const tb of ['agents']) if (P[tb]?.length) await t.updateWhere(tb, { id: P[tb] }, { marche_id: null, depot_id: null }); }
+  for (const tb of ORDRE_SUPPRESSION) {
+    let ids = P[tb]; if (!ids?.length) continue;
+    if (tb === 'stock_mouvements') { const mv = new Map((await t.select('stock_mouvements', { id: ids })).map((m) => [m.id, m])); ids = [...ids].sort((x, y) => (mv.get(x)?.type === 'remise' ? 1 : 0) - (mv.get(y)?.type === 'remise' ? 1 : 0)); }
+    let n = 0;
+    for (let i = 0; i < ids.length; i += 500) n += await t.remove(tb, { id: ids.slice(i, i + 500) });
+    compte[tb] = n;
+  }
+  return compte;
+}
+// Écraser les jours d'un classeur : avant réimport, on efface ce qui existe aux mêmes dates pour les mêmes onglets
+// (les ventes venues des fichiers TB ne sont pas touchées)
+async function planJours(t, p) {
+  const S = p.sections || {}; const P = {};
+  const add = (tb, ids) => { if (ids.length) P[tb] = [...new Set([...(P[tb] || []), ...ids])]; };
+  const set = (l) => new Set((l || []).filter(isDate));
+  const mv = S.mouvements || {};
+  if (Object.keys(mv).length) {
+    const par = Object.fromEntries(Object.entries(mv).map(([k, l]) => [k, set(l)]));
+    add('circuit_mvts', (await t.select('circuit_mvts')).filter((m) => par[m.type]?.has(m.date)).map((m) => m.id));
+  }
+  const ventes = await t.select('ventes');
+  const horsTB = (v) => !String(v?.ref_externe || '').startsWith('TB|');
+  const jv = set(S.ventes);
+  const vs = ventes.filter((v) => jv.has(v.date) && horsTB(v));
+  if (vs.length) {
+    const ids = new Set(vs.map((v) => v.id));
+    add('ventes', [...ids]);
+    add('vente_lignes', (await t.select('vente_lignes')).filter((l) => ids.has(l.vente_id)).map((l) => l.id));
+    add('remboursements', (await t.select('remboursements')).filter((r) => ids.has(r.vente_id)).map((r) => r.id));
+    add('relances', (await t.select('relances')).filter((r) => ids.has(r.vente_id)).map((r) => r.id));
+    add('stock_mouvements', (await t.select('stock_mouvements')).filter((m) => m.vente_id && ids.has(m.vente_id)).map((m) => m.id));
+  }
+  const jr = set(S.remboursements);
+  if (jr.size) { const vm = new Map(ventes.map((v) => [v.id, v])); add('remboursements', (await t.select('remboursements')).filter((r) => jr.has(r.date) && horsTB(vm.get(r.vente_id))).map((r) => r.id)); }
+  const jvs = set(S.versements);
+  if (jvs.size) add('versements', (await t.select('versements')).filter((v) => jvs.has(v.date)).map((v) => v.id));
+  return P;
+}
+A['purge.jours'] = async ({ t, perms, user, payload, ip }) => {
+  if (!can(perms, 'suppression', 'supprimer')) fail('Seul le Responsable Commercial & Force de Vente peut écraser des données.', 403);
+  const P = await planJours(t, payload);
+  const prevu = Object.fromEntries(ORDRE_SUPPRESSION.filter((k) => P[k]?.length).map((k) => [k, P[k].length]));
+  if (payload.preview) return { compte: prevu };
+  if (!clean(payload.motif)) fail('Le motif est obligatoire.');
+  const compte = await executerSuppression(t, P);
+  await audit(t, user, 'SUPPRESSION', 'ecrasement', clean(payload.fichier) || 'classeur', { jours: payload.sections, supprime: compte }, null, payload.motif, ip);
+  return { compte };
+};
 A['purge.preview'] = async ({ t, perms, user, payload }) => {
   if (!can(perms, 'suppression', 'supprimer')) fail('Seul le Responsable Commercial & Force de Vente peut supprimer des données.', 403);
   const P = await planSuppression(t, user, payload);
@@ -1297,19 +1352,12 @@ A['purge.run'] = async ({ t, perms, user, payload, ip }) => {
   if (payload.confirmation !== 'SUPPRIMER') fail('Tapez SUPPRIMER pour confirmer.');
   if (!clean(payload.motif)) fail('Le motif de la suppression est obligatoire.');
   const P = await planSuppression(t, user, payload);
-  const compte = {};
-  if (P.ventes?.length) await t.updateWhere('ventes', { id: P.ventes }, { lot_id: null });
-  if (P.depenses?.length) { const dem = (await t.select('demandes')).filter((d) => d.depense_id && P.depenses.includes(d.depense_id) && !(P.demandes || []).includes(d.id)); for (const d of dem) await t.update('demandes', d.id, { depense_id: null }); }
-  if (P.stock_mouvements?.length) { const vl = (await t.select('ventes')).filter((v) => v.lot_id && P.stock_mouvements.includes(v.lot_id)); for (const v of vl) await t.update('ventes', v.id, { lot_id: null }); }
-  if (payload.cible === 'tout') { for (const tb of ['agents']) if (P[tb]?.length) await t.updateWhere(tb, { id: P[tb] }, { marche_id: null, depot_id: null }); }
-  for (const tb of ORDRE_SUPPRESSION) {
-    let ids = P[tb]; if (!ids?.length) continue;
-    if (tb === 'stock_mouvements') { const mv = new Map((await t.select('stock_mouvements', { id: ids })).map((m) => [m.id, m])); ids = [...ids].sort((x, y) => (mv.get(x)?.type === 'remise' ? 1 : 0) - (mv.get(y)?.type === 'remise' ? 1 : 0)); }
-    let n = 0;
-    for (let i = 0; i < ids.length; i += 500) n += await t.remove(tb, { id: ids.slice(i, i + 500) });
-    compte[tb] = n;
+  const compte = await executerSuppression(t, P, payload.cible === 'tout');
+  if (['tout', 'operations'].includes(payload.cible)) {
+    for (const c of await t.select('compteurs')) if (payload.cible === 'tout' || !String(c.cle).startsWith('DEM-')) await t.remove('compteurs', { cle: c.cle });
+    // Nouveau départ : la date des stocks initiaux sera fixée par le prochain classeur
+    await t.updateWhere('parametres', { cle: 'circuit_date_depart' }, { valeur: { date: null }, updated_at: nowISO(), updated_by: user.id });
   }
-  if (payload.cible === 'tout') for (const c of await t.select('compteurs')) await t.remove('compteurs', { cle: c.cle });
   await audit(t, user, 'SUPPRESSION', payload.cible === 'import' ? 'imports' : payload.cible, payload.import_id || payload.cible, { filtres: { du: payload.du || null, au: payload.au || null, equipe_id: payload.equipe_id || null }, supprime: compte }, null, payload.motif, ip);
   return { compte };
 };

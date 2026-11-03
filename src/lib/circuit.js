@@ -59,7 +59,9 @@ function situationVendeur(C, agent, date, { depot }, au = date) {
   const credits = C.ventes.filter((x) => ids.has(x.v.agent_id) && x.v.mode === 'credit' && x.v.date <= au).map((x) => creditInfo(x.v, C.I, au));
   // Objectif du mois (cartons) et ventes du mois jusqu'à la fin de la période
   const mois = au.slice(0, 7);
-  const objectif = somme((C.D.objectifs || []).filter((o) => o.actif !== false && o.axe === 'agent' && o.mois === mois && !o.produit_id && ids.has(o.cible_id)), (o) => o.objectif_cartons);
+  let objectif = somme((C.D.objectifs || []).filter((o) => o.actif !== false && o.axe === 'agent' && o.mois === mois && !o.produit_id && ids.has(o.cible_id)), (o) => o.objectif_cartons);
+  // Sans objectifs par agent, le dépôt reprend l'objectif de son équipe
+  if (!objectif && depot && agent.equipe_id) objectif = somme((C.D.objectifs || []).filter((o) => o.actif !== false && o.axe === 'equipe' && o.mois === mois && !o.produit_id && o.cible_id === agent.equipe_id), (o) => o.objectif_cartons);
   const venduMois = somme(C.ventes.filter((x) => ids.has(x.v.agent_id) && x.v.date >= `${mois}-01` && x.v.date <= au), (x) => x.cartons);
   const enCours = somme(credits, (c) => c.solde), enRetard = somme(credits.filter((c) => c.statut === 'En retard'), (c) => c.solde);
   return { id: agent.id, code: agent.code || '', nom: agent.nom, fonction: agent.fonction || '', equipe_id: agent.equipe_id, depot_id: agent.depot_id || null, prix: num(agent.prix_carton) || null, si, recu, recuFoods, recuRice, recuGross, recuTransfert, transfere, disp, vc, vk, sf, ca, aVerser, verse, verseGrossiste, ecart: round2(aVerser - verse), remb, enCours, enRetard, objectif, venduMois, taux: objectif > 0 ? (venduMois / objectif) * 100 : null };
@@ -81,7 +83,16 @@ export function situationDepots(C, date, au = date) {
     const verseRice = round2(somme(vs.filter((v) => v.beneficiaire === 'Oriba Rice'), (v) => v.montant) + somme(vs.filter((v) => !v.beneficiaire), (v) => v.montant) * pr);
     const aVerserRice = round2(s.aVerser * pr);
     const split = { partRice: pr, aVerserRice, aVerserFood: round2(s.aVerser - aVerserRice), verseRice, verseFood: round2(s.verse - verseRice) };
-    split.resteRice = round2(split.aVerserRice - split.verseRice); split.resteFood = round2(split.aVerserFood - split.verseFood);
+    // Reste à verser = solde : reste à encaisser au départ + ventes comptant depuis le départ − versements depuis le départ
+    const dep0 = C.depart, cum = (x) => x >= dep0 && x <= au;
+    const vCum = somme(C.ventes.filter((x) => x.v.mode === 'comptant' && ids.has(x.v.agent_id) && cum(x.v.date)), (x) => x.montant);
+    const vsCum = C.vers.filter((v) => v.objet === 'ventes_comptant' && ids.has(v.agent_id) && cum(v.date));
+    const verseCumRice = round2(somme(vsCum.filter((v) => v.beneficiaire === 'Oriba Rice'), (v) => v.montant) + somme(vsCum.filter((v) => !v.beneficiaire), (v) => v.montant) * pr);
+    const verseCum = somme(vsCum, (v) => v.montant);
+    split.soldeDepart = round2(num(d.solde_initial_food) + num(d.solde_initial_rice));
+    split.resteRice = round2(num(d.solde_initial_rice) + vCum * pr - verseCumRice);
+    split.resteFood = round2(num(d.solde_initial_food) + vCum * (1 - pr) - (verseCum - verseCumRice));
+    split.reste = round2(split.resteFood + split.resteRice);
     const ss = (C.sousDe.get(d.id) || []).map((x) => situationVendeur(C, x, date, { depot: false }, au));
     const vcR = round2(s.vc + somme(ss, (x) => x.vc)), vkR = round2(s.vk + somme(ss, (x) => x.vk));
     return { ...s, ...split, stockSous: somme(ss, (x) => x.sf), stockTotal: round2(s.sf + somme(ss, (x) => x.sf)), siTotal: round2(s.si + somme(ss, (x) => x.si)), vcReseau: vcR, vkReseau: vkR, venduReseau: round2(vcR + vkR), nbSous: ss.length, sousAgents: ss };

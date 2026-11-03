@@ -63,17 +63,18 @@ export function renderAccueil(root) {
     const vC = vp.filter((x) => x.v.mode === 'comptant'), vK = vp.filter((x) => x.v.mode === 'credit');
     const sm = (l, k) => l.reduce((s, x) => s + num(x[k]), 0);
     const mois = au.slice(0, 7);
-    const obj = sm((App.D.objectifs || []).filter((o) => o.actif !== false && o.axe === 'agent' && o.mois === mois && !o.produit_id), 'objectif_cartons');
+    const objA = sm((App.D.objectifs || []).filter((o) => o.actif !== false && o.axe === 'agent' && o.mois === mois && !o.produit_id), 'objectif_cartons');
+    const obj = objA || sm((App.D.objectifs || []).filter((o) => o.actif !== false && o.axe === 'equipe' && o.mois === mois && !o.produit_id), 'objectif_cartons');
     const venduMois = sm(C.ventes.filter((x) => x.v.date >= `${mois}-01` && x.v.date <= au), 'cartons');
     const cr = creditsCircuit(C, au, { tous: true }), retard = cr.filter((c) => c.statut === 'En retard');
-    const reste = S(dep, 'ecart');
+    const reste = S(dep, 'reste');
     const enc = C.rembs.filter((r) => r.date >= du && r.date <= au);
     const resteF = S(dep, 'resteFood'), resteR = S(dep, 'resteRice');
     $('#ek', root).innerHTML = [
       kpi('Ventes au comptant', fmtF(sm(vC, 'montant')), `${ctn(sm(vC, 'cartons'))} · total des ventes ${fmtF(sm(vp, 'montant'))}${obj ? ` · objectif du mois ${fmtN((venduMois / obj) * 100, 0)} %` : ''}`),
       kpi('Ventes à crédit', fmtF(sm(vK, 'montant')), `${ctn(sm(vK, 'cartons'))} · ${vK.length} vente(s)`),
       kpi('Encaissements sur crédits', fmtF(sm(enc, 'montant')), `${enc.length} remboursement(s) reçu(s)`, 'ok'),
-      kpi('Argent à verser', fmtF(reste), `à Oriba Food ${fmtF(resteF)} · à Oriba Rice ${fmtF(resteR)} · déjà versé ${fmtF(S(dep, 'verse'))}`, reste > 0 ? 'crit' : 'ok'),
+      kpi('Reste à verser', fmtF(reste), `à Oriba Food ${fmtF(resteF)} · à Oriba Rice ${fmtF(resteR)}${S(dep, 'soldeDepart') ? ` · dont ${fmtF(S(dep, 'soldeDepart'))} dus au départ` : ''} · versé sur la période ${fmtF(S(dep, 'verse'))}`, reste > 0 ? 'crit' : 'ok'),
       kpi('Crédits clients en cours', fmtF(S(cr, 'solde')), `dont en retard ${fmtF(S(retard, 'solde'))} (${new Set(retard.map((c) => c.client_id)).size} client(s))`, retard.length ? 'crit' : 'ok'),
       C.stockConnu ? kpi('Stock dans les dépôts', ctn(S(dep, 'stockTotal')), `reçu : Oriba Food ${fmtQ(S(dep, 'recuFoods'))} · Oriba Rice ${fmtQ(S(dep, 'recuRice'))} · grossistes ${fmtQ(S(dep, 'recuGross'))}`, S(dep, 'stockTotal') < 0 ? 'warn' : '')
         : kpi('Stock dans les dépôts', 'Non renseigné', 'Saisissez le stock de départ ou les approvisionnements des dépôts'),
@@ -95,7 +96,7 @@ export function renderAccueil(root) {
     $('#ec', root).innerHTML = `<header><h3>Ventes à crédit à relancer</h3>${cr.length ? '<a class="small" href="#credits">Voir tous les crédits</a>' : ''}</header>${top.length ? `<ul class="alertes">${top.map((c) => `<li class="${c.statut === 'En retard' ? 'crit' : c.proche ? 'warn' : ''}"><b>${esc(nm.client(c.client_id) || 'Client non précisé')}</b> doit ${fmtF(c.solde)} — ${c.statut === 'En retard' ? `en retard de ${c.joursRetard} jour(s)` : `échéance le ${fmtD(c.echeance)}`}<small class="muted"> · vendeur : ${esc(nm.agent(c.agent_id))}</small></li>`).join('')}</ul>` : '<p class="muted">Aucun crédit en cours.</p>'}`;
     // À surveiller : dépôts
     const alertes = [
-      ...dep.filter((d) => d.ecart > 0).sort((a, b) => b.ecart - a.ecart).map((d) => [`${d.nom} : ${fmtF(d.ecart)} pas encore versés${d.resteFood > 0 && d.resteRice > 0 ? ` (Oriba Food ${fmtF(d.resteFood)} · Oriba Rice ${fmtF(d.resteRice)})` : d.resteRice > 0 ? ' à Oriba Rice' : ' à Oriba Food'}`, 'crit']),
+      ...dep.filter((d) => d.reste > 0).sort((a, b) => b.reste - a.reste).map((d) => [`${d.nom} : ${fmtF(d.reste)} pas encore versés${d.resteFood > 0 && d.resteRice > 0 ? ` (Oriba Food ${fmtF(d.resteFood)} · Oriba Rice ${fmtF(d.resteRice)})` : d.resteRice > 0 ? ' à Oriba Rice' : ' à Oriba Food'}`, 'crit']),
       ...dep.filter((d) => C.stockConnu && d.stockTotal < 0).map((d) => [`${d.nom} : stock négatif (${fmtQ(d.stockTotal)} ctn) — vérifier les saisies`, 'warn']),
       ...dep.filter((d) => d.objectif && d.taux !== null && d.taux < 50 && au.slice(8, 10) >= '15').map((d) => [`${d.nom} : ${fmtN(d.taux, 0)} % de l’objectif du mois seulement`, 'warn']),
     ].slice(0, 6);
@@ -166,7 +167,7 @@ export function renderDepotsEssentiel(root) {
       <span class="zc-ca">${fmtF(x.ca)} <small class="muted">de ventes</small></span><span class="bar" title="Ventes de la période"><i style="width:${(x.ca / maxCA) * 100}%"></i></span>
       <span class="zc-grid">
         <span><small>Reçu par le dépôt</small><b>${fmtQ(x.recu + x.recuTransfert)} ctn</b></span><span><small>Ventes</small><b>${fmtQ(x.venduReseau)} ctn</b></span>
-        <span><small>Stock final</small><b class="${C.stockConnu && x.stockTotal < 0 ? 't-crit' : ''}">${C.stockConnu ? `${fmtQ(x.stockTotal)} ctn` : '—'}</b></span><span><small>Reste à verser</small><b class="${x.ecart > 0 ? 't-crit' : ''}">${fmtF(x.ecart)}</b></span>
+        <span><small>Stock final</small><b class="${C.stockConnu && x.stockTotal < 0 ? 't-crit' : ''}">${C.stockConnu ? `${fmtQ(x.stockTotal)} ctn` : '—'}</b></span><span><small>Reste à verser</small><b class="${x.reste > 0 ? 't-crit' : ''}">${fmtF(x.reste)}</b></span>
         <span><small>Créances</small><b class="${x.enRetard > 0 ? 't-crit' : ''}">${fmtF(x.enCours)}</b></span><span><small>Clients</small><b>${fmtN(x.clients)}</b></span>
       </span></button>`).join('');
     $$('#dz [data-d]', root).forEach((b) => b.addEventListener('click', () => { p.depot = b.dataset.d; draw(); $('#dt-c', root).scrollIntoView({ behavior: 'smooth', block: 'start' }); }));

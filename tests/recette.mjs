@@ -297,6 +297,14 @@ console.log('Circuit de distribution (grossistes → agents-dépôts → sous-ag
   await call(sessions.com, 'circuit.depart', { date: addDays(today(), -7) });
   ok((await call(sessions.dg, 'data.bootstrap')).data.parametres.find((x) => x.cle === 'circuit_date_depart')?.valeur?.date === addDays(today(), -7), 'Date des stocks initiaux du circuit enregistrée');
   if (mode === 'pg') await expectErr(globalThis.__pool.query('delete from circuit_mvts'), 'Suppression de mouvement interdite en base', /Suppression interdite/);
+  // Écraser les jours d'un classeur
+  const sec = { sections: { mouvements: { dispatch: [today()], transfert: [today()] }, versements: [today()] } };
+  const pv = await call(sessions.com, 'purge.jours', { ...sec, preview: true });
+  ok(pv.compte.circuit_mvts === 2 && pv.compte.versements === 3, `Écraser les jours : aperçu ${JSON.stringify(pv.compte)}`);
+  await expectErr(call(sessions.dg, 'purge.jours', { ...sec, motif: 'x' }), 'La DG ne peut pas écraser', /Responsable Commercial/);
+  const ec = await call(sessions.com, 'purge.jours', { ...sec, motif: 'Écrasement par le classeur test.xlsx' });
+  const D2 = (await call(sessions.com, 'data.bootstrap')).data;
+  ok(ec.compte.circuit_mvts === 2 && D2.circuit_mvts.filter((m) => ['dispatch', 'transfert'].includes(m.type)).length === 0 && D2.circuit_mvts.length === 3 && D2.versements.length === 0, 'Écrasement : seuls les onglets et jours du fichier sont effacés');
 }
 console.log('Suppression définitive (Responsable commercial seul)');
 {

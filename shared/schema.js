@@ -147,6 +147,7 @@ export const REFS = {
       { k: 'date_affectation', l: "Date d'affectation", t: 'date' },
       { k: 'role_circuit', l: 'Rôle dans le circuit', t: 'select:depot=Dépôt|sous_agent=Agent d’un dépôt' }, { k: 'depot_id', l: 'Dépôt (pour un agent)', t: 'ref:agents' },
       { k: 'stock_initial', l: 'Stock initial (cartons)', t: 'number' }, { k: 'prix_carton', l: 'Prix du carton DADI (FCFA, pour un dépôt)', t: 'number' },
+      { k: 'solde_initial_food', l: 'Reste à encaisser au départ — Oriba Food (FCFA, pour un dépôt)', t: 'number' }, { k: 'solde_initial_rice', l: 'Reste à encaisser au départ — Oriba Rice (FCFA, pour un dépôt)', t: 'number' },
     ],
   },
   marches: {
@@ -258,7 +259,7 @@ export const DEFAULT_MARCHES = [
 export const WRITABLE = {
   zones: ['nom', 'actif'],
   equipes: ['code', 'nom', 'zone_id', 'responsable', 'actif'],
-  agents: ['code', 'nom', 'fonction', 'telephone', 'equipe_id', 'zone_id', 'marche_id', 'date_affectation', 'role_circuit', 'depot_id', 'stock_initial', 'prix_carton', 'actif'],
+  agents: ['code', 'nom', 'fonction', 'telephone', 'equipe_id', 'zone_id', 'marche_id', 'date_affectation', 'role_circuit', 'depot_id', 'stock_initial', 'prix_carton', 'solde_initial_food', 'solde_initial_rice', 'actif'],
   grossistes: ['code', 'nom', 'localite', 'fournisseur', 'telephone', 'stock_initial', 'solde_initial', 'actif'],
   marches: ['nom', 'commune', 'zone_id', 'equipe_id', 'actif'],
   clients: ['code', 'nom', 'type', 'marche_id', 'telephone', 'plafond_cartons', 'depositaire', 'actif'],

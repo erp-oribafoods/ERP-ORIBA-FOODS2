@@ -2,7 +2,7 @@
 // listes (Grossistes, Agents-dépôts, Sous-agents, Clients) puis journaux 1-Appro, 2-Prises, 3-Dispatch, 4-Ventes, 5-Versements.
 // Chaque ligne reçoit un identifiant stable : réimporter le même fichier (ou le fichier du lendemain, complété) n'ajoute que les nouveautés.
 import { App, nm } from '../app.js';
-import { esc, $, $$, fmtN, fmtD, toast, busy, icon, modal, exportRows, saveBlob } from './ui.js';
+import { esc, $, $$, fmtN, fmtD, toast, busy, icon, modal, exportRows, saveBlob, confirmBox } from './ui.js';
 import { cleNom, trouverAgent } from './noms.js';
 import { K, generateurCles } from './circuitRefs.js';
 import { today } from '../../shared/logic.js';
@@ -267,13 +267,22 @@ export async function appliquerCircuit(wb, fname, etape = () => {}) {
 }
 
 // Fenêtre d'import
+// Jours présents dans chaque onglet du classeur (pour « écraser les jours du fichier »)
+function joursDuFichier(A) {
+  const j = (l) => [...new Set(l.map((r) => iso(r.date)).filter(Boolean))];
+  const vers = A.J.versements || [];
+  return { mouvements: { appro: j(A.J.appro || []), prise: j(A.J.prise || []), dispatch: j(A.J.dispatch || []), transfert: j(A.J.transfert || []) },
+    ventes: j(A.J.ventes || []), versements: j(vers.filter((r) => !K(r.objet).startsWith('rembours'))), remboursements: j(vers.filter((r) => K(r.objet).startsWith('rembours'))) };
+}
+const LIB_TABLES = { circuit_mvts: 'mouvement(s) de cartons', ventes: 'vente(s)', vente_lignes: null, remboursements: 'remboursement(s)', relances: null, stock_mouvements: null, versements: 'versement(s)' };
 export function ouvrirImportCircuit() {
   modal({ title: 'Import du classeur du circuit', wide: true,
-    body: `<ol class="steps-imp"><li><b>Choisissez le classeur du jour</b> (même format que le modèle : onglets Grossistes, Agents-dépôts, Sous-agents, Clients, 1-Appro, 2-Prises, 3-Dispatch, 4-Ventes, 5-Versements).</li>
+    body: `<ol class="steps-imp"><li><b>Choisissez le classeur du jour</b> (même format que le modèle : onglets Dépôts, Agents, Clients, Grossistes, 1-Appro grossistes, 2-Appro dépôts, 3-Remises agents, 4-Ventes, 5-Versements, 6-Transferts).</li>
       <li><b>Vérifiez le bilan</b> : les lignes déjà enregistrées sont reconnues, seules les nouvelles sont proposées.</li><li><b>Enregistrez</b> : rien n’est jamais enregistré deux fois.</li></ol>
       <div class="filters"><label class="btn primary"><input type="file" accept=".xlsx,.xls" hidden data-f>${icon('upload')} Choisir le classeur</label><button class="btn ghost" type="button" data-mod>${icon('download')} Modèle Excel</button></div><div data-b></div>`,
     onMount: (m) => {
-      let wb = null, fname = '';
+      let wb = null, fname = '', ecraser = false;
+      const peutEcraser = App.can('suppression', 'supprimer');
       const zone = $('[data-b]', m);
       $('[data-mod]', m).addEventListener('click', () => modeleCircuit());
       const LIBS = [['appro', '1-Appro grossistes'], ['prise', '2-Appro dépôts'], ['dispatch', '3-Remises agents'], ['transfert', '6-Transferts entre dépôts'], ['ventes', '4-Ventes'], ['versements', '5-Versements (versements)'], ['remboursements', '5-Versements (remboursements)']];
@@ -288,12 +297,25 @@ export function ouvrirImportCircuit() {
           ${LIBS.map(([k, l]) => `<tr><td>${l}</td><td class="n">${fmtN(c(k, 'ok'))}</td><td class="n">${fmtN(c(k, 'identique'))}</td><td class="n">${c(k, 'rejet') ? `<b class="t-crit">${c(k, 'rejet')}</b>` : 0}</td></tr>`).join('')}</tbody></table></div>
           ${nCreer || A.ref.maj.length ? `<div class="note">À créer : ${[['grossistes', 'grossiste(s)'], ['depots', 'agent(s)-dépôt(s)'], ['sous', 'sous-agent(s)'], ['clients', 'client(s)']].filter(([k]) => A.ref.creer[k].length).map(([k, l]) => `${A.ref.creer[k].length} ${l}`).join(', ') || 'rien'}.${A.ref.maj.length ? ` À mettre à jour : ${A.ref.maj.length} (rôle, agent-dépôt ou stock de départ).` : ''}${A.depart && !App.I.p.circuit_date_depart?.date ? ` Date des stocks initiaux : ${fmtD(A.depart)}.` : ''}</div>` : ''}
           ${rej.length ? `<details class="card"><summary><b>${rej.length} ligne(s) rejetée(s)</b> — à corriger dans le classeur</summary><p>${rej.slice(0, 25).map(([f, x]) => `${esc(f)} ligne ${x.ligne} : ${esc(x.msg)}`).join('<br>')}${rej.length > 25 ? '<br>…' : ''}</p></details>` : ''}
-          <div class="row-act"><button class="btn ghost" data-x>Exporter le contrôle</button><button class="btn primary" data-go ${total ? '' : 'disabled'}>${icon('check')} Enregistrer dans la plateforme</button></div><div data-p></div>`;
+          ${peutEcraser ? `<label class="chk ecraser"><input type="checkbox" data-ec ${ecraser ? 'checked' : ''}> <span><b>Écraser les jours du fichier</b> : ce qui est déjà enregistré aux dates présentes dans ce classeur (mêmes onglets) est remplacé par le contenu du fichier. Les ventes des fichiers TB ne sont pas touchées.</span></label><div data-ec-info class="small muted"></div>` : ''}
+          <div class="row-act"><button class="btn ghost" data-x>Exporter le contrôle</button><button class="btn primary" data-go ${total || ecraser ? '' : 'disabled'}>${icon('check')} ${ecraser ? 'Écraser et enregistrer' : 'Enregistrer dans la plateforme'}</button></div><div data-p></div>`;
+        $('[data-ec]', zone)?.addEventListener('change', (e) => { ecraser = e.target.checked; afficher(); });
+        if (ecraser) App.api.call('purge.jours', { preview: true, sections: joursDuFichier(A) }).then((r) => {
+          const l = Object.entries(r.compte || {}).filter(([k]) => LIB_TABLES[k]).map(([k, n]) => `${fmtN(n)} ${LIB_TABLES[k]}`);
+          const info = $('[data-ec-info]', zone); if (info) info.innerHTML = l.length ? `Seront remplacés : ${l.join(', ')} déjà enregistrés aux mêmes dates.` : 'Rien n’est encore enregistré à ces dates : l’import ajoutera simplement les lignes.';
+        }).catch((er) => { const info = $('[data-ec-info]', zone); if (info) info.textContent = er.message; });
         $('[data-x]', zone).addEventListener('click', () => exportRows('xlsx', 'Contrôle classeur circuit', [{ k: 'f', l: 'Onglet' }, { k: 'ligne', l: 'Ligne' }, { k: 'apercu', l: 'Aperçu' }, { k: 's', l: 'Contrôle' }, { k: 'msg', l: 'Détail' }],
           LIBS.flatMap(([k, l]) => A.res[k].map((x) => ({ f: l, ligne: x.ligne, apercu: x.apercu, s: { ok: 'Nouvelle', identique: 'Déjà présente', rejet: 'Rejetée' }[x.statut], msg: x.msg }))), `Fichier : ${fname}`));
         $('[data-go]', zone).addEventListener('click', (ev) => busy(ev.currentTarget, async () => {
           const prog = $('[data-p]', zone);
           try {
+            if (ecraser) {
+              const ok = await confirmBox({ title: 'Écraser les jours du fichier', message: 'Les données déjà enregistrées aux dates de ce classeur vont être supprimées puis remplacées par celles du fichier. L’opération est inscrite au journal d’audit.', okLabel: 'Écraser et enregistrer', danger: true });
+              if (!ok) return;
+              prog.innerHTML = '<div class="note">Suppression des données des jours du fichier…</div>';
+              await App.api.call('purge.jours', { sections: joursDuFichier(analyseCircuit(wb)), fichier: fname, motif: `Écrasement par le classeur ${fname}` });
+              await App.refresh();
+            }
             const r = await appliquerCircuit(wb, fname, (txt) => { prog.innerHTML = `<div class="note">${esc(txt)}…</div>`; });
             const f = (x) => (x ? `${fmtN(x.integrees)} ajoutée(s)${x.deja ? `, ${fmtN(x.deja)} déjà présente(s)` : ''}` : '0');
             zone.innerHTML = `<div class="note ok"><b>Import terminé.</b><ul><li>Référentiels créés ou mis à jour : ${r.refs}</li><li>Approvisionnements : ${f(r.R.appro)} · Prises : ${f(r.R.prise)} · Dispatch : ${f(r.R.dispatch)} · Transferts : ${f(r.R.transfert)}</li><li>Ventes comptant : ${f(r.R.comptant)} · Ventes à crédit : ${f(r.R.credit)}</li><li>Versements : ${f(r.R.versements)} · Remboursements : ${f(r.R.remb)}</li></ul>

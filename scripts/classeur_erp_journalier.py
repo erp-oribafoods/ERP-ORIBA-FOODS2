@@ -9,7 +9,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils import get_column_letter as L
 
 BASE, FDV, OUT = sys.argv[1:4]
-TB = sys.argv[4] if len(sys.argv) > 4 else None
+TBS = sys.argv[4:]  # fichiers TB des équipes (Tahoua, Balleyara…)
 VERT, VERT_F, VIOLET, GRIS, BLANC, BLEU = '2E7D32', '1B5E20', '5B3E96', 'F2F7EE', 'FFFFFF', 'E8F0FE'
 LIGNES = 400
 DEPART = dt.date(2026, 11, 4)
@@ -38,10 +38,10 @@ CHEF_DEP = {NOM_AG[c]: NOM_DEP[d] for c, d in CHEFS.items()}
 
 # ---------- Historique du fichier TB de l'équipe (ex. TB Mohamedine Tahoua) : ventes comptant, ventes à crédit, remboursements
 import re
-def nom_client(c):
+def nom_client(c, zone):
     n = re.sub(r'^\s*Client\s+\w+\s*-\s*', '', str(c or '')).strip()
     n = re.sub(r'\s+', ' ', n)
-    return {'Detaillant': 'Détaillants divers (Tahoua)', 'Détaillant': 'Détaillants divers (Tahoua)'}.get(n, n) if n else None
+    return (f'Détaillants divers ({zone})' if re.match(r'^d[ée]taill', n, re.I) else n) if n else None
 def unite(u, prix):  # « Pack » à prix de carton dans le TB = en réalité des cartons
     return 'Carton' if not u or (str(u).lower().startswith('pack') and (prix or 0) >= 5000) else u
 def nom_marche(m): return re.sub(r'^\s*March[ée]\s+', '', str(m or '')).strip() or None
@@ -51,28 +51,50 @@ def jour(v):
     m = re.match(r'^(\d{1,2})/(\d{1,2})/0?(\d{3,4})$', str(v or '').strip())
     if m: y = int(m.group(3)); y = 2026 if y in (206, 2026) else y; return dt.date(y, int(m.group(2)), int(m.group(1)))
     return None
-HIST_V, HIST_R, TB_NOM = [], [], ''
-if TB:
+HIST_V, HIST_R, TB_NOMS, TEL, CORR = [], [], [], {}, []
+ZONE_DEP = {d[1]: d[2] for d in DEPOTS}
+for TB in TBS:
     tb_wb = load_workbook(TB, data_only=True)
-    TB_NOM = TB.rsplit('/', 1)[-1]
+    TB_NOMS.append(TB.rsplit('/', 1)[-1])
+    vend = lambda a: CHEF_DEP.get(str(a).strip(), str(a).strip())
+    chef = next((str(r[1]).strip() for r in tb_wb['Journal Comptant'].iter_rows(min_row=3, values_only=True) if r[1] and str(r[1]).strip() in CHEF_DEP), None)
+    dep = CHEF_DEP.get(chef, '')
+    zone = ZONE_DEP.get(dep, dep.replace('Dépôt ', ''))
+    pref = next((d[0] for d in DEPOTS if d[1] == dep), 'DEP').replace('DEP-', '')
+    # Téléphones des clients (onglet Paramètres du TB : « Client X - Nom » suivi du numéro)
+    if 'Paramètres' in tb_wb.sheetnames:
+        for r in tb_wb['Paramètres'].iter_rows(values_only=True):
+            for k in range(len(r) - 1):
+                if isinstance(r[k], str) and re.match(r'^\s*Client\s+\w+\s*-', r[k]) and isinstance(r[k + 1], str) and re.search(r'\d{2}\s?\d{2}', r[k + 1]) and 'X' not in r[k + 1]:
+                    TEL[nom_client(r[k], zone)] = r[k + 1].strip()
     for r in tb_wb['Journal Comptant'].iter_rows(min_row=3, values_only=True):
         d = jour(r[0])
         if not d or not r[1]: continue
-        HIST_V.append([d, CHEF_DEP.get(str(r[1]).strip(), str(r[1]).strip()), nom_marche(r[2]), nom_client(r[3]), r[4], unite(r[5], r[7]), r[6], r[7], 'Comptant', None, None, r[9] or None])
+        if not r[6]: CORR.append(f'{zone} : vente au comptant du {d:%d/%m/%Y} sans quantité, ignorée'); continue
+        HIST_V.append([d, vend(r[1]), nom_marche(r[2]), nom_client(r[3], zone), r[4], unite(r[5], r[7]), r[6], r[7], 'Comptant', None, None, r[9] or None])
     n = 0
     for r in tb_wb['Journal Crédit'].iter_rows(min_row=3, values_only=True):
         d = jour(r[0])
         if not d or not r[1]: continue
-        n += 1; num_v = f'TAH-C{n:03d}'
+        n += 1; num_v = f'{pref}-C{n:03d}'
         ech = jour(r[9]) or d
-        HIST_V.append([d, CHEF_DEP.get(str(r[1]).strip(), str(r[1]).strip()), nom_marche(r[2]), nom_client(r[3]), r[4], unite(r[5], r[7]), r[6], r[7], 'Crédit', ech, num_v, 'Reprise du TB'])
+        if ech < d:  # date promesse saisie avant la vente : même jour du mois suivant
+            e2 = (dt.date(d.year + (d.month == 12), d.month % 12 + 1, min(ech.day, 28)))
+            CORR.append(f'{zone} : crédit du {d:%d/%m/%Y} ({num_v}), date promesse {ech:%d/%m/%Y} avant la vente, corrigée en {e2:%d/%m/%Y}'); ech = e2
+        HIST_V.append([d, vend(r[1]), nom_marche(r[2]), nom_client(r[3], zone), r[4], unite(r[5], r[7]), r[6], r[7], 'Crédit', ech, num_v, f'Reprise du TB {zone}'])
         rb = r[10] or 0
         if rb > 0:
             dr = jour(r[11]) or ech
+            if dr.year > 2026:
+                CORR.append(f'{zone} : remboursement de {num_v} daté du {dr:%d/%m/%Y}, corrigé en {dr.day:02d}/{dr.month:02d}/2026'); dr = dt.date(2026, dr.month, dr.day)
             if dr < d: dr = d
-            HIST_R.append([dr, CHEF_DEP.get(str(r[1]).strip(), str(r[1]).strip()), 'Remboursement crédit', num_v, 'Caisse Oriba', None, rb, None])
-    noms = {c[1] for c in CLIENTS}
-    for c in sorted({x[3] for x in HIST_V if x[3]} - noms): CLIENTS.append([None, c, None, None, None, None])
+            HIST_R.append([dr, vend(r[1]), 'Remboursement crédit', num_v, 'Caisse Oriba', None, rb, None])
+noms = {c[1] for c in CLIENTS}
+for c in sorted({x[3] for x in HIST_V if x[3]} - noms): CLIENTS.append([None, c, None, None, None, None])
+for c in CLIENTS:
+    if not c[4] and TEL.get(c[1]): c[4] = TEL[c[1]]
+TB_NOM = ', '.join(TB_NOMS)
+for c in CORR: print('CORRECTION', c)
 for g in GROSSISTES:
     if not g[3]: g[3] = 'Oriba Food'
 PRODUITS = [('Arôme DADI Épicé', 'Arôme', 13250), ('Arôme DADI Poulet', 'Arôme', 12250), ('Mayonnaise Délice', 'Mayonnaise', 9500), ('Mayonnaise Oriba 1000 ml', 'Mayonnaise', 9500),
@@ -157,7 +179,7 @@ txt = [
     ('6. Crédit : dans 4-Ventes, la date promesse va dans « Échéance » ; chaque remboursement va dans 5-Versements avec le N° de la vente. Le solde, les jours de retard et le statut se calculent seuls.', None),
     ('', None),
     ('LES ONGLETS DE SAISIE', Font(bold=True, color=VIOLET)),
-    ('4-Ventes : ventes au comptant ou à crédit, par un dépôt ou un agent, avec le marché, le client, l’unité (carton ou pack). Crédit : client, date promesse et N° de vente (ex. V001) obligatoires. Déjà rempli avec l’historique du TB de Tahoua (juin à octobre 2026).', None),
+    ('4-Ventes : ventes au comptant ou à crédit, par un dépôt ou un agent, avec le marché, le client, l’unité (carton ou pack). Crédit : client, date promesse et N° de vente (ex. V001) obligatoires. Déjà rempli avec l’historique des TB de Tahoua et de Balleyara (mai à octobre 2026).', None),
     ('5-Versements : argent versé (Ventes comptant), remboursement d’un crédit (avec le N° de la vente), ou règlement d’un grossiste. Indiquez pour Oriba Food ou Oriba Rice.', None),
     ('2-Appro dépôts : cartons reçus par un dépôt, d’Oriba Food, d’Oriba Rice ou d’un grossiste.', None),
     ('3-Remises agents : cartons donnés par un dépôt à un de ses agents.', None),
@@ -216,7 +238,7 @@ j3 = feuille('3-Remises agents', '3 · Remises de cartons aux agents', 'Cartons 
              ['Date', 'Dépôt', 'Agent', 'Produit', 'Cartons', 'Observation'], [13, 20, 32, 22, 10, 30], vides=LIGNES, couleur=VIOLET, dates=(1,))
 liste(j3, 'B', '=Choix!$A$2:$A$40', LIGNES, 'Dépôt'); liste(j3, 'C', '=Choix!$B$2:$B$151', LIGNES, 'Agent'); liste(j3, 'D', '=Choix!$E$2:$E$20', LIGNES, 'Produit')
 NV = len(HIST_V) + 800
-j4 = feuille('4-Ventes', '4 · Ventes aux clients (comptant et crédit)', 'Une ligne par vente. Crédit : client, date promesse (échéance) et N° de vente obligatoires. Les cases bleues se calculent seules.' + (f' Lignes de juin à octobre 2026 : reprise du fichier {TB_NOM}.' if TB_NOM else ''),
+j4 = feuille('4-Ventes', '4 · Ventes aux clients (comptant et crédit)', 'Une ligne par vente. Crédit : client, date promesse (échéance) et N° de vente obligatoires. Les cases bleues se calculent seules.' + (f' Lignes de mai à octobre 2026 : reprise des fichiers {TB_NOM}.' if TB_NOM else ''),
              ['Date', 'Vendeur (dépôt ou agent)', 'Marché / village', 'Client / acheteur', 'Produit', 'Unité (Carton / Pack)', 'Quantité', 'Prix unitaire (FCFA)', 'Mode (Comptant / Crédit)', 'Échéance / date promesse (si crédit)', 'N° vente', 'Observation',
               'Montant (calculé)', 'Remboursé (calculé)', 'Solde restant (calculé)', 'Jours de retard (calculé)', 'Statut (calculé)', 'Mois (calculé)', 'Cartons (calculé)', 'Quantité restant à verser (calculé)'],
              [12, 28, 18, 28, 20, 10, 9, 12, 12, 14, 11, 20, 14, 14, 14, 10, 20, 10, 10, 12], HIST_V, vides=NV - len(HIST_V), dates=(1, 10), nombres=(8, 13, 14, 15), calc=(13, 14, 15, 16, 17, 18, 19, 20))
@@ -311,10 +333,11 @@ def calc(ws, r, j, f, fmt='# ##0'):
 TBD['A1'] = 'TABLEAU DE BORD — VENTES, CRÉANCES ET ENCAISSEMENTS'; TBD['A1'].font = Font(bold=True, size=15, color=VERT_F)
 TBD['A2'] = 'Tout se calcule à partir des onglets 4-Ventes et 5-Versements. Choisissez la période (cases jaunes) ; les créances en cours ne dépendent pas de la période.'; TBD['A2'].font = Font(italic=True, color='5A5670')
 JAUNE = PatternFill('solid', fgColor='FFF8E1')
-for r, (lib, v) in enumerate([('Du', dt.date(2026, 6, 1)), ('Au', '=TODAY()'), ('Plafond cumul créances (cartons)', 1000), ('Seuil d’alerte créance (jours)', 7)], 4):
+for r, (lib, v) in enumerate([('Du', dt.date(2026, 5, 1)), ('Au', '=TODAY()'), ('Plafond cumul créances (cartons)', 1500), ('Seuil d’alerte créance (jours)', 7)], 4):
     TBD.cell(row=r, column=1, value=lib).font = Font(bold=True)
     c = TBD.cell(row=r, column=2, value=v); c.fill = JAUNE; c.font = Font(bold=True); c.border = BORD
     if r <= 5: c.number_format = 'DD/MM/YYYY'
+TBD['C6'] = 'Tahoua 1 000 + Balleyara 500 (plafonds des TB)'; TBD['C6'].font = Font(italic=True, color='5A5670')
 V = "'4-Ventes'"; VS = "'5-Versements'"
 PER = f',{V}!$A:$A,">="&$B$4,{V}!$A:$A,"<="&$B$5'
 PERV = f',{VS}!$A:$A,">="&$B$4,{VS}!$A:$A,"<="&$B$5'
@@ -359,8 +382,8 @@ for i, p in enumerate(PRODUITS):
     calc(TBD, r, 2, f'=SUMIFS({V}!$S:$S,{V}!$E:$E,$A{r}{PER})'); calc(TBD, r, 3, f'=SUMIFS({V}!$M:$M,{V}!$E:$E,$A{r}{PER})')
 r3 = r2 + 3 + len(PRODUITS)
 titre(TBD, r3, 'Évolution mensuelle'); entete(TBD, r3 + 1, ['Mois', 'CA comptant (FCFA)', 'CA crédit (FCFA)', 'CA total (FCFA)', 'Quantité (cartons)'])
-for i in range(13):
-    y, m = 2026 + (5 + i) // 12, (5 + i) % 12 + 1; mo = f'{y}-{m:02d}'; r = r3 + 2 + i
+for i in range(14):
+    y, m = 2026 + (4 + i) // 12, (4 + i) % 12 + 1; mo = f'{y}-{m:02d}'; r = r3 + 2 + i
     TBD.cell(row=r, column=1, value=mo).border = BORD
     calc(TBD, r, 2, f'=SUMIFS({V}!$M:$M,{V}!$R:$R,$A{r},{V}!$I:$I,"Comptant")'); calc(TBD, r, 3, f'=SUMIFS({V}!$M:$M,{V}!$R:$R,$A{r},{V}!$I:$I,"Crédit")')
     calc(TBD, r, 4, f'=B{r}+C{r}'); calc(TBD, r, 5, f'=SUMIFS({V}!$S:$S,{V}!$R:$R,$A{r})')

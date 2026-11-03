@@ -95,7 +95,7 @@ txt = [
     ('3-Remises agents : cartons donnés par un dépôt à un de ses agents.', None),
     ('6-Transferts : cartons envoyés d’un dépôt à un autre dépôt.', None),
     ('1-Appro grossistes : cartons reçus par un grossiste, d’Oriba Food ou d’Oriba Rice.', None),
-    ('7-Dépenses : une ligne par dépense (salaires, carburant, réparations, vidanges, assurances…). Sans N° de pièce, la dépense est enregistrée « sans pièce ».', None),
+    ('7-Dépenses : une ligne par dépense (salaires, carburant, réparations, vidanges, assurances…). Vidange et assurance : indiquez le véhicule. Les dépenses importées arrivent « à valider » dans Logistique et charges > Validation.', None),
     ('8-Objectifs : objectif du mois en cartons par agent (ou par équipe). Déjà rempli pour novembre et décembre 2026 ; modifiez un chiffre puis réimportez.', None),
     ('9-Budgets : budget mensuel par équipe et nature de dépense. Déjà rempli pour novembre et décembre 2026.', None),
     ('', None),

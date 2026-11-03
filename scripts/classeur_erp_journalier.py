@@ -36,38 +36,71 @@ AGENTS = [a for a in AGENTS if a[0] not in CHEFS]
 for a in AGENTS: a[4] = MARCHES.get(a[0])
 CHEF_DEP = {NOM_AG[c]: NOM_DEP[d] for c, d in CHEFS.items()}
 
+LISTE_MARCHES = ['Aéroport', 'Dolé', 'Koira Tégui', 'Dar es Salam', 'Yantala', 'Grand Marché', 'Petit Marché', 'Nouveau Marché', 'Wadata', 'Bonkaney', 'Katako', 'Gamkallé',
+    'Balleyara', 'Loga', 'Gotheye', 'Hamdallahi', 'Ouallam', 'Konni Ville', 'Gidan Ider', 'Tunfafi', 'Galmi', 'Malbaza', 'Karofan', 'Madaoua', 'Tsernaoua', 'Massalata', 'Dossey', 'Dibissou',
+    'Tahoua Ville', 'Badaguichiri', 'Abalak', 'Tchinta', 'Bouza', 'Agadez']
 # ---------- Historique du fichier TB de l'équipe (ex. TB Mohamedine Tahoua) : ventes comptant, ventes à crédit, remboursements
 import re
 def nom_client(c, zone):
-    n = re.sub(r'^\s*Client\s+\w+\s*-\s*', '', str(c or '')).strip()
-    n = re.sub(r'\s+', ' ', n)
-    return (f'Détaillants divers ({zone})' if re.match(r'^d[ée]taill', n, re.I) else n) if n else None
+    brut = re.sub(r'\s+', ' ', str(c or '')).strip()
+    if not brut: return None
+    m = re.match(r'^Clien?t?\s+(\w+)\s*-\s*(.*)$', brut, re.I)
+    if m:
+        n = m.group(2).strip()
+        if not n: return f'Client {m.group(1).upper()} ({zone})'   # client sans nom dans le TB
+    else: n = brut
+    return f'Détaillants divers ({zone})' if re.match(r'^d[ée]taill', n, re.I) else n
 def unite(u, prix):  # l'unité suit le prix : prix de carton = Carton, prix de pack (moins de 5 000 F) = Pack
     if not prix: return u or 'Carton'
     return 'Carton' if prix >= 5000 else 'Pack'
-def nom_marche(m): return re.sub(r'^\s*March[ée]\s+', '', str(m or '')).strip() or None
+import difflib, unicodedata
+def _cle(x): return ''.join(ch for ch in unicodedata.normalize('NFD', str(x).lower()) if unicodedata.category(ch) != 'Mn').replace('-', ' ').strip()
+def nom_marche(m):
+    n = re.sub(r'\s+', ' ', re.sub(r'^\s*March[ée]s?\s+', '', str(m or ''))).strip()
+    if not n or _cle(n) == 'secteur': return None     # « Secteur » : vente ambulante, sans marché
+    n = re.sub(r'^Nouveaux\s+', 'Nouveau ', n)
+    k = _cle(n)
+    for x in LISTE_MARCHES:
+        if _cle(x) == k or k.startswith(_cle(x) + ' '): return x
+    p = difflib.get_close_matches(k, [_cle(x) for x in LISTE_MARCHES], 1, 0.8)
+    return next(x for x in LISTE_MARCHES if _cle(x) == p[0]) if p else n
 def jour(v):
     if isinstance(v, dt.datetime): return v.date()
     if isinstance(v, dt.date): return v
     m = re.match(r'^(\d{1,2})/(\d{1,2})/0?(\d{3,4})$', str(v or '').strip())
     if m: y = int(m.group(3)); y = 2026 if y in (206, 2026) else y; return dt.date(y, int(m.group(2)), int(m.group(1)))
     return None
-HIST_V, HIST_R, TB_NOMS, TEL, CORR = [], [], [], {}, []
+HIST_V, HIST_R, TB_NOMS, TEL, CORR, PLAF = [], [], [], {}, [], []
 ZONE_DEP = {d[1]: d[2] for d in DEPOTS}
 for TB in TBS:
     tb_wb = load_workbook(TB, data_only=True)
     TB_NOMS.append(TB.rsplit('/', 1)[-1])
-    def vend(a):
-        n = re.sub(r'\s+', ' ', str(a)).strip()
-        if n in CHEF_DEP: return CHEF_DEP[n]
-        if any(x[1] == n for x in AGENTS): return n
-        # nom abrégé dans le TB (ex. « Mahfouz » = Kamel Alalla Mahfouze)
-        c = [x[1] for x in AGENTS if any(w.lower().startswith(n.lower()) for w in x[1].split())]
-        if len(c) == 1: CORR.append(f'agent « {n} » du TB reconnu comme {c[0]}'); return c[0]
-        return n
-    chef = next((str(r[1]).strip() for r in tb_wb['Journal Comptant'].iter_rows(min_row=3, values_only=True) if r[1] and str(r[1]).strip() in CHEF_DEP), None)
+    JC = tb_wb[next(n for n in tb_wb.sheetnames if n.lower().startswith('journal comptant'))]
+    JK = tb_wb[next(n for n in tb_wb.sheetnames if re.match(r'journal cr[ée]dit', n.lower()))]
+    chef = next((re.sub(r'\s+', ' ', str(r[1])).strip() for J in (JC, JK) for r in J.iter_rows(min_row=3, values_only=True) if r[1] and re.sub(r'\s+', ' ', str(r[1])).strip() in CHEF_DEP), None)
     dep = CHEF_DEP.get(chef, '')
     zone = ZONE_DEP.get(dep, dep.replace('Dépôt ', ''))
+    if 'Paramètres' in tb_wb.sheetnames:
+        for r in tb_wb['Paramètres'].iter_rows(values_only=True):
+            if r and isinstance(r[0], str) and r[0].lower().startswith('plafond cumul') and isinstance(r[1], (int, float)): PLAF.append((zone, r[1]))
+    VUS = {}
+    def vend(a):
+        n = re.sub(r'\s+', ' ', str(a)).strip()
+        if n in VUS: return VUS[n]
+        if n in CHEF_DEP: r = CHEF_DEP[n]
+        elif any(x[1] == n for x in AGENTS): r = n
+        else:
+            du = [x[1] for x in AGENTS if x[2] == dep] or [x[1] for x in AGENTS]
+            c = [x for x in du if any(w.lower().startswith(n.lower()) for w in x.split())]                    # nom abrégé (« Mahfouz », « Saliya »)
+            c = c or [x for x in du if set(x.lower().split()) <= set(n.lower().split())]                        # nom complété (« Abdou Rachid Ousmane »)
+            c = c or difflib.get_close_matches(n, du, 1, 0.85)                                                  # orthographe (« Roukiatou »)
+            if len(c) == 1: r = c[0]; CORR.append(f'{zone} : agent « {n} » du TB reconnu comme {r}')
+            else:
+                pre = next((d[0] for d in DEPOTS if d[1] == dep), 'DEP').replace('DEP-', '')
+                k = 1 + max([int(x[0].split('-')[1]) for x in AGENTS if str(x[0]).startswith(pre + '-') and x[0].split('-')[1].isdigit()] + [0])
+                AGENTS.append([f'{pre}-{k:02d}', n, dep, 'Agent Commercial', None, None, 0]); r = n
+                CORR.append(f'{zone} : agent « {n} » absent de la liste, ajouté au {dep}')
+        VUS[n] = r; return r
     pref = next((d[0] for d in DEPOTS if d[1] == dep), 'DEP').replace('DEP-', '')
     # Téléphones des clients (onglet Paramètres du TB : « Client X - Nom » suivi du numéro)
     if 'Paramètres' in tb_wb.sheetnames:
@@ -75,13 +108,13 @@ for TB in TBS:
             for k in range(len(r) - 1):
                 if isinstance(r[k], str) and re.match(r'^\s*Client\s+\w+\s*-', r[k]) and isinstance(r[k + 1], str) and re.search(r'\d{2}\s?\d{2}', r[k + 1]) and 'X' not in r[k + 1]:
                     TEL[nom_client(r[k], zone)] = r[k + 1].strip()
-    for r in tb_wb['Journal Comptant'].iter_rows(min_row=3, values_only=True):
+    for r in JC.iter_rows(min_row=3, values_only=True):
         d = jour(r[0])
         if not d or not r[1]: continue
         if not r[6]: CORR.append(f'{zone} : vente au comptant du {d:%d/%m/%Y} sans quantité, ignorée'); continue
         HIST_V.append([d, vend(r[1]), nom_marche(r[2]), nom_client(r[3], zone), r[4], unite(r[5], r[7]), r[6], r[7], 'Comptant', None, None, r[9] or None])
     n = 0
-    for r in tb_wb['Journal Crédit'].iter_rows(min_row=3, values_only=True):
+    for r in JK.iter_rows(min_row=3, values_only=True):
         d = jour(r[0])
         if not d or not r[1]: continue
         n += 1; num_v = f'{pref}-C{n:03d}'
@@ -92,7 +125,7 @@ for TB in TBS:
         HIST_V.append([d, vend(r[1]), nom_marche(r[2]), nom_client(r[3], zone), r[4], unite(r[5], r[7]), r[6], r[7], 'Crédit', ech, num_v, f'Reprise du TB {zone}'])
         rb = r[10] or 0
         if rb > 0:
-            dr = jour(r[11]) or ech
+            dr = jour(r[11]) or min(ech, dt.date.today())   # sans date de remboursement : date promesse (au plus tard aujourd'hui)
             if dr.year > 2026:
                 CORR.append(f'{zone} : remboursement de {num_v} daté du {dr:%d/%m/%Y}, corrigé en {dr.day:02d}/{dr.month:02d}/2026'); dr = dt.date(2026, dr.month, dr.day)
             if dr < d: dr = d
@@ -124,9 +157,7 @@ BUD = {'Niamey 1': (390000, 89000, 125000, 1245000), 'Niamey 2': (60000, 25000, 
        'Tahoua': (150000, 45000, 100000, 550000), 'Konni': (130000, 24000, 100000, 275000), 'Dosso': (None, 46000, None, 170000),
        'Balleyara': (200000, 46000, 60000, 210000), 'Zinder': (120000, 24000, 60000, 150000), 'Équipe Mayonnaise': (130000, 46000, 60000, 160000),
        'Équipe Contrôleur': (60000, 21000, 15000, 360000)}
-LISTE_MARCHES = ['Aéroport', 'Dolé', 'Koira Tégui', 'Dar es Salam', 'Yantala', 'Grand Marché', 'Petit Marché', 'Nouveau Marché', 'Wadata', 'Bonkaney', 'Katako', 'Gamkallé',
-    'Balleyara', 'Loga', 'Gotheye', 'Hamdallahi', 'Ouallam', 'Konni Ville', 'Gidan Ider', 'Tunfafi', 'Galmi', 'Malbaza', 'Karofan', 'Madaoua', 'Tsernaoua', 'Massalata', 'Dossey', 'Dibissou',
-    'Tahoua Ville', 'Badaguichiri', 'Abalak', 'Tchinta', 'Bouza', 'Agadez']
+
 NATURES_B = ['Carburant', 'Vidange', 'Réparations et entretien', 'Salaires et rémunérations agents']
 NATURES = ['Salaires et rémunérations agents', 'Carburant', 'Réparations et entretien', 'Vidange', 'Assurance', 'Filtres moteur', 'Vignette', 'Visite technique',
            'Patente', 'Autorisations', 'Frais d’insalubrité territoriale', 'Gadgets et supports promotionnels', 'Caisse / cachet annuel', 'Autres frais autorisés']
@@ -187,7 +218,7 @@ txt = [
     ('6. Crédit : dans 4-Ventes, la date promesse va dans « Échéance » ; chaque remboursement va dans 5-Versements avec le N° de la vente. Le solde, les jours de retard et le statut se calculent seuls.', None),
     ('', None),
     ('LES ONGLETS DE SAISIE', Font(bold=True, color=VIOLET)),
-    ('4-Ventes : ventes au comptant ou à crédit, par un dépôt ou un agent, avec le marché, le client, l’unité (carton ou pack). Crédit : client, date promesse et N° de vente (ex. V001) obligatoires. Déjà rempli avec l’historique des TB de Tahoua, Balleyara et Konni (mai à octobre 2026).', None),
+    ('4-Ventes : ventes au comptant ou à crédit, par un dépôt ou un agent, avec le marché, le client, l’unité (carton ou pack). Crédit : client, date promesse et N° de vente (ex. V001) obligatoires. Déjà rempli avec l’historique des TB des équipes (Tahoua, Balleyara, Konni, Niamey 1, Niamey 2), de mai à octobre 2026.', None),
     ('5-Versements : argent versé (Ventes comptant), remboursement d’un crédit (avec le N° de la vente), ou règlement d’un grossiste. Indiquez pour Oriba Food ou Oriba Rice.', None),
     ('2-Appro dépôts : cartons reçus par un dépôt, d’Oriba Food, d’Oriba Rice ou d’un grossiste.', None),
     ('3-Remises agents : cartons donnés par un dépôt à un de ses agents.', None),
@@ -341,11 +372,11 @@ def calc(ws, r, j, f, fmt='# ##0'):
 TBD['A1'] = 'TABLEAU DE BORD — VENTES, CRÉANCES ET ENCAISSEMENTS'; TBD['A1'].font = Font(bold=True, size=15, color=VERT_F)
 TBD['A2'] = 'Tout se calcule à partir des onglets 4-Ventes et 5-Versements. Choisissez la période (cases jaunes) ; les créances en cours ne dépendent pas de la période.'; TBD['A2'].font = Font(italic=True, color='5A5670')
 JAUNE = PatternFill('solid', fgColor='FFF8E1')
-for r, (lib, v) in enumerate([('Du', dt.date(2026, 5, 1)), ('Au', '=TODAY()'), ('Plafond cumul créances (cartons)', 1550), ('Seuil d’alerte créance (jours)', 7)], 4):
+for r, (lib, v) in enumerate([('Du', dt.date(2026, 5, 1)), ('Au', '=TODAY()'), ('Plafond cumul créances (cartons)', sum(p for _, p in PLAF) or 1000), ('Seuil d’alerte créance (jours)', 7)], 4):
     TBD.cell(row=r, column=1, value=lib).font = Font(bold=True)
     c = TBD.cell(row=r, column=2, value=v); c.fill = JAUNE; c.font = Font(bold=True); c.border = BORD
     if r <= 5: c.number_format = 'DD/MM/YYYY'
-TBD['C6'] = 'Tahoua 1 000 + Balleyara 500 + Konni 50 (plafonds des TB)'; TBD['C6'].font = Font(italic=True, color='5A5670')
+TBD['C6'] = ' + '.join(f'{z} {p:,.0f}'.replace(',', ' ') for z, p in PLAF) + ' (plafonds des TB)'; TBD['C6'].font = Font(italic=True, color='5A5670')
 V = "'4-Ventes'"; VS = "'5-Versements'"
 PER = f',{V}!$A:$A,">="&$B$4,{V}!$A:$A,"<="&$B$5'
 PERV = f',{VS}!$A:$A,">="&$B$4,{VS}!$A:$A,"<="&$B$5'

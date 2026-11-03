@@ -110,7 +110,8 @@ export function grossistesSemaine(C, w0) {
   return C.grossistes.map((g) => {
     const ap = C.mv.filter((m) => m.type === 'appro' && m.grossiste_id === g.id), pr = C.mv.filter((m) => m.type === 'prise' && m.grossiste_id === g.id);
     const si = round2(num(g.stock_initial) + somme(ap.filter((m) => entre(m.date, dep, w0)), (m) => m.cartons) - somme(pr.filter((m) => entre(m.date, dep, w0)), (m) => m.cartons));
-    const sem = (l) => l.filter((m) => entre(m.date, w0, w1));
+    // Mouvements de la semaine, à partir de la date de départ (le stock initial est celui du départ)
+    const sem = (l) => l.filter((m) => entre(m.date, w0, w1) && m.date >= dep);
     const usine = somme(sem(ap).filter((m) => m.fournisseur !== 'Oriba Rice'), (m) => m.cartons), rice = somme(sem(ap).filter((m) => m.fournisseur === 'Oriba Rice'), (m) => m.cartons);
     const pc = somme(sem(pr).filter((m) => m.mode !== 'credit'), (m) => m.cartons), pk = somme(sem(pr).filter((m) => m.mode === 'credit'), (m) => m.cartons);
     const valeur = round2(num(g.solde_initial) + somme(ap.filter((m) => m.date < w1), (m) => m.montant));

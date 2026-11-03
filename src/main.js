@@ -1,4 +1,5 @@
 // Démarrage, authentification, navigation.
+import { renderTbVentes } from './pages/tbVentes.js';
 import { App } from './app.js';
 import { serverApi, demoApi } from './api.js';
 import { esc, $, $$, toast, icon, modal, field, readForm, showErr, busy, setExportContext, setSaver, destroyCharts } from './lib/ui.js';
@@ -104,10 +105,10 @@ function renderAgentsObjectifs(root) {
 }
 // Ventes : une seule page, comptant et crédit en onglets
 function renderVentesUnique(root) {
-  const f = (App.filters.ventesOnglet = App.filters.ventesOnglet || { mode: App.can('ventes') ? 'comptant' : 'credit' });
-  root.innerHTML = `<div class="seg onglets" role="tablist">${App.can('ventes') ? `<button data-o="comptant" class="${f.mode === 'comptant' ? 'on' : ''}">Au comptant</button>` : ''}<button data-o="credit" class="${f.mode === 'credit' ? 'on' : ''}">À crédit</button></div><div id="v-host"></div>`;
+  const f = (App.filters.ventesOnglet = App.filters.ventesOnglet || { mode: 'tb' });
+  root.innerHTML = `<div class="seg onglets" role="tablist"><button data-o="tb" class="${f.mode === 'tb' ? 'on' : ''}">Tableau de bord des ventes</button>${App.can('ventes') ? `<button data-o="comptant" class="${f.mode === 'comptant' ? 'on' : ''}">Au comptant</button>` : ''}<button data-o="credit" class="${f.mode === 'credit' ? 'on' : ''}">À crédit</button></div><div id="v-host"></div>`;
   $$('[data-o]', root).forEach((b) => b.addEventListener('click', () => { f.mode = b.dataset.o; renderVentesUnique(root); }));
-  renderVentes($('#v-host', root), f.mode);
+  if (f.mode === 'tb') renderTbVentes($('#v-host', root)); else renderVentes($('#v-host', root), f.mode);
 }
 const root = document.getElementById('app');
 let current = null;

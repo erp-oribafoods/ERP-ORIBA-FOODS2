@@ -22,7 +22,17 @@ export function suivi(axe, moisDu, moisAu, produitId) {
   const facts = salesFacts(App.I, { preset: 'perso', du, au, produit_id: produitId || '' });
   const key = axe === 'global' ? () => null : AXE_SRC[axe][2];
   const mois = monthsBetween(du, auFin);
-  const objs = (App.D.objectifs || []).filter((o) => o.axe === axe && mois.includes(o.mois) && (o.produit_id || '') === (produitId || ''));
+  const dansMois = (o) => o.actif !== false && mois.includes(o.mois) && (o.produit_id || '') === (produitId || '');
+  let objs = (App.D.objectifs || []).filter((o) => o.axe === axe && dansMois(o));
+  // Vue globale sans objectif « global » : somme des objectifs des agents, à défaut des équipes (mois par mois)
+  if (axe === 'global') {
+    const parMois = mois.flatMap((m) => {
+      const g = objs.filter((o) => o.mois === m); if (g.length) return g;
+      for (const ax of ['agent', 'equipe']) { const l = (App.D.objectifs || []).filter((o) => o.axe === ax && o.mois === m && dansMois(o)); if (l.length) return l.map((o) => ({ ...o, cible_id: null })); }
+      return [];
+    });
+    objs = parMois;
+  }
   // Part de la période écoulée (pour juger du rythme) et projection
   const totalJours = daysBetween(du, auFin) + 1;
   const ecoules = Math.max(0, Math.min(totalJours, daysBetween(du, t) + 1));

@@ -53,7 +53,7 @@ const C_JOURNAUX = {
   prise: { date: ['date'], agent: ['agent', 'depot'], grossiste: ['grossiste', 'source'], produit: ['produit'], cartons: ['cartons'], prix: ['prix'], mode: ['mode'], observation: ['observation'] },
   dispatch: { date: ['date'], agent: ['agent_depot', 'depot'], sous: ['sous_agent', 'agent'], produit: ['produit'], cartons: ['cartons'], observation: ['observation'] },
   transfert: { date: ['date'], de: ['depot_qui_envoie', 'de_', 'depot_depart'], vers: ['depot_qui_recoit', 'vers', 'depot_arrivee'], produit: ['produit'], cartons: ['cartons'], observation: ['observation'] },
-  ventes: { date: ['date'], vendeur: ['vendeur'], client: ['client'], produit: ['produit'], cartons: ['cartons'], prix: ['prix'], mode: ['mode'], echeance: ['echeance'], numero: ['n_vente', 'no_vente', 'numero'] },
+  ventes: { date: ['date'], vendeur: ['vendeur'], client: ['client'], produit: ['produit'], cartons: ['cartons', 'quantite'], prix: ['prix'], mode: ['mode'], echeance: ['echeance', 'date_promesse'], numero: ['n_vente', 'no_vente', 'numero'], marche: ['marche'], unite: ['unite'], observation: ['observation'] },
   versements: { date: ['date'], par: ['verse_par'], objet: ['objet'], numero: ['n_vente', 'no_vente'], lieu: ['lieu'], grossiste: ['grossiste'], montant: ['montant'], pour: ['argent_pour', 'pour', 'beneficiaire'] },
   depenses: { date: ['date'], equipe: ['equipe', 'depot', 'zone'], nature: ['nature', 'categorie'], montant: ['montant'], beneficiaire: ['beneficiaire'], vehicule: ['vehicule', 'immatriculation'], piece: ['n_piece', 'no_piece', 'piece', 'reference'], description: ['description', 'motif', 'observation'] },
   objectifs: { mois: ['mois'], cible: ['agent', 'equipe', 'cible'], cartons: ['objectif_cartons', 'objectif'] },
@@ -96,7 +96,7 @@ export function analyseCircuit(wb) {
   const R = referentiels();
   const L = Object.fromEntries(Object.entries(C_LISTES).map(([k, c]) => [k, lire(wb, FEUILLES[k], c)]));
   const J = Object.fromEntries(Object.entries(C_JOURNAUX).map(([k, c]) => [k, lire(wb, FEUILLES[k], c)]));
-  const ref = { creer: { grossistes: [], depots: [], sous: [], clients: [] }, maj: [], rejets: [] };
+  const ref = { creer: { grossistes: [], depots: [], sous: [], clients: [], marches: [] }, maj: [], rejets: [] };
   // Dans les journaux, chaque élément peut être désigné par son code OU par son nom
   const alias = (m, x) => { if (t(x.code) && t(x.nom) && !m.has(K(x.nom))) m.set(K(x.nom), m.get(K(x.code))); };
   // Grossistes
@@ -210,9 +210,12 @@ export function analyseCircuit(wb) {
     if (t(r.client) && !connu(CL, r.client) && !R.parCode(R.D.clients, r.client)) msgs.push(`Client « ${t(r.client)} » absent de la liste`);
     const ech = iso(r.echeance);
     if (credit && ech && d && ech < d) msgs.push('Échéance avant la date de vente');
-    const ref2 = cle(['V', d, K(r.vendeur), K(r.client), K(r.produit), q, num(r.prix), credit ? 'K' : 'C']);
+    const pack = /pack/i.test(t(r.unite));
+    // Marché inconnu : il sera créé à l'import
+    if (t(r.marche) && !R.marche(r.marche) && !ref.creer.marches.some((m) => cleNom(m.nom) === cleNom(t(r.marche).replace(/^march[ée] /i, '')))) ref.creer.marches.push({ nom: t(r.marche).replace(/^march[ée] /i, '') });
+    const ref2 = cle(['V', d, K(r.vendeur), K(r.client), K(r.produit), q, num(r.prix), credit ? 'K' : 'C', ...(pack ? ['PK'] : [])]);
     if (t(r.numero)) venteRef.set(K(r.numero), ref2);
-    push('ventes', r, msgs, ref2, { d, q, p, r, credit, ech }, `${fmtD(d)} · ${t(r.vendeur)} · ${t(r.client) || '—'} · ${fmtN(q)} ctn · ${credit ? 'crédit' : 'comptant'}`, deja.ventes);
+    push('ventes', r, msgs, ref2, { d, q, p, r, credit, ech, pack, marche: R.marche(r.marche) }, `${fmtD(d)} · ${t(r.vendeur)} · ${t(r.client) || '—'} · ${fmtN(q)} ctn · ${credit ? 'crédit' : 'comptant'}`, deja.ventes);
   }
   for (const r of J.versements) {
     const msgs = []; const d = iso(r.date); if (!d) msgs.push('Date illisible'); else if (d > today()) msgs.push('Date dans le futur');
@@ -302,6 +305,7 @@ export async function appliquerCircuit(wb, fname, etape = () => {}) {
   const depId = (k) => A.A.get(k)?.id;
   await sauver('agents', [...A.ref.creer.sous.map(({ _depot, ...d }) => ({ ...d, depot_id: depId(_depot) })).filter((d) => d.depot_id)], 'nouveaux sous-agents');
   await sauver('clients', A.ref.creer.clients, 'nouveaux clients');
+  await sauver('marches', A.ref.creer.marches, 'nouveaux marchés');
   A = analyseCircuit(wb);
   if (A.ref.maj.length) {
     etape('mise à jour des rôles et stocks initiaux');
@@ -326,7 +330,7 @@ export async function appliquerCircuit(wb, fname, etape = () => {}) {
   if (nouv('transfert').length) { etape('transferts entre dépôts'); R.transfert = await envoyer('circuit_transfert', `${fname} — 6-Transferts`, mv('transfert', (x) => ({ agent_id: ag(x.data.r.de), depot_dest_id: ag(x.data.r.vers) }))); }
   await App.refresh();
   for (const credit of [false, true]) {
-    const rows = nouv('ventes').filter((x) => x.data.credit === credit).map((x) => ({ ligne: x.ligne, data: { date: x.data.d, agent_id: ag(x.data.r.vendeur), marche_id: null, client_id: cl(x.data.r.client), echeance: credit ? x.data.ech : null, ref_externe: x.ref, observation: null }, lignes: [{ produit_id: x.data.p.id, unite: 'carton', quantite: x.data.q, prix_unitaire: num(x.data.r.prix) }] }));
+    const rows = nouv('ventes').filter((x) => x.data.credit === credit).map((x) => ({ ligne: x.ligne, data: { date: x.data.d, agent_id: ag(x.data.r.vendeur), marche_id: x.data.marche?.id || null, client_id: cl(x.data.r.client), echeance: credit ? x.data.ech : null, ref_externe: x.ref, observation: t(x.data.r.observation) || null }, lignes: [{ produit_id: x.data.p.id, unite: x.data.pack ? 'pack' : 'carton', quantite: x.data.q, prix_unitaire: num(x.data.r.prix) }] }));
     if (rows.length) { etape(`ventes ${credit ? 'à crédit' : 'au comptant'}`); R[credit ? 'credit' : 'comptant'] = await envoyer(credit ? 'ventes_credit' : 'ventes_comptant', `${fname} — 4-Ventes`, rows); }
   }
   await App.refresh();
@@ -382,7 +386,7 @@ export function ouvrirImportCircuit() {
         zone.innerHTML = `${total ? '' : '<div class="note ok">Tout est déjà à jour : aucune nouvelle ligne dans ce classeur.</div>'}
           <div class="tbl-wrap"><table class="tbl maj-t"><thead><tr><th>Onglet</th><th class="n">À ajouter</th><th class="n">Déjà présentes</th><th class="n">Rejetées</th></tr></thead><tbody>
           ${LIBS.map(([k, l]) => `<tr><td>${l}</td><td class="n">${fmtN(c(k, 'ok'))}</td><td class="n">${fmtN(c(k, 'identique'))}</td><td class="n">${c(k, 'rejet') ? `<b class="t-crit">${c(k, 'rejet')}</b>` : 0}</td></tr>`).join('')}</tbody></table></div>
-          ${nCreer || A.ref.maj.length ? `<div class="note">À créer : ${[['grossistes', 'grossiste(s)'], ['depots', 'agent(s)-dépôt(s)'], ['sous', 'sous-agent(s)'], ['clients', 'client(s)']].filter(([k]) => A.ref.creer[k].length).map(([k, l]) => `${A.ref.creer[k].length} ${l}`).join(', ') || 'rien'}.${A.ref.maj.length ? ` À mettre à jour : ${A.ref.maj.length} (rôle, agent-dépôt ou stock de départ).` : ''}${A.depart && !App.I.p.circuit_date_depart?.date ? ` Date des stocks initiaux : ${fmtD(A.depart)}.` : ''}</div>` : ''}
+          ${nCreer || A.ref.maj.length ? `<div class="note">À créer : ${[['grossistes', 'grossiste(s)'], ['depots', 'agent(s)-dépôt(s)'], ['sous', 'sous-agent(s)'], ['clients', 'client(s)'], ['marches', 'marché(s)']].filter(([k]) => A.ref.creer[k].length).map(([k, l]) => `${A.ref.creer[k].length} ${l}`).join(', ') || 'rien'}.${A.ref.maj.length ? ` À mettre à jour : ${A.ref.maj.length} (rôle, agent-dépôt ou stock de départ).` : ''}${A.depart && !App.I.p.circuit_date_depart?.date ? ` Date des stocks initiaux : ${fmtD(A.depart)}.` : ''}</div>` : ''}
           ${rej.length ? `<details class="card"><summary><b>${rej.length} ligne(s) rejetée(s)</b> — à corriger dans le classeur</summary><p>${rej.slice(0, 25).map(([f, x]) => `${esc(f)} ligne ${x.ligne} : ${esc(x.msg)}`).join('<br>')}${rej.length > 25 ? '<br>…' : ''}</p></details>` : ''}
           ${peutEcraser ? `<label class="chk ecraser"><input type="checkbox" data-ec ${ecraser ? 'checked' : ''}> <span><b>Écraser les jours du fichier</b> : ce qui est déjà enregistré aux dates présentes dans ce classeur (mêmes onglets) est remplacé par le contenu du fichier. Les ventes des fichiers TB ne sont pas touchées.</span></label><div data-ec-info class="small muted"></div>` : ''}
           <div class="row-act"><button class="btn ghost" data-x>Exporter le contrôle</button><button class="btn primary" data-go ${total || ecraser ? '' : 'disabled'}>${icon('check')} ${ecraser ? 'Écraser et enregistrer' : 'Enregistrer dans la plateforme'}</button></div><div data-p></div>`;

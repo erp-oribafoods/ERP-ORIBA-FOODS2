@@ -9,6 +9,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils import get_column_letter as L
 
 BASE, FDV, OUT = sys.argv[1:4]
+TB = sys.argv[4] if len(sys.argv) > 4 else None
 VERT, VERT_F, VIOLET, GRIS, BLANC, BLEU = '2E7D32', '1B5E20', '5B3E96', 'F2F7EE', 'FFFFFF', 'E8F0FE'
 LIGNES = 400
 DEPART = dt.date(2026, 11, 4)
@@ -34,6 +35,44 @@ for d in DEPOTS: d.append(' / '.join(RESP.get(d[0], [])) or None); d.append(MARC
 AGENTS = [a for a in AGENTS if a[0] not in CHEFS]
 for a in AGENTS: a[4] = MARCHES.get(a[0])
 CHEF_DEP = {NOM_AG[c]: NOM_DEP[d] for c, d in CHEFS.items()}
+
+# ---------- Historique du fichier TB de l'équipe (ex. TB Mohamedine Tahoua) : ventes comptant, ventes à crédit, remboursements
+import re
+def nom_client(c):
+    n = re.sub(r'^\s*Client\s+\w+\s*-\s*', '', str(c or '')).strip()
+    n = re.sub(r'\s+', ' ', n)
+    return {'Detaillant': 'Détaillants divers (Tahoua)', 'Détaillant': 'Détaillants divers (Tahoua)'}.get(n, n) if n else None
+def unite(u, prix):  # « Pack » à prix de carton dans le TB = en réalité des cartons
+    return 'Carton' if not u or (str(u).lower().startswith('pack') and (prix or 0) >= 5000) else u
+def nom_marche(m): return re.sub(r'^\s*March[ée]\s+', '', str(m or '')).strip() or None
+def jour(v):
+    if isinstance(v, dt.datetime): return v.date()
+    if isinstance(v, dt.date): return v
+    m = re.match(r'^(\d{1,2})/(\d{1,2})/0?(\d{3,4})$', str(v or '').strip())
+    if m: y = int(m.group(3)); y = 2026 if y in (206, 2026) else y; return dt.date(y, int(m.group(2)), int(m.group(1)))
+    return None
+HIST_V, HIST_R, TB_NOM = [], [], ''
+if TB:
+    tb_wb = load_workbook(TB, data_only=True)
+    TB_NOM = TB.rsplit('/', 1)[-1]
+    for r in tb_wb['Journal Comptant'].iter_rows(min_row=3, values_only=True):
+        d = jour(r[0])
+        if not d or not r[1]: continue
+        HIST_V.append([d, CHEF_DEP.get(str(r[1]).strip(), str(r[1]).strip()), nom_marche(r[2]), nom_client(r[3]), r[4], unite(r[5], r[7]), r[6], r[7], 'Comptant', None, None, r[9] or None])
+    n = 0
+    for r in tb_wb['Journal Crédit'].iter_rows(min_row=3, values_only=True):
+        d = jour(r[0])
+        if not d or not r[1]: continue
+        n += 1; num_v = f'TAH-C{n:03d}'
+        ech = jour(r[9]) or d
+        HIST_V.append([d, CHEF_DEP.get(str(r[1]).strip(), str(r[1]).strip()), nom_marche(r[2]), nom_client(r[3]), r[4], unite(r[5], r[7]), r[6], r[7], 'Crédit', ech, num_v, 'Reprise du TB'])
+        rb = r[10] or 0
+        if rb > 0:
+            dr = jour(r[11]) or ech
+            if dr < d: dr = d
+            HIST_R.append([dr, CHEF_DEP.get(str(r[1]).strip(), str(r[1]).strip()), 'Remboursement crédit', num_v, 'Caisse Oriba', None, rb, None])
+    noms = {c[1] for c in CLIENTS}
+    for c in sorted({x[3] for x in HIST_V if x[3]} - noms): CLIENTS.append([None, c, None, None, None, None])
 for g in GROSSISTES:
     if not g[3]: g[3] = 'Oriba Food'
 PRODUITS = [('Arôme DADI Épicé', 'Arôme', 13250), ('Arôme DADI Poulet', 'Arôme', 12250), ('Mayonnaise Délice', 'Mayonnaise', 9500), ('Mayonnaise Oriba 1000 ml', 'Mayonnaise', 9500),
@@ -55,6 +94,9 @@ BUD = {'Niamey 1': (390000, 89000, 125000, 1245000), 'Niamey 2': (60000, 25000, 
        'Tahoua': (150000, 45000, 100000, 550000), 'Konni': (130000, 24000, 100000, 275000), 'Dosso': (None, 46000, None, 170000),
        'Balleyara': (200000, 46000, 60000, 210000), 'Zinder': (120000, 24000, 60000, 150000), 'Équipe Mayonnaise': (130000, 46000, 60000, 160000),
        'Équipe Contrôleur': (60000, 21000, 15000, 360000)}
+LISTE_MARCHES = ['Aéroport', 'Dolé', 'Koira Tégui', 'Dar es Salam', 'Yantala', 'Grand Marché', 'Petit Marché', 'Nouveau Marché', 'Wadata', 'Bonkaney', 'Katako', 'Gamkallé',
+    'Balleyara', 'Loga', 'Gotheye', 'Hamdallahi', 'Ouallam', 'Konni Ville', 'Gidan Ider', 'Tunfafi', 'Galmi', 'Malbaza', 'Karofan', 'Madaoua', 'Tsernaoua', 'Massalata', 'Dossey', 'Dibissou',
+    'Tahoua Ville', 'Badaguichiri', 'Abalak', 'Tchinta', 'Bouza', 'Agadez']
 NATURES_B = ['Carburant', 'Vidange', 'Réparations et entretien', 'Salaires et rémunérations agents']
 NATURES = ['Salaires et rémunérations agents', 'Carburant', 'Réparations et entretien', 'Vidange', 'Assurance', 'Filtres moteur', 'Vignette', 'Visite technique',
            'Patente', 'Autorisations', 'Frais d’insalubrité territoriale', 'Gadgets et supports promotionnels', 'Caisse / cachet annuel', 'Autres frais autorisés']
@@ -110,10 +152,12 @@ txt = [
     ('3. Les cases bleues se calculent seules (montants) : ne les remplissez pas.', None),
     ('4. Enregistrez puis importez le fichier dans l’ERP. Un contrôle s’affiche avant l’enregistrement : lignes nouvelles, déjà présentes, refusées (avec la raison).', None),
     ('   Réimporter le même fichier ne crée aucun doublon : seules les lignes nouvelles sont ajoutées.', None),
-    ('5. Onglet « Tableau du jour » : choisissez une date en haut pour voir les totaux de la journée et du mois.', None),
+    ('5. Onglet « Tableau de bord » : CA, ventes comptant et crédit, encaissements, créances, plafond, ventes par vendeur, par marché, par produit et par mois (choisissez la période en haut).', None),
+    ('   Onglet « Créances par client » : ce que chaque client doit encore. Onglet « Tableau du jour » : les totaux d’une journée.', None),
+    ('6. Crédit : dans 4-Ventes, la date promesse va dans « Échéance » ; chaque remboursement va dans 5-Versements avec le N° de la vente. Le solde, les jours de retard et le statut se calculent seuls.', None),
     ('', None),
     ('LES ONGLETS DE SAISIE', Font(bold=True, color=VIOLET)),
-    ('4-Ventes : ventes au comptant ou à crédit, par un dépôt ou un agent. Crédit : client, échéance et N° de vente (ex. V001) obligatoires.', None),
+    ('4-Ventes : ventes au comptant ou à crédit, par un dépôt ou un agent, avec le marché, le client, l’unité (carton ou pack). Crédit : client, date promesse et N° de vente (ex. V001) obligatoires. Déjà rempli avec l’historique du TB de Tahoua (juin à octobre 2026).', None),
     ('5-Versements : argent versé (Ventes comptant), remboursement d’un crédit (avec le N° de la vente), ou règlement d’un grossiste. Indiquez pour Oriba Food ou Oriba Rice.', None),
     ('2-Appro dépôts : cartons reçus par un dépôt, d’Oriba Food, d’Oriba Rice ou d’un grossiste.', None),
     ('3-Remises agents : cartons donnés par un dépôt à un de ses agents.', None),
@@ -171,17 +215,32 @@ liste(j2, 'D', '=Choix!$E$2:$E$20', LIGNES, 'Produit'); liste(j2, 'G', '=Choix!$
 j3 = feuille('3-Remises agents', '3 · Remises de cartons aux agents', 'Cartons donnés par un dépôt à un de ses agents.',
              ['Date', 'Dépôt', 'Agent', 'Produit', 'Cartons', 'Observation'], [13, 20, 32, 22, 10, 30], vides=LIGNES, couleur=VIOLET, dates=(1,))
 liste(j3, 'B', '=Choix!$A$2:$A$40', LIGNES, 'Dépôt'); liste(j3, 'C', '=Choix!$B$2:$B$151', LIGNES, 'Agent'); liste(j3, 'D', '=Choix!$E$2:$E$20', LIGNES, 'Produit')
-j4 = feuille('4-Ventes', '4 · Ventes aux clients', 'Une ligne par vente. Crédit : client, échéance et N° de vente obligatoires.',
-             ['Date', 'Vendeur (dépôt ou agent)', 'Client', 'Produit', 'Cartons', 'Prix carton (FCFA)', 'Mode (Comptant / Crédit)', 'Échéance (si crédit)', 'N° vente', 'Montant (calculé)'],
-             [13, 32, 30, 22, 9, 14, 14, 14, 11, 16], vides=LIGNES, dates=(1, 8), nombres=(6, 10), calc=(10,))
-montant(j4, 'J', 'E', 'F', LIGNES)
-liste(j4, 'B', '=Choix!$C$2:$C$191', LIGNES, 'Dépôt ou agent qui a vendu'); liste(j4, 'C', '=Choix!$D$2:$D$401', LIGNES, 'Client')
-liste(j4, 'D', '=Choix!$E$2:$E$20', LIGNES, 'Produit'); liste(j4, 'G', '=Choix!$H$2:$H$3', LIGNES, 'Comptant ou Crédit')
-j5 = feuille('5-Versements', '5 · Versements et remboursements', 'Argent versé à la caisse Oriba ou chez le grossiste ; remboursements de crédits ; règlements des grossistes.',
+NV = len(HIST_V) + 800
+j4 = feuille('4-Ventes', '4 · Ventes aux clients (comptant et crédit)', 'Une ligne par vente. Crédit : client, date promesse (échéance) et N° de vente obligatoires. Les cases bleues se calculent seules.' + (f' Lignes de juin à octobre 2026 : reprise du fichier {TB_NOM}.' if TB_NOM else ''),
+             ['Date', 'Vendeur (dépôt ou agent)', 'Marché / village', 'Client / acheteur', 'Produit', 'Unité (Carton / Pack)', 'Quantité', 'Prix unitaire (FCFA)', 'Mode (Comptant / Crédit)', 'Échéance / date promesse (si crédit)', 'N° vente', 'Observation',
+              'Montant (calculé)', 'Remboursé (calculé)', 'Solde restant (calculé)', 'Jours de retard (calculé)', 'Statut (calculé)', 'Mois (calculé)', 'Cartons (calculé)', 'Quantité restant à verser (calculé)'],
+             [12, 28, 18, 28, 20, 10, 9, 12, 12, 14, 11, 20, 14, 14, 14, 10, 20, 10, 10, 12], HIST_V, vides=NV - len(HIST_V), dates=(1, 10), nombres=(8, 13, 14, 15), calc=(13, 14, 15, 16, 17, 18, 19, 20))
+for r in range(5, 5 + NV):
+    j4[f'M{r}'] = f'=IF(OR(G{r}="",H{r}=""),"",G{r}*H{r})'
+    j4[f'N{r}'] = f'=IF(OR(K{r}="",I{r}<>"Crédit"),"",SUMIFS(\'5-Versements\'!$G:$G,\'5-Versements\'!$D:$D,K{r},\'5-Versements\'!$C:$C,"Remboursement crédit"))'
+    j4[f'O{r}'] = f'=IF(OR(M{r}="",I{r}<>"Crédit"),"",MAX(0,M{r}-N(N{r})))'
+    j4[f'P{r}'] = f'=IF(OR(O{r}="",O{r}=0,J{r}=""),"",MAX(0,TODAY()-J{r}))'
+    j4[f'Q{r}'] = f'=IF(O{r}="","",IF(O{r}=0,"Soldé",IF(N(P{r})>0,"En retard",IF(N(N{r})>0,"Partiellement remboursé","En attente"))))'
+    j4[f'R{r}'] = f'=IF(A{r}="","",YEAR(A{r})&"-"&TEXT(MONTH(A{r}),"00"))'
+    j4[f'S{r}'] = f'=IF(G{r}="","",IF(F{r}="Pack",G{r}/12,G{r}))'
+    j4[f'T{r}'] = f'=IF(N(O{r})>0,O{r}/H{r},"")'
+j4.auto_filter.ref = f'A4:T{4 + NV}'
+liste(j4, 'B', '=Choix!$C$2:$C$191', NV, 'Dépôt ou agent qui a vendu'); liste(j4, 'C', '=Choix!$Q$2:$Q$80', NV, 'Marché / village de la vente'); liste(j4, 'D', '=Choix!$D$2:$D$401', NV, 'Client')
+liste(j4, 'E', '=Choix!$E$2:$E$20', NV, 'Produit'); liste(j4, 'F', '=Choix!$R$2:$R$3', NV, 'Carton ou Pack'); liste(j4, 'I', '=Choix!$H$2:$H$3', NV, 'Comptant ou Crédit')
+from openpyxl.formatting.rule import FormulaRule
+j4.conditional_formatting.add(f'Q5:Q{4 + NV}', FormulaRule(formula=['$Q5="En retard"'], font=Font(bold=True, color='B71C1C'), fill=PatternFill('solid', fgColor='FDE7E7')))
+j4.conditional_formatting.add(f'Q5:Q{4 + NV}', FormulaRule(formula=['$Q5="Soldé"'], font=Font(color='2E7D32')))
+NR = len(HIST_R) + LIGNES
+j5 = feuille('5-Versements', '5 · Versements et remboursements', 'Argent versé à la caisse Oriba ou chez le grossiste ; remboursements de crédits (avec le N° de la vente) ; règlements des grossistes.',
              ['Date', 'Versé par', 'Objet', 'N° vente (si remboursement)', 'Lieu du versement', 'Grossiste (si versé chez lui)', 'Montant (FCFA)', 'Argent pour (Oriba Food / Oriba Rice)'],
-             [13, 32, 22, 14, 18, 26, 15, 18], vides=LIGNES, dates=(1,), nombres=(7,))
-liste(j5, 'B', '=Choix!$K$2:$K$291', LIGNES, 'Dépôt, agent ou grossiste qui verse'); liste(j5, 'C', '=Choix!$I$2:$I$4', LIGNES, 'Objet du versement')
-liste(j5, 'E', '=Choix!$L$2:$L$3', LIGNES, 'Caisse Oriba ou Chez le grossiste'); liste(j5, 'F', '=Choix!$F$2:$F$101', LIGNES, 'Grossiste'); liste(j5, 'H', '=Choix!$J$2:$J$3', LIGNES, 'Oriba Food ou Oriba Rice')
+             [13, 32, 22, 14, 18, 26, 15, 18], HIST_R, vides=LIGNES, dates=(1,), nombres=(7,))
+liste(j5, 'B', '=Choix!$K$2:$K$291', NR, 'Dépôt, agent ou grossiste qui verse'); liste(j5, 'C', '=Choix!$I$2:$I$4', NR, 'Objet du versement')
+liste(j5, 'E', '=Choix!$L$2:$L$3', NR, 'Caisse Oriba ou Chez le grossiste'); liste(j5, 'F', '=Choix!$F$2:$F$101', NR, 'Grossiste'); liste(j5, 'H', '=Choix!$J$2:$J$3', NR, 'Oriba Food ou Oriba Rice')
 j6 = feuille('6-Transferts', '6 · Transferts entre dépôts', 'Cartons envoyés d’un dépôt à un autre (ex. Dépôt Niamey 1 → Dépôt Niamey 2).',
              ['Date', 'Dépôt qui envoie', 'Dépôt qui reçoit', 'Produit', 'Cartons', 'Observation'], [13, 22, 22, 22, 10, 30], vides=LIGNES, couleur=VIOLET, dates=(1,))
 liste(j6, 'B', '=Choix!$A$2:$A$40', LIGNES, 'Dépôt qui envoie'); liste(j6, 'C', '=Choix!$A$2:$A$40', LIGNES, 'Dépôt qui reçoit'); liste(j6, 'D', '=Choix!$E$2:$E$20', LIGNES, 'Produit')
@@ -218,9 +277,9 @@ def jour(f, col, crit=''):
 def mois(f, col, crit=''):
     return f"=SUMIFS('{f}'!{col}:{col},'{f}'!A:A,\">=\"&{D1},'{f}'!A:A,\"<=\"&$B$4{crit})"
 IND = [
-    ('Ventes au comptant', '4-Ventes', 'J', ",'4-Ventes'!G:G,\"Comptant\"", 'FCFA'),
-    ('Ventes à crédit', '4-Ventes', 'J', ",'4-Ventes'!G:G,\"Crédit\"", 'FCFA'),
-    ('Cartons vendus', '4-Ventes', 'E', '', 'cartons'),
+    ('Ventes au comptant', '4-Ventes', 'M', ",'4-Ventes'!I:I,\"Comptant\"", 'FCFA'),
+    ('Ventes à crédit', '4-Ventes', 'M', ",'4-Ventes'!I:I,\"Crédit\"", 'FCFA'),
+    ('Cartons vendus', '4-Ventes', 'S', '', 'cartons'),
     ('Versements (ventes comptant)', '5-Versements', 'G', ",'5-Versements'!C:C,\"Ventes comptant\"", 'FCFA'),
     ('  dont pour Oriba Food', '5-Versements', 'G', ",'5-Versements'!C:C,\"Ventes comptant\",'5-Versements'!H:H,\"Oriba Food\"", 'FCFA'),
     ('  dont pour Oriba Rice', '5-Versements', 'G', ",'5-Versements'!C:C,\"Ventes comptant\",'5-Versements'!H:H,\"Oriba Rice\"", 'FCFA'),
@@ -240,11 +299,97 @@ for i, (lib, f, col, crit, u) in enumerate(IND, 7):
     if lib.startswith('  '): tb.cell(row=i, column=1).font = Font(italic=True, color='5A5670')
 tb.column_dimensions['A'].width = 36; tb.column_dimensions['B'].width = 18; tb.column_dimensions['C'].width = 22; tb.column_dimensions['D'].width = 10
 
+# ---------- Tableau de bord (comme le TB de l'équipe : rien à saisir, sauf la période et le plafond)
+TBD = wb.create_sheet('Tableau de bord')
+def titre(ws, r, t):
+    c = ws.cell(row=r, column=1, value=t); c.font = Font(bold=True, size=12, color=VIOLET)
+def entete(ws, r, hs):
+    for j, h in enumerate(hs, 1):
+        c = ws.cell(row=r, column=j, value=h); c.font = Font(bold=True, color=BLANC); c.fill = PatternFill('solid', fgColor=VERT); c.border = BORD; c.alignment = Alignment(wrap_text=True, vertical='center')
+def calc(ws, r, j, f, fmt='# ##0'):
+    c = ws.cell(row=r, column=j, value=f); c.number_format = fmt; c.border = BORD; c.fill = PatternFill('solid', fgColor=BLEU); return c
+TBD['A1'] = 'TABLEAU DE BORD — VENTES, CRÉANCES ET ENCAISSEMENTS'; TBD['A1'].font = Font(bold=True, size=15, color=VERT_F)
+TBD['A2'] = 'Tout se calcule à partir des onglets 4-Ventes et 5-Versements. Choisissez la période (cases jaunes) ; les créances en cours ne dépendent pas de la période.'; TBD['A2'].font = Font(italic=True, color='5A5670')
+JAUNE = PatternFill('solid', fgColor='FFF8E1')
+for r, (lib, v) in enumerate([('Du', dt.date(2026, 6, 1)), ('Au', '=TODAY()'), ('Plafond cumul créances (cartons)', 1000), ('Seuil d’alerte créance (jours)', 7)], 4):
+    TBD.cell(row=r, column=1, value=lib).font = Font(bold=True)
+    c = TBD.cell(row=r, column=2, value=v); c.fill = JAUNE; c.font = Font(bold=True); c.border = BORD
+    if r <= 5: c.number_format = 'DD/MM/YYYY'
+V = "'4-Ventes'"; VS = "'5-Versements'"
+PER = f',{V}!$A:$A,">="&$B$4,{V}!$A:$A,"<="&$B$5'
+PERV = f',{VS}!$A:$A,">="&$B$4,{VS}!$A:$A,"<="&$B$5'
+titre(TBD, 9, 'Indicateurs clés'); entete(TBD, 10, ['Indicateur', 'Valeur', 'Commentaire'])
+KPI = [('CA total (FCFA)', f'=SUMIFS({V}!$M:$M{PER})', 'ventes comptant + crédit de la période'),
+       ('Ventes au comptant (FCFA)', f'=SUMIFS({V}!$M:$M,{V}!$I:$I,"Comptant"{PER})', ''),
+       ('Ventes à crédit (FCFA)', f'=SUMIFS({V}!$M:$M,{V}!$I:$I,"Crédit"{PER})', ''),
+       ('Cartons vendus', f'=SUMIFS({V}!$S:$S{PER})', 'les packs comptent pour 1/12 de carton'),
+       ('Montant encaissé (FCFA)', f'=SUMIFS({VS}!$G:$G,{VS}!$C:$C,"Ventes comptant"{PERV})+SUMIFS({VS}!$G:$G,{VS}!$C:$C,"Remboursement crédit"{PERV})', 'versements des ventes comptant + remboursements de crédits'),
+       ('Solde des créances en cours (FCFA)', f'=SUM({V}!$O:$O)', 'toutes dates'),
+       ('Quantité en créance (cartons)', f'=SUM({V}!$T:$T)', ''),
+       ('% d’utilisation du plafond', '=IF($B$6>0,B17/$B$6,0)', ''),
+       ('Statut du plafond', '=IF(B18>=1,"🚨 Plafond dépassé",IF(B18>=0.8,"⚠️ Proche du plafond","✅ Normal"))', ''),
+       ('Créances en retard (nombre)', f'=COUNTIF({V}!$Q:$Q,"En retard")', ''),
+       ('Créances en retard de plus que le seuil (nombre)', f'=COUNTIFS({V}!$Q:$Q,"En retard",{V}!$P:$P,">"&$B$7)', ''),
+       ('Clients débiteurs actifs', '=COUNTIF(C:C,">0")-COUNTIF(C1:C40,">0")', 'clients avec un solde à rembourser')]
+for i, (lib, f, com) in enumerate(KPI, 11):
+    TBD.cell(row=i, column=1, value=lib).border = BORD
+    calc(TBD, i, 2, f, '0 %' if '%' in lib else '# ##0'); TBD.cell(row=i, column=3, value=com).font = Font(italic=True, color='5A5670')
+r0 = 25
+titre(TBD, r0, 'Ventes par vendeur (dépôt / chef d’équipe et agents)'); entete(TBD, r0 + 1, ['Vendeur', 'Qté comptant', 'Qté crédit', 'Qté totale', 'CA comptant (FCFA)', 'CA crédit (FCFA)', 'CA total (FCFA)'])
+NVd = len(DEPOTS) + len(AGENTS) + 20
+for i in range(NVd):
+    nd = len(DEPOTS) + 5; r = r0 + 2 + i; src = f'Choix!C{2 + i}' if i < nd else f'Choix!C{42 + i - nd}'
+    TBD.cell(row=r, column=1, value=f'={src}&""').border = BORD
+    k = f'{V}!$B:$B,$A{r}'
+    calc(TBD, r, 2, f'=IF($A{r}="","",SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Comptant"{PER}))'); calc(TBD, r, 3, f'=IF($A{r}="","",SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Crédit"{PER}))')
+    calc(TBD, r, 4, f'=IF($A{r}="","",N(B{r})+N(C{r}))'); calc(TBD, r, 5, f'=IF($A{r}="","",SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Comptant"{PER}))')
+    calc(TBD, r, 6, f'=IF($A{r}="","",SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Crédit"{PER}))'); calc(TBD, r, 7, f'=IF($A{r}="","",N(E{r})+N(F{r}))')
+r1 = r0 + 3 + NVd
+titre(TBD, r1, 'Ventes par marché'); entete(TBD, r1 + 1, ['Marché / village', 'Qté comptant', 'Qté crédit', 'Qté totale', 'CA comptant (FCFA)', 'CA crédit (FCFA)', 'CA total (FCFA)'])
+for i, m in enumerate(LISTE_MARCHES + ['(marché non renseigné)']):
+    r = r1 + 2 + i
+    TBD.cell(row=r, column=1, value=m).border = BORD
+    k = f'{V}!$C:$C,{"$A" + str(r) if i < len(LISTE_MARCHES) else chr(34) + chr(34)}'
+    calc(TBD, r, 2, f'=SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Comptant"{PER})'); calc(TBD, r, 3, f'=SUMIFS({V}!$S:$S,{k},{V}!$I:$I,"Crédit"{PER})')
+    calc(TBD, r, 4, f'=B{r}+C{r}'); calc(TBD, r, 5, f'=SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Comptant"{PER})'); calc(TBD, r, 6, f'=SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Crédit"{PER})'); calc(TBD, r, 7, f'=E{r}+F{r}')
+r2 = r1 + 4 + len(LISTE_MARCHES)
+titre(TBD, r2, 'Ventes par produit'); entete(TBD, r2 + 1, ['Produit', 'Quantité (cartons)', 'CA (FCFA)'])
+for i, p in enumerate(PRODUITS):
+    r = r2 + 2 + i; TBD.cell(row=r, column=1, value=p[0]).border = BORD
+    calc(TBD, r, 2, f'=SUMIFS({V}!$S:$S,{V}!$E:$E,$A{r}{PER})'); calc(TBD, r, 3, f'=SUMIFS({V}!$M:$M,{V}!$E:$E,$A{r}{PER})')
+r3 = r2 + 3 + len(PRODUITS)
+titre(TBD, r3, 'Évolution mensuelle'); entete(TBD, r3 + 1, ['Mois', 'CA comptant (FCFA)', 'CA crédit (FCFA)', 'CA total (FCFA)', 'Quantité (cartons)'])
+for i in range(13):
+    y, m = 2026 + (5 + i) // 12, (5 + i) % 12 + 1; mo = f'{y}-{m:02d}'; r = r3 + 2 + i
+    TBD.cell(row=r, column=1, value=mo).border = BORD
+    calc(TBD, r, 2, f'=SUMIFS({V}!$M:$M,{V}!$R:$R,$A{r},{V}!$I:$I,"Comptant")'); calc(TBD, r, 3, f'=SUMIFS({V}!$M:$M,{V}!$R:$R,$A{r},{V}!$I:$I,"Crédit")')
+    calc(TBD, r, 4, f'=B{r}+C{r}'); calc(TBD, r, 5, f'=SUMIFS({V}!$S:$S,{V}!$R:$R,$A{r})')
+for c, w in zip('ABCDEFG', [44, 16, 16, 14, 18, 18, 18]): TBD.column_dimensions[c].width = w
+TBD.freeze_panes = 'A9'
+# Créances par client (onglet à part)
+CRC = wb.create_sheet('Créances par client')
+CRC['A1'] = 'CRÉANCES PAR CLIENT'; CRC['A1'].font = Font(bold=True, size=15, color=VERT_F)
+CRC['A2'] = 'Ventes à crédit et remboursements de chaque client (toutes dates). Rien à saisir.'; CRC['A2'].font = Font(italic=True, color='5A5670')
+entete(CRC, 4, ['Client', 'Crédits accordés (FCFA)', 'Remboursé (FCFA)', 'Montant dû (FCFA)', 'Qté en créance (cartons)', 'Taux de remboursement', 'Créances en retard'])
+for i in range(250):
+    r = 5 + i
+    CRC.cell(row=r, column=1, value=f'=Choix!D{2 + i}&""').border = BORD
+    k = f'{V}!$D:$D,$A{r}'
+    calc(CRC, r, 2, f'=IF($A{r}="","",SUMIFS({V}!$M:$M,{k},{V}!$I:$I,"Crédit"))'); calc(CRC, r, 3, f'=IF($A{r}="","",SUMIFS({V}!$N:$N,{k}))')
+    calc(CRC, r, 4, f'=IF($A{r}="","",SUMIFS({V}!$O:$O,{k}))'); calc(CRC, r, 5, f'=IF($A{r}="","",SUMIFS({V}!$T:$T,{k}))')
+    calc(CRC, r, 6, f'=IF(OR($A{r}="",N(B{r})=0),"",C{r}/B{r})', '0 %'); calc(CRC, r, 7, f'=IF($A{r}="","",COUNTIFS({k},{V}!$Q:$Q,"En retard"))')
+CRC.conditional_formatting.add('D5:D254', FormulaRule(formula=['N($G5)>0'], font=Font(bold=True, color='B71C1C')))
+for c, w in zip('ABCDEFG', [34, 18, 16, 16, 14, 14, 12]): CRC.column_dimensions[c].width = w
+CRC.freeze_panes = 'A5'
+CRC.auto_filter.ref = 'A4:G254'
+TBD['B22'] = "=COUNTIF('Créances par client'!D5:D254,\">0\")"
+TBD['B22'].number_format = '# ##0'; TBD['B22'].fill = PatternFill('solid', fgColor=BLEU); TBD['B22'].border = BORD
+
 # ---------- Choix (feuille cachée) : les listes déroulantes suivent les onglets de listes
 ch = wb.create_sheet('Choix')
 ref = lambda f, r: f'=IF(\'{f}\'!B{r}="","",\'{f}\'!B{r})'
 cols = {'A': 'Dépôts', 'B': 'Agents', 'C': 'Vendeurs', 'D': 'Clients', 'E': 'Produits', 'F': 'Grossistes', 'G': 'Sources', 'H': 'Modes', 'I': 'Objets', 'J': 'Fournisseurs',
-        'K': 'Versé par', 'L': 'Lieux', 'M': 'Équipes', 'N': 'Natures', 'O': 'Véhicules', 'P': 'Agents et équipes', 'Q': 'Marchés'}
+        'K': 'Versé par', 'L': 'Lieux', 'M': 'Équipes', 'N': 'Natures', 'O': 'Véhicules', 'P': 'Agents et équipes', 'Q': 'Marchés', 'R': 'Unités'}
 for c, t in cols.items(): ch[f'{c}1'] = t
 for i in range(39): ch[f'A{2 + i}'] = ref('Dépôts', 5 + i)
 for i in range(150): ch[f'B{2 + i}'] = ref('Agents', 5 + i)
@@ -268,13 +413,12 @@ for i, v in enumerate(VEHICULES): ch[f'O{2 + i}'] = v
 for i in range(150): ch[f'P{2 + i}'] = ref('Agents', 5 + i)
 for i, e in enumerate(EQUIPES): ch[f'P{152 + i}'] = e
 for i in range(40): ch[f'P{165 + i}'] = ref('Dépôts', 5 + i)
-LISTE_MARCHES = ['Aéroport', 'Dolé', 'Koira Tégui', 'Dar es Salam', 'Yantala', 'Grand Marché', 'Petit Marché', 'Nouveau Marché', 'Wadata', 'Bonkaney', 'Katako', 'Gamkallé',
-    'Balleyara', 'Loga', 'Gotheye', 'Hamdallahi', 'Ouallam', 'Konni Ville', 'Gidan Ider', 'Tunfafi', 'Galmi', 'Malbaza', 'Karofan', 'Madaoua', 'Tsernaoua', 'Massalata', 'Dossey', 'Dibissou',
-    'Tahoua Ville', 'Badaguichiri', 'Abalak', 'Tchinta', 'Bouza', 'Agadez']
+
 for i, m in enumerate(LISTE_MARCHES): ch[f'Q{2 + i}'] = m
+ch['R2'], ch['R3'] = 'Carton', 'Pack'
 ch.sheet_state = 'hidden'
 
-ordre = ['Lisez-moi', 'Tableau du jour', '4-Ventes', '5-Versements', '2-Appro dépôts', '3-Remises agents', '6-Transferts', '1-Appro grossistes', '7-Dépenses', '8-Objectifs', '9-Budgets',
+ordre = ['Lisez-moi', 'Tableau de bord', 'Tableau du jour', 'Créances par client', '4-Ventes', '5-Versements', '2-Appro dépôts', '3-Remises agents', '6-Transferts', '1-Appro grossistes', '7-Dépenses', '8-Objectifs', '9-Budgets',
          'Dépôts', 'Agents', 'Clients', 'Grossistes', 'Paramètres', 'Choix']
 wb._sheets = [wb[n] for n in ordre]
 wb.active = 2

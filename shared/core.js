@@ -3,8 +3,14 @@
 import { MODULES, REFS, WRITABLE, DEFAULT_PARAMS, DEFAULT_ROLES, STOCK_TYPES, AXES_OBJECTIF, SUIVI_CHAMPS } from './schema.js';
 import {
   buildIndex, creditInfo, encoursClient, plafondClient, niveauPlafond, lots, lineCalc, today, nowISO, moisDe,
-  isDate, num, round2, addDays, moisClos, fmtF, fmtQ,
+  isDate, num, round2, addDays, moisClos, fmtF, fmtQ, jourSaisie, estVerrouille,
 } from './logic.js';
+// Règle de la journée d'opération : une opération ne peut être corrigée ou annulée que le jour de sa saisie
+function verrouJour(row, quoi) {
+  if (!estVerrouille(row)) return;
+  const j = jourSaisie(row.created_at).split('-').reverse().join('/');
+  fail(`${quoi} saisi(e) le ${j} : la journée d’opération est terminée, l’opération est définitive et ne peut plus être modifiée ni annulée.`, 423);
+}
 
 export class AppError extends Error {
   constructor(msg, status = 400) { super(msg); this.status = status; }
@@ -378,6 +384,7 @@ A['vente.correct'] = async ({ t, user, perms, payload, ip }) => {
   const motif = clean(payload.motif);
   if (!motif) fail('Le motif de correction est obligatoire.');
   const v = await one(t, 'ventes', payload.id, 'Vente');
+  verrouJour(v, `Vente ${v.numero || ''}`);
   if (v.statut !== 'validee') fail('Seule une vente active peut être corrigée.');
   const h = { ...v, ...pick(payload.vente || {}, ['date', 'agent_id', 'marche_id', 'client_id', 'echeance', 'observation']), mode: v.mode };
   const oldL = await t.select('vente_lignes', { vente_id: v.id });
@@ -408,6 +415,7 @@ async function cancelVente(t, user, perms, id, motif, ip) {
   if (!can(perms, 'ventes', 'annuler')) fail('Droit insuffisant pour annuler une vente.', 403);
   if (!clean(motif)) fail('Le motif d’annulation est obligatoire.');
   const v = await one(t, 'ventes', id, 'Vente');
+  verrouJour(v, `Vente ${v.numero || ''}`);
   if (v.statut === 'annulee') fail('Cette vente est déjà annulée.');
   const rembs = (await t.select('remboursements', { vente_id: id })).filter((r) => r.statut === 'valide');
   if (rembs.length) fail('Cette vente a des remboursements actifs : annulez-les d’abord.');
@@ -458,6 +466,7 @@ A['remb.cancel'] = async ({ t, user, perms, payload, ip }) => {
   if (!can(perms, 'remboursements', 'annuler')) fail('Droit insuffisant pour annuler un remboursement.', 403);
   if (!clean(payload.motif)) fail('Le motif d’annulation est obligatoire.');
   const r = await one(t, 'remboursements', payload.id, 'Remboursement');
+  verrouJour(r, `Remboursement ${r.numero || ''}`);
   if (r.statut !== 'valide') fail('Ce remboursement est déjà annulé.');
   const r2 = await t.update('remboursements', r.id, { statut: 'annule', motif: payload.motif, updated_by: user.id, updated_at: nowISO() });
   await audit(t, user, 'ANNULATION', 'remboursements', r.id, r, r2, payload.motif, ip);
@@ -540,6 +549,7 @@ A['stock.cancel'] = async ({ t, user, perms, payload, ip }) => {
   if (!can(perms, 'stock', 'annuler')) fail('Droit insuffisant pour annuler un mouvement de stock.', 403);
   if (!clean(payload.motif)) fail('Le motif est obligatoire.');
   const m = await one(t, 'stock_mouvements', payload.id, 'Mouvement');
+  verrouJour(m, 'Mouvement de stock');
   if (m.statut !== 'valide') fail('Mouvement déjà annulé.');
   if (m.type === 'remise') {
     const others = (await t.select('stock_mouvements', { lot_id: m.id })).filter((x) => x.id !== m.id && x.statut === 'valide');
@@ -1179,6 +1189,7 @@ A['circuit.cancel'] = async ({ t, user, perms, payload, ip }) => {
   if (!can(perms, 'circuit', 'annuler')) fail('Droit insuffisant pour annuler un mouvement.', 403);
   if (!clean(payload.motif)) fail('Le motif d’annulation est obligatoire.');
   const avant = await one(t, 'circuit_mvts', payload.id, 'Mouvement');
+  verrouJour(avant, `Mouvement ${avant.numero || ''}`);
   if (avant.statut === 'annule') fail('Ce mouvement est déjà annulé.');
   const r = await t.update('circuit_mvts', avant.id, { statut: 'annule', motif: clean(payload.motif), updated_by: user.id, updated_at: nowISO() });
   await audit(t, user, 'ANNULATION', 'circuit_mvts', avant.id, avant, r, payload.motif, ip);
@@ -1221,6 +1232,7 @@ A['versement.cancel'] = async ({ t, user, perms, payload, ip }) => {
   if (!can(perms, 'circuit', 'annuler')) fail('Droit insuffisant pour annuler un versement.', 403);
   if (!clean(payload.motif)) fail('Le motif d’annulation est obligatoire.');
   const avant = await one(t, 'versements', payload.id, 'Versement');
+  verrouJour(avant, `Versement ${avant.numero || ''}`);
   if (avant.statut === 'annule') fail('Ce versement est déjà annulé.');
   const r = await t.update('versements', avant.id, { statut: 'annule', motif: clean(payload.motif), updated_by: user.id, updated_at: nowISO() });
   await audit(t, user, 'ANNULATION', 'versements', avant.id, avant, r, payload.motif, ip);
@@ -1310,18 +1322,20 @@ async function executerSuppression(t, P, tout = false) {
 // Écraser les jours d'un classeur : avant réimport, on efface ce qui existe aux mêmes dates pour les mêmes onglets
 // (les ventes venues des fichiers TB ne sont pas touchées)
 async function planJours(t, p) {
-  const S = p.sections || {}; const P = {};
+  const S = p.sections || {}; const P = { _verrou: 0 };
+  // Journée d'opération : les opérations saisies un jour précédent sont définitives, l'écrasement ne les touche pas
+  const libre = (r) => { if (estVerrouille(r)) { P._verrou++; return false; } return true; };
   const add = (tb, ids) => { if (ids.length) P[tb] = [...new Set([...(P[tb] || []), ...ids])]; };
   const set = (l) => new Set((l || []).filter(isDate));
   const mv = S.mouvements || {};
   if (Object.keys(mv).length) {
     const par = Object.fromEntries(Object.entries(mv).map(([k, l]) => [k, set(l)]));
-    add('circuit_mvts', (await t.select('circuit_mvts')).filter((m) => par[m.type]?.has(m.date)).map((m) => m.id));
+    add('circuit_mvts', (await t.select('circuit_mvts')).filter((m) => par[m.type]?.has(m.date) && libre(m)).map((m) => m.id));
   }
   const ventes = await t.select('ventes');
   const horsTB = (v) => !String(v?.ref_externe || '').startsWith('TB|');
   const jv = set(S.ventes);
-  const vs = ventes.filter((v) => jv.has(v.date) && horsTB(v));
+  const vs = ventes.filter((v) => jv.has(v.date) && horsTB(v) && libre(v));
   if (vs.length) {
     const ids = new Set(vs.map((v) => v.id));
     add('ventes', [...ids]);
@@ -1331,20 +1345,21 @@ async function planJours(t, p) {
     add('stock_mouvements', (await t.select('stock_mouvements')).filter((m) => m.vente_id && ids.has(m.vente_id)).map((m) => m.id));
   }
   const jr = set(S.remboursements);
-  if (jr.size) { const vm = new Map(ventes.map((v) => [v.id, v])); add('remboursements', (await t.select('remboursements')).filter((r) => jr.has(r.date) && horsTB(vm.get(r.vente_id))).map((r) => r.id)); }
+  if (jr.size) { const vm = new Map(ventes.map((v) => [v.id, v])); add('remboursements', (await t.select('remboursements')).filter((r) => jr.has(r.date) && horsTB(vm.get(r.vente_id)) && libre(r)).map((r) => r.id)); }
   const jvs = set(S.versements);
-  if (jvs.size) add('versements', (await t.select('versements')).filter((v) => jvs.has(v.date)).map((v) => v.id));
+  if (jvs.size) add('versements', (await t.select('versements')).filter((v) => jvs.has(v.date) && libre(v)).map((v) => v.id));
   return P;
 }
 A['purge.jours'] = async ({ t, perms, user, payload, ip }) => {
   if (!can(perms, 'suppression', 'supprimer')) fail('Seul le Responsable Commercial & Force de Vente peut écraser des données.', 403);
   const P = await planJours(t, payload);
   const prevu = Object.fromEntries(ORDRE_SUPPRESSION.filter((k) => P[k]?.length).map((k) => [k, P[k].length]));
-  if (payload.preview) return { compte: prevu };
+  const verrouilles = P._verrou; delete P._verrou;
+  if (payload.preview) return { compte: prevu, verrouilles };
   if (!clean(payload.motif)) fail('Le motif est obligatoire.');
   const compte = await executerSuppression(t, P);
-  await audit(t, user, 'SUPPRESSION', 'ecrasement', clean(payload.fichier) || 'classeur', { jours: payload.sections, supprime: compte }, null, payload.motif, ip);
-  return { compte };
+  await audit(t, user, 'SUPPRESSION', 'ecrasement', clean(payload.fichier) || 'classeur', { jours: payload.sections, supprime: compte, verrouilles }, null, payload.motif, ip);
+  return { compte, verrouilles };
 };
 A['purge.preview'] = async ({ t, perms, user, payload }) => {
   if (!can(perms, 'suppression', 'supprimer')) fail('Seul le Responsable Commercial & Force de Vente peut supprimer des données.', 403);

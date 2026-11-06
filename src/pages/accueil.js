@@ -7,7 +7,7 @@ import { ouvrirImportCircuit, modeleCircuit } from '../lib/importCircuit.js';
 import { formMouvement, formVersement } from './circuit.js';
 import { ouvrirMiseAJour, peutMettreAJour } from '../lib/majTB.js';
 import { peutImporter, ouvrirImport } from '../lib/importer.js';
-import { today, addDays, num } from '../../shared/logic.js';
+import { today, addDays, num, round2, estVerrouille } from '../../shared/logic.js';
 
 const P = () => (App.filters.essentiel = App.filters.essentiel || { per: 'tout', date: today(), du: '', au: today(), depot: '' });
 // Première vente enregistrée (vue « Tout »)
@@ -187,7 +187,10 @@ export function renderDepotsEssentiel(root) {
   const can = App.can('circuit', 'creer');
   root.innerHTML = pageHead('Dépôts', 'Cliquez sur un dépôt pour voir ses agents. Chiffres de la période choisie.',
     can && p.depot ? `<button class="btn primary" id="d-appro">${icon('plus')} Approvisionner un dépôt</button><button class="btn" id="d-remise">${icon('plus')} Remettre à un agent</button><button class="btn" id="d-transf">${icon('truck')} Transférer entre dépôts</button>` : '') +
-    (depots.length ? '' : noteVide()) + barre() +
+    (depots.length ? '' : noteVide()) +
+    `<article class="card tb-sec bleu" id="jr-c"><header><h3>Journée des dépôts</h3><label class="ff"><span>Journée du</span><input type="date" id="jr-date" value="${p.jour || today()}" max="${today()}"></label></header>
+      <p class="muted small">Pour chaque dépôt (chef d’équipe et ses agents) : cartons pris, remis, vendus, et argent à remettre à la caisse d’Oriba Food et d’Oriba Rice ce jour-là. Cliquez sur un dépôt pour voir le détail de ses opérations. « À remettre » : ventes au comptant du jour à verser à la caisse ; « Reste dû » : cumul non encore versé. Une opération devient définitive à la fin de sa journée de saisie.</p>
+      <div id="jr"></div><h4 class="sec" id="jo-t"></h4><div id="jo"></div></article>` + barre() +
     '<section class="zgrid" id="dz"></section><article class="card" id="dt-c"><header><h3 id="dt-t">Agents du dépôt</h3></header><div id="dt"></div></article>';
   $('#d-appro', root)?.addEventListener('click', () => formMouvement('prise', p.depot));
   $('#d-remise', root)?.addEventListener('click', () => formMouvement('dispatch', p.depot));
@@ -213,7 +216,7 @@ export function renderDepotsEssentiel(root) {
       <span class="zc-ca">${fmtF(x.ca)} <small class="muted">de ventes</small></span><span class="bar" title="Ventes de la période"><i style="width:${(x.ca / maxCA) * 100}%"></i></span>
       <span class="zc-grid">
         <span><small>Reçu par le dépôt</small><b>${fmtQ(x.recu + x.recuTransfert)} ctn</b></span><span><small>Ventes</small><b>${fmtQ(x.venduReseau)} ctn</b></span>
-        <span><small>Stock final</small><b class="${C.stockConnu && x.stockTotal < 0 ? 't-crit' : ''}">${C.stockConnu ? `${fmtQ(x.stockTotal)} ctn` : '—'}</b></span><span><small>Reste à verser</small><b class="${x.reste > 0 ? 't-crit' : ''}">${fmtF(x.reste)}</b></span>
+        <span><small>Stock final</small><b class="${C.stockConnu && x.stockTotal < 0 ? 't-crit' : ''}">${C.stockConnu ? `${fmtQ(x.stockTotal)} ctn` : '—'}</b></span><span><small>Reste dû Oriba Food</small><b class="${x.resteFood > 0 ? 't-crit' : ''}">${fmtF(x.resteFood)}</b></span><span><small>Reste dû Oriba Rice</small><b class="${x.resteRice > 0 ? 't-crit' : ''}">${fmtF(x.resteRice)}</b></span>
         <span><small>Créances</small><b class="${x.enRetard > 0 ? 't-crit' : ''}">${fmtF(x.enCours)}</b></span><span><small>Clients</small><b>${fmtN(x.clients)}</b></span>
       </span></button>`).join('');
     $$('#dz [data-d]', root).forEach((b) => b.addEventListener('click', () => { p.depot = b.dataset.d; draw(); $('#dt-c', root).scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
@@ -227,8 +230,59 @@ export function renderDepotsEssentiel(root) {
         { k: 'objectif', l: 'Objectif du mois', num: 1, f: (r) => (r.objectif ? fmtQ(r.objectif) : '—') }, { k: 'venduMois', l: 'Vendu du mois', num: 1, f: (r) => fmtQ(r.venduMois) },
         { k: 'taux', l: 'Réalisé', num: 1, v: (r) => r.taux ?? -1, f: (r) => pct(r.taux) }, { k: 'enCours', l: 'Crédits en cours (FCFA)', num: 1, f: (r) => (r.enRetard > 0 ? `<b class="t-crit">${fmtN(r.enCours)}</b>` : fmtN(r.enCours)) }] }).mount($('#dt', root));
   };
+  const drawJour = () => {
+    const j = p.jour || today(), C = contexte(App.D, App.I);
+    const tous = situationDepots(C, j, j);
+    const ops = (d) => operationsDepot(C, d.id, j);
+    const rows = tous.map((d) => ({ ...d, nbOps: ops(d).length, pris: round2(d.recu), versFood: d.verseFood, versRice: d.verseRice })).sort((a, b) => a.nom.localeCompare(b.nom, 'fr', { numeric: true }));
+    const S = (k) => (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : k.includes(c.k) ? `<b>${fmtN(rs.reduce((x, r) => x + num(r[c.k]), 0))}</b>` : '');
+    new Table({ title: `Journée des dépôts du ${fmtD(j)}`, rows, sort: { k: 'nom', dir: 1 }, pageSize: 40, onRow: (r) => { p.depot = r.id; drawOps(); draw(); },
+      foot: S(['pris', 'disp', 'vcReseau', 'vkReseau', 'aVerserFood', 'aVerserRice', 'verse', 'resteFood', 'resteRice', 'nbOps']),
+      cols: [{ k: 'nom', l: 'Dépôt', v: (r) => r.nom + (r.responsable ? ` · ${r.responsable}` : ''), f: (r) => `<b>${esc(r.nom)}</b>${r.responsable ? `<br><small class="muted">${esc(r.responsable)}</small>` : ''}` },
+        { k: 'pris', l: 'Cartons pris', num: 1, x: (r) => r.pris, f: (r) => `${r.pris ? `<b>${fmtQ(r.pris)}</b>` : '0'}${[r.recuFoods && `Food ${fmtQ(r.recuFoods)}`, r.recuRice && `Rice ${fmtQ(r.recuRice)}`, r.recuGross && `grossiste ${fmtQ(r.recuGross)}`, r.recuTransfert && `+${fmtQ(r.recuTransfert)} d’un dépôt`, r.transfere && `−${fmtQ(r.transfere)} vers un dépôt`].filter(Boolean).map((t) => `<br><small class="muted">${t}</small>`).join('')}` },
+        { k: 'disp', l: 'Remis agents', num: 1, f: (r) => fmtQ(r.disp) },
+        { k: 'vcReseau', l: 'Vendus cpt', num: 1, f: (r) => fmtQ(r.vcReseau) }, { k: 'vkReseau', l: 'Vendus crédit', num: 1, f: (r) => fmtQ(r.vkReseau) },
+        { k: 'aVerserFood', l: 'À remettre Food', num: 1, f: (r) => (r.aVerserFood ? `<b>${fmtN(r.aVerserFood)}</b>` : '0') },
+        { k: 'aVerserRice', l: 'À remettre Rice', num: 1, f: (r) => (r.aVerserRice ? `<b>${fmtN(r.aVerserRice)}</b>` : '0') },
+        { k: 'verse', l: 'Versé', num: 1, f: (r) => fmtN(r.verse) },
+        { k: 'resteFood', l: 'Reste dû Food', num: 1, f: (r) => (r.resteFood > 0 ? `<b class="t-crit">${fmtN(r.resteFood)}</b>` : fmtN(r.resteFood)) },
+        { k: 'resteRice', l: 'Reste dû Rice', num: 1, f: (r) => (r.resteRice > 0 ? `<b class="t-crit">${fmtN(r.resteRice)}</b>` : fmtN(r.resteRice)) },
+        { k: 'nbOps', l: 'Opér.', num: 1, f: (r) => (r.nbOps ? `<b>${r.nbOps}</b>` : '<span class="muted">0</span>') }] }).mount($('#jr', root));
+    drawOps();
+  };
+  const drawOps = () => {
+    const j = p.jour || today(), C = contexte(App.D, App.I), d = (App.D.agents || []).find((a) => a.id === p.depot);
+    if (!d) { $('#jo-t', root).textContent = ''; $('#jo', root).innerHTML = ''; return; }
+    $('#jo-t', root).textContent = `Opérations du ${fmtD(j)} — ${d.nom}${d.responsable ? ` · ${d.responsable}` : ''}`;
+    new Table({ title: `Opérations ${d.nom} ${j}`, rows: operationsDepot(C, d.id, j), sort: { k: 'ordre', dir: 1 }, pageSize: 50, empty: 'Aucune opération enregistrée ce jour pour ce dépôt.',
+      cols: [{ k: 'ordre', l: 'Saisie', v: (r) => r.ordre, f: (r) => (r.heure ? esc(r.heure) : '—') }, { k: 'type', l: 'Opération', f: (r) => `<b>${esc(r.type)}</b>` }, { k: 'numero', l: 'N°' },
+        { k: 'qui', l: 'Par' }, { k: 'detail', l: 'Détail' }, { k: 'cartons', l: 'Cartons', num: 1, f: (r) => (r.cartons ? fmtQ(r.cartons) : '') },
+        { k: 'montant', l: 'Montant (FCFA)', num: 1, f: (r) => (r.montant ? fmtN(r.montant) : '') },
+        { k: 'verrou', l: 'Statut', v: (r) => (r.verrou ? 'Définitive' : 'Modifiable aujourd’hui'), f: (r) => (r.verrou ? '🔒 Définitive' : '<span class="muted">Modifiable ce jour</span>') }] }).mount($('#jo', root));
+  };
+  $('#jr-date', root).addEventListener('change', (e) => { p.jour = e.target.value || today(); drawJour(); });
   lierBarre(root, draw);
   draw();
+  drawJour();
+}
+
+// Toutes les opérations d'un dépôt (lui-même et ses agents) pour une journée, dans l'ordre de saisie
+function operationsDepot(C, depotId, j) {
+  const ids = C.reseau(depotId), out = [];
+  const h = (iso) => { try { return new Intl.DateTimeFormat('fr-FR', { timeZone: 'Africa/Niamey', hour: '2-digit', minute: '2-digit' }).format(new Date(iso)); } catch { return ''; } };
+  const add = (row, o) => out.push({ id: row.id, ordre: row.created_at || '', heure: row.created_at ? h(row.created_at) : '', numero: row.numero || '', verrou: estVerrouille(row), ...o });
+  const src = (m) => (m.grossiste_id ? `grossiste ${nm.grossiste(m.grossiste_id)}` : m.fournisseur || 'Oriba Food');
+  for (const m of C.mv) {
+    if (m.date !== j) continue;
+    if (m.type === 'prise' && m.agent_id === depotId) add(m, { type: 'Cartons pris', qui: nm.agent(depotId), detail: `${nm.produit(m.produit_id)} · chez ${src(m)}${m.mode === 'credit' ? ' · à crédit' : ''}`, cartons: num(m.cartons), montant: num(m.montant) });
+    else if (m.type === 'dispatch' && m.agent_id === depotId) add(m, { type: 'Remise à un agent', qui: nm.agent(m.sous_agent_id), detail: nm.produit(m.produit_id), cartons: num(m.cartons), montant: 0 });
+    else if (m.type === 'transfert' && m.agent_id === depotId) add(m, { type: 'Transfert envoyé', qui: nm.agent(depotId), detail: `vers ${nm.agent(m.depot_dest_id)} · ${nm.produit(m.produit_id)}`, cartons: num(m.cartons), montant: 0 });
+    else if (m.type === 'transfert' && m.depot_dest_id === depotId) add(m, { type: 'Transfert reçu', qui: nm.agent(m.agent_id), detail: `de ${nm.agent(m.agent_id)} · ${nm.produit(m.produit_id)}`, cartons: num(m.cartons), montant: 0 });
+  }
+  for (const x of C.ventes) if (x.v.date === j && ids.has(x.v.agent_id)) add(x.v, { type: x.v.mode === 'credit' ? 'Vente à crédit' : 'Vente au comptant', qui: nm.agent(x.v.agent_id), detail: `${nm.client(x.v.client_id)}${x.v.marche_id ? ` · ${nm.marche(x.v.marche_id)}` : ''}${x.v.mode === 'credit' && x.v.echeance ? ` · échéance ${fmtD(x.v.echeance)}` : ''}`, cartons: num(x.cartons), montant: num(x.montant) });
+  for (const v of C.vers) if (v.date === j && v.objet === 'ventes_comptant' && ids.has(v.agent_id)) add(v, { type: 'Versement', qui: nm.agent(v.agent_id), detail: `${v.lieu === 'grossiste' ? `chez ${nm.grossiste(v.lieu_grossiste_id)}` : 'caisse'}${v.beneficiaire ? ` · pour ${v.beneficiaire}` : ''}`, cartons: 0, montant: num(v.montant) });
+  for (const r of C.rembs) { const x = C.venteById.get(r.vente_id); if (r.date === j && x && ids.has(x.v.agent_id)) add(r, { type: 'Remboursement de crédit', qui: nm.agent(x.v.agent_id), detail: `${nm.client(x.v.client_id)} · vente ${x.v.numero || ''}`, cartons: 0, montant: num(r.montant) }); }
+  return out;
 }
 
 // ---------------------------------------------------------------- Saisie rapide et import

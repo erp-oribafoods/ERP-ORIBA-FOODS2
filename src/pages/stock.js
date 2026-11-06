@@ -2,7 +2,7 @@
 import { App, nm, opts, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, confirmBox, field, readForm, showErr, busy, toast, icon, pill } from '../lib/ui.js';
 import { boutonImport, lierImport } from '../lib/importer.js';
-import { lots, today, num } from '../../shared/logic.js';
+import { lots, today, num, estVerrouille } from '../../shared/logic.js';
 import { STOCK_TYPES } from '../../shared/schema.js';
 import { openVente } from './ventes.js';
 
@@ -47,7 +47,7 @@ function openLot(id) {
       <h4 class="sec">Mouvements</h4><div class="tbl-wrap"><table class="tbl"><thead><tr><th>N°</th><th>Date</th><th>Type</th><th class="n">Quantité</th><th>Document / motif</th><th>Vente</th><th>Par</th><th></th></tr></thead><tbody>
       ${all.map((m) => `<tr class="${m.statut === 'annule' ? 'strike' : ''}"><td>${esc(m.numero)}</td><td>${fmtD(m.date)}</td><td>${esc(STOCK_TYPES[m.type])}</td><td class="n">${fmtQ(m.quantite)}</td><td>${esc([m.document, m.motif].filter(Boolean).join(' — '))}</td>
         <td>${m.vente_id ? `<a href="#" data-v="${m.vente_id}">${esc(App.I.ventes.get(m.vente_id)?.numero || 'voir')}</a>` : ''}</td><td>${esc(nm.user(m.created_by))}</td>
-        <td>${m.statut === 'valide' && App.can('stock', 'annuler') ? `<button class="btn sm ghost" data-c="${m.id}">Annuler</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`,
+        <td>${m.statut === 'valide' && !estVerrouille(m) && App.can('stock', 'annuler') ? `<button class="btn sm ghost" data-c="${m.id}">Annuler</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`,
     footer: can ? `<button class="btn primary" data-t="vente">Imputer une vente</button><button class="btn" data-t="inventaire">Inventaire physique</button><button class="btn ghost" data-t="retour">Retour</button><button class="btn ghost" data-t="perte">Perte</button><button class="btn ghost" data-t="ajustement_plus">Ajustement +</button><button class="btn ghost" data-t="ajustement_moins">Ajustement −</button>` : '<button class="btn ghost" data-close>Fermer</button>',
     onMount: (m, close) => {
       $$('[data-t]', m.parentElement).forEach((b) => b.addEventListener('click', () => { close(); mouvementForm(id, b.dataset.t); }));

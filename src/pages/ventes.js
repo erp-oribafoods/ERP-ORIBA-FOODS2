@@ -4,7 +4,7 @@ import { App, nm, opts, filterBar, describeFilters, pageHead } from '../app.js';
 import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, confirmBox, field, readForm, showErr, busy, toast, icon, pill, statutCreditPill } from '../lib/ui.js';
 import { boutonImport, lierImport } from '../lib/importer.js';
 import { venteMatches, periodRange } from '../lib/facts.js';
-import { creditInfo, venteTotals, encoursClient, plafondClient, niveauPlafond, lineCalc, today, addDays, num } from '../../shared/logic.js';
+import { creditInfo, venteTotals, encoursClient, plafondClient, niveauPlafond, lineCalc, today, addDays, num, estVerrouille } from '../../shared/logic.js';
 import { MODES_PAIEMENT_REMB, CANAUX_RELANCE } from '../../shared/schema.js';
 import { signalAnomalie } from './audit.js';
 
@@ -182,18 +182,18 @@ export function openVente(id) {
     </tbody></table></div>
     ${credit ? `<h4 class="sec">Remboursements <small class="muted">${fmtF(ci.rembourse)} encaissés</small></h4>
     <div class="tbl-wrap"><table class="tbl"><thead><tr><th>N°</th><th>Date</th><th>Mode</th><th>Référence</th><th class="n">Montant</th><th>Enregistré par</th><th></th></tr></thead><tbody>
-    ${rembs.map((r) => `<tr class="${r.statut === 'annule' ? 'strike' : ''}"><td>${esc(r.numero)}</td><td>${fmtD(r.date)}</td><td>${esc(r.mode || '')}</td><td>${esc(r.reference || '')}</td><td class="n">${fmtN(r.montant)}</td><td>${esc(nm.user(r.created_by))}</td><td>${r.statut === 'valide' && App.can('remboursements', 'annuler') ? `<button class="btn sm ghost" data-rcancel="${r.id}">Annuler</button>` : r.statut === 'annule' ? `<small>Annulé : ${esc(r.motif || '')}</small>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Aucun remboursement.</td></tr>'}
+    ${rembs.map((r) => `<tr class="${r.statut === 'annule' ? 'strike' : ''}"><td>${esc(r.numero)}</td><td>${fmtD(r.date)}</td><td>${esc(r.mode || '')}</td><td>${esc(r.reference || '')}</td><td class="n">${fmtN(r.montant)}</td><td>${esc(nm.user(r.created_by))}</td><td>${r.statut === 'valide' && !estVerrouille(r) && App.can('remboursements', 'annuler') ? `<button class="btn sm ghost" data-rcancel="${r.id}">Annuler</button>` : r.statut === 'annule' ? `<small>Annulé : ${esc(r.motif || '')}</small>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Aucun remboursement.</td></tr>'}
     </tbody></table></div>
     <h4 class="sec">Relances</h4>
     <ul class="timeline">${rel.map((r) => `<li><b>${fmtD(r.date)} · ${esc(r.canal || '')}</b> — ${esc(r.resultat || '')}${r.promesse_date ? ` · promesse ${fmtF(r.promesse_montant)} le ${fmtD(r.promesse_date)}` : ''}${r.prochaine_action ? `<br><small>Prochaine action : ${esc(r.prochaine_action)} ${r.date_prochaine ? 'le ' + fmtD(r.date_prochaine) : ''}</small>` : ''}<br><small>${esc(nm.user(r.created_by))}</small></li>`).join('') || '<li class="muted">Aucune relance.</li>'}</ul>` : ''}`;
   const btns = [];
   if (actif && credit && ci.solde > 0 && App.can('remboursements', 'creer')) btns.push(`<button class="btn primary" id="b-remb">Enregistrer un remboursement</button>`);
   if (actif && credit && ci.solde > 0 && App.can('creances', 'creer')) btns.push(`<button class="btn" id="b-rel">Noter une relance</button>`);
-  if (actif && App.can('ventes', 'modifier') && v.source !== 'stock') btns.push(`<button class="btn" id="b-cor">${icon('edit')} Corriger</button>`);
-  if (actif && App.can('ventes', 'annuler')) btns.push(`<button class="btn danger ghost" id="b-ann">Annuler la vente</button>`);
+  if (actif && !estVerrouille(v) && App.can('ventes', 'modifier') && v.source !== 'stock') btns.push(`<button class="btn" id="b-cor">${icon('edit')} Corriger</button>`);
+  if (actif && !estVerrouille(v) && App.can('ventes', 'annuler')) btns.push(`<button class="btn danger ghost" id="b-ann">Annuler la vente</button>`);
   if (App.can('audit', 'creer')) btns.push(`<button class="btn ghost" id="b-ano">${icon('flag')} Signaler une anomalie</button>`);
   modal({
-    title: `Vente ${v.numero}`, wide: true, body, footer: btns.join('') || '<button class="btn ghost" data-close>Fermer</button>',
+    title: `Vente ${v.numero}`, wide: true, body: (actif && estVerrouille(v) ? '<p class="note">🔒 Opération définitive : sa journée de saisie est terminée, elle ne peut plus être modifiée ni annulée.</p>' : '') + body, footer: btns.join('') || '<button class="btn ghost" data-close>Fermer</button>',
     onMount: (m, close) => {
       const F = m.parentElement;
       $('#b-remb', F)?.addEventListener('click', () => { close(); rembForm(v.id); });

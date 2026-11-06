@@ -6,6 +6,9 @@ export const TZ = 'Africa/Niamey';
 export function today() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
+// Jour (heure de Niamey) où une opération a été saisie ; une opération est définitive dès que sa journée est terminée
+export function jourSaisie(iso) { if (!iso) return null; const d = new Date(iso); return isNaN(d) ? null : new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d); }
+export function estVerrouille(row) { const j = jourSaisie(row?.created_at); return !!j && j < today(); }
 export function nowISO() { return new Date().toISOString(); }
 export function dayNum(d) { return Math.floor(Date.parse(String(d).slice(0, 10) + 'T00:00:00Z') / 86400000); }
 export function daysBetween(a, b) { return dayNum(b) - dayNum(a); }

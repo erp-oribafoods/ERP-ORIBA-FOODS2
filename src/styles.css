@@ -523,3 +523,6 @@ ul.alertes li { border-radius: 12px 4px 12px 4px; }
 .tb-sec.violet { border-top-color: #7D3C98; } .tb-sec.marine { border-top-color: #1F4E79; }
 @media (max-width: 1100px) { .tbc-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .tbc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tbc-v { font-size: 1.02rem; } }
+/* Journée des dépôts : tableau compact pour voir toutes les colonnes */
+#jr th, #jr td, #jo th, #jo td { padding: 6px 7px; font-size: .84rem; }
+#jr th, #jo th { white-space: normal; line-height: 1.2; }

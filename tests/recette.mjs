@@ -292,8 +292,12 @@ console.log('Circuit de distribution (grossistes → agents-dépôts → sous-ag
   ok(i2.integrees.length === 0 && i2.deja.length === 1, 'Réimport du même fichier : rien de nouveau');
   const cx = await call(sessions.com, 'circuit.cancel', { id: ap.mvt.id, motif: 'Erreur de saisie' });
   ok(cx.mvt.statut === 'annule', 'Mouvement annulé avec motif (conservé)');
+  // Journée d'opération : une opération saisie un jour précédent est définitive
+  const ap2 = await call(sessions.com, 'circuit.save', { type: 'appro', date: today(), grossiste_id: gro.id, fournisseur: 'Usine Oriba Foods', produit_id: prod.id, cartons: 3, prix: 12000 });
+  await db.update('circuit_mvts', ap2.mvt.id, { created_at: new Date(Date.now() - 30 * 3600 * 1000).toISOString() });
+  await expectErr(call(sessions.com, 'circuit.cancel', { id: ap2.mvt.id, motif: 'trop tard' }), 'Opération de la veille : annulation refusée (définitive)', /définitive/);
   const D = (await call(sessions.dg, 'data.bootstrap')).data;
-  ok(D.grossistes.length === 1 && D.circuit_mvts.length === 5 && D.versements.length === 3, `La DG consulte le circuit (lecture) : ${D.circuit_mvts.length} mouvements, ${D.versements.length} versements`);
+  ok(D.grossistes.length === 1 && D.circuit_mvts.length === 6 && D.versements.length === 3, `La DG consulte le circuit (lecture) : ${D.circuit_mvts.length} mouvements, ${D.versements.length} versements`);
   await call(sessions.com, 'circuit.depart', { date: addDays(today(), -7) });
   ok((await call(sessions.dg, 'data.bootstrap')).data.parametres.find((x) => x.cle === 'circuit_date_depart')?.valeur?.date === addDays(today(), -7), 'Date des stocks initiaux du circuit enregistrée');
   if (mode === 'pg') await expectErr(globalThis.__pool.query('delete from circuit_mvts'), 'Suppression de mouvement interdite en base', /Suppression interdite/);
@@ -304,7 +308,7 @@ console.log('Circuit de distribution (grossistes → agents-dépôts → sous-ag
   await expectErr(call(sessions.dg, 'purge.jours', { ...sec, motif: 'x' }), 'La DG ne peut pas écraser', /Responsable Commercial/);
   const ec = await call(sessions.com, 'purge.jours', { ...sec, motif: 'Écrasement par le classeur test.xlsx' });
   const D2 = (await call(sessions.com, 'data.bootstrap')).data;
-  ok(ec.compte.circuit_mvts === 2 && D2.circuit_mvts.filter((m) => ['dispatch', 'transfert'].includes(m.type)).length === 0 && D2.circuit_mvts.length === 3 && D2.versements.length === 0, 'Écrasement : seuls les onglets et jours du fichier sont effacés');
+  ok(ec.compte.circuit_mvts === 2 && D2.circuit_mvts.filter((m) => ['dispatch', 'transfert'].includes(m.type)).length === 0 && D2.circuit_mvts.length === 4 && D2.versements.length === 0, 'Écrasement : seuls les onglets et jours du fichier sont effacés');
 }
 console.log('Suppression définitive (Responsable commercial seul)');
 {

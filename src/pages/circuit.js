@@ -5,7 +5,7 @@ import { esc, $, $$, fmtF, fmtN, fmtQ, fmtD, Table, modal, confirmBox, field, re
 import { contexte, situationDepots, situationSous, grossistesSemaine, serie, creditsCircuit, lundi } from '../lib/circuit.js';
 import { ouvrirImportCircuit, modeleCircuit } from '../lib/importCircuit.js';
 import { refFormPublic } from './admin.js';
-import { today, addDays, num } from '../../shared/logic.js';
+import { today, addDays, num, estVerrouille } from '../../shared/logic.js';
 import { CIRCUIT_TYPES, OBJETS_VERSEMENT, LIEUX_VERSEMENT } from '../../shared/schema.js';
 
 // Date par défaut : aujourd'hui, ou le dernier jour d'activité du circuit s'il n'y a rien aujourd'hui
@@ -204,8 +204,8 @@ function ficheMouvement(r) {
   modal({ title: `${libType[r.type]} ${r.numero}`,
     body: `<dl class="dl">${[['Date', fmtD(r.date)], ['Grossiste', r.grossiste_id ? nm.grossiste(r.grossiste_id) : '—'], ['Fournisseur', r.fournisseur || '—'], ['Dépôt', r.agent_id ? nm.agent(r.agent_id) : '—'], ...(r.type === 'transfert' ? [['Dépôt qui reçoit', nm.agent(r.depot_dest_id)]] : [['Agent', r.sous_agent_id ? nm.agent(r.sous_agent_id) : '—']]),
       ['Produit', nm.produit(r.produit_id)], ['Cartons', fmtQ(r.cartons)], ['Prix', r.prix === null ? '—' : fmtF(r.prix)], ['Montant', r.montant === null ? '—' : fmtF(r.montant)], ['Mode', r.type === 'prise' ? (r.mode === 'credit' ? 'Crédit' : 'Comptant') : '—'],
-      ['Observation', r.observation || '—'], ['Statut', r.statut === 'annule' ? `Annulé — ${r.motif || ''}` : 'Valide'], ['Saisi le', fmtD(r.created_at)]].map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`,
-    footer: `${App.can('circuit', 'annuler') && r.statut !== 'annule' ? '<button class="btn danger" id="ma">Annuler ce mouvement</button>' : ''}<span class="grow"></span><button class="btn ghost" data-close>Fermer</button>`,
+      ['Observation', r.observation || '—'], ['Statut', r.statut === 'annule' ? `Annulé — ${r.motif || ''}` : 'Valide'], ['Saisi le', fmtD(r.created_at)]].map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${r.statut !== 'annule' && estVerrouille(r) ? '<p class="note">🔒 Opération définitive : sa journée de saisie est terminée, elle ne peut plus être modifiée ni annulée.</p>' : ''}`,
+    footer: `${App.can('circuit', 'annuler') && r.statut !== 'annule' && !estVerrouille(r) ? '<button class="btn danger" id="ma">Annuler ce mouvement</button>' : ''}<span class="grow"></span><button class="btn ghost" data-close>Fermer</button>`,
     onMount: (m, close) => $('#ma', m.parentElement)?.addEventListener('click', async () => {
       const motif = await confirmBox({ title: 'Annuler le mouvement', message: 'Le mouvement reste visible, marqué « annulé », et ne compte plus dans les stocks.', okLabel: 'Annuler le mouvement', danger: true, motif: true });
       if (!motif) return;
@@ -284,8 +284,8 @@ export function formVersement() {
 function ficheVersement(r) {
   modal({ title: `Versement ${r.numero}`,
     body: `<dl class="dl">${[['Date', fmtD(r.date)], ['Objet', OBJETS_VERSEMENT[r.objet]], ['Versé par', r.agent_id ? nm.agent(r.agent_id) : nm.grossiste(r.grossiste_id)], ['Lieu', r.lieu === 'grossiste' ? `Chez ${nm.grossiste(r.lieu_grossiste_id)}` : 'Caisse Oriba'],
-      ['Montant', fmtF(r.montant)], ['Référence', r.reference || '—'], ['Statut', r.statut === 'annule' ? `Annulé — ${r.motif || ''}` : 'Valide']].map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`,
-    footer: `${App.can('circuit', 'annuler') && r.statut !== 'annule' ? '<button class="btn danger" id="va">Annuler ce versement</button>' : ''}<span class="grow"></span><button class="btn ghost" data-close>Fermer</button>`,
+      ['Montant', fmtF(r.montant)], ['Référence', r.reference || '—'], ['Statut', r.statut === 'annule' ? `Annulé — ${r.motif || ''}` : 'Valide']].map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${r.statut !== 'annule' && estVerrouille(r) ? '<p class="note">🔒 Opération définitive : sa journée de saisie est terminée, elle ne peut plus être modifiée ni annulée.</p>' : ''}`,
+    footer: `${App.can('circuit', 'annuler') && r.statut !== 'annule' && !estVerrouille(r) ? '<button class="btn danger" id="va">Annuler ce versement</button>' : ''}<span class="grow"></span><button class="btn ghost" data-close>Fermer</button>`,
     onMount: (m, close) => $('#va', m.parentElement)?.addEventListener('click', async () => {
       const motif = await confirmBox({ title: 'Annuler le versement', message: 'Le versement reste visible, marqué « annulé », et ne compte plus dans la caisse.', okLabel: 'Annuler le versement', danger: true, motif: true });
       if (!motif) return;

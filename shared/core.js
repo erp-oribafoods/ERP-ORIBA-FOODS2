@@ -1119,7 +1119,8 @@ const MODE_C = (m) => { const k = String(m || '').normalize('NFD').replace(/[\u0
 async function saveCircuit(t, user, perms, d, opts = {}) {
   if (!can(perms, 'circuit', 'creer')) fail('Seul le Responsable Commercial & Force de Vente peut enregistrer les mouvements du circuit.', 403);
   const type = d.type;
-  if (!['appro', 'prise', 'dispatch', 'transfert'].includes(type)) fail('Type de mouvement inconnu.');
+  if (type === 'transfert') fail('Les transferts entre dépôts n’existent plus.');
+  if (!['appro', 'prise', 'dispatch'].includes(type)) fail('Type de mouvement inconnu.');
   if (!isDate(d.date)) fail('Date invalide.');
   if (d.date > today()) fail('La date ne peut pas être dans le futur.');
   const cartons = round2(num(d.cartons));

@@ -117,10 +117,9 @@ export function renderAccueil(root) {
     ].join('');
     graphiques(root, C, dep, du, au);
     new Table({ title: `Dépôts — ${libPer()}`, rows: dep, sort: { k: 'nom', dir: 1 }, pageSize: 20, exportable: true, onRow: (r) => { P().depot = r.id; App.go('depots'); },
-      foot: (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : ['siTotal', 'recuFoods', 'recuRice', 'recuGross', 'recuTransfert', 'transfere', 'venduReseau', 'stockTotal', 'enCours', 'resteFood', 'resteRice'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + num(r[c.k]), 0))}</b>` : ''),
+      foot: (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : ['siTotal', 'recuFoods', 'recuRice', 'recuGross', 'venduReseau', 'stockTotal', 'enCours', 'resteFood', 'resteRice'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + num(r[c.k]), 0))}</b>` : ''),
       cols: [{ k: 'nom', l: 'Dépôt', f: (r) => `<b>${esc(r.nom)}</b>${r.responsable ? `<br><small class="muted">${esc(r.responsable)}</small>` : ''}`, x: (r) => (r.responsable ? `${r.nom} · ${r.responsable}` : r.nom) }, { k: 'siTotal', l: 'Stock début', num: 1, f: (r) => fmtQ(r.siTotal) },
         { k: 'recuFoods', l: 'Reçu Oriba Food', num: 1, f: (r) => fmtQ(r.recuFoods) }, { k: 'recuRice', l: 'Reçu Oriba Rice', num: 1, f: (r) => fmtQ(r.recuRice) }, { k: 'recuGross', l: 'Reçu grossistes', num: 1, f: (r) => fmtQ(r.recuGross) },
-        { k: 'recuTransfert', l: 'Reçu d’un dépôt', num: 1, f: (r) => fmtQ(r.recuTransfert) }, { k: 'transfere', l: 'Transféré à un dépôt', num: 1, f: (r) => (r.transfere ? `−${fmtQ(r.transfere)}` : fmtQ(0)) },
         { k: 'venduReseau', l: 'Vendu', num: 1, f: (r) => fmtQ(r.venduReseau) }, { k: 'stockTotal', l: 'Stock fin', num: 1, f: (r) => (r.stockTotal < 0 ? `<b class="t-crit">${fmtQ(r.stockTotal)}</b>` : `<b>${fmtQ(r.stockTotal)}</b>`) },
         { k: 'taux', l: 'Objectif du mois', num: 1, v: (r) => r.taux ?? -1, f: (r) => (r.objectif ? `${pct(r.taux)}<small class="muted">${fmtQ(r.venduMois)} / ${fmtQ(r.objectif)} ctn</small>` : '—'), x: (r) => (r.taux === null ? '' : Math.round(r.taux)) },
         { k: 'enCours', l: 'Crédits en cours (FCFA)', num: 1, f: (r) => (r.enRetard > 0 ? `<b class="t-crit">${fmtN(r.enCours)}</b>` : fmtN(r.enCours)) },
@@ -186,7 +185,7 @@ export function renderDepotsEssentiel(root) {
   if (!depots.some((d) => d.id === p.depot)) p.depot = depots[0]?.id || '';
   const can = App.can('circuit', 'creer');
   root.innerHTML = pageHead('Dépôts', 'Cliquez sur un dépôt pour voir ses agents. Chiffres de la période choisie.',
-    can && p.depot ? `<button class="btn primary" id="d-appro">${icon('plus')} Approvisionner un dépôt</button><button class="btn" id="d-remise">${icon('plus')} Remettre à un agent</button><button class="btn" id="d-transf">${icon('truck')} Transférer entre dépôts</button>` : '') +
+    can && p.depot ? `<button class="btn primary" id="d-appro">${icon('plus')} Approvisionner un dépôt</button><button class="btn" id="d-remise">${icon('plus')} Remettre à un agent</button>` : '') +
     (depots.length ? '' : noteVide()) +
     `<article class="card tb-sec bleu" id="jr-c"><header><h3>Journée des dépôts</h3><label class="ff"><span>Journée du</span><input type="date" id="jr-date" value="${p.jour || today()}" max="${today()}"></label></header>
       <p class="muted small">Pour chaque dépôt (chef d’équipe et ses agents) : cartons pris, remis, vendus, et argent à remettre à la caisse d’Oriba Food et d’Oriba Rice ce jour-là. Cliquez sur un dépôt pour voir le détail de ses opérations. « À remettre » : ventes au comptant du jour à verser à la caisse ; « Reste dû » : cumul non encore versé. Une opération devient définitive à la fin de sa journée de saisie.</p>
@@ -194,7 +193,6 @@ export function renderDepotsEssentiel(root) {
     '<section class="zgrid" id="dz"></section><article class="card" id="dt-c"><header><h3 id="dt-t">Agents du dépôt</h3></header><div id="dt"></div></article>';
   $('#d-appro', root)?.addEventListener('click', () => formMouvement('prise', p.depot));
   $('#d-remise', root)?.addEventListener('click', () => formMouvement('dispatch', p.depot));
-  $('#d-transf', root)?.addEventListener('click', () => formMouvement('transfert', p.depot));
   const draw = () => {
     $('.per-lib', root).textContent = libPer();
     if (!p.depot) return;
@@ -239,7 +237,7 @@ export function renderDepotsEssentiel(root) {
     new Table({ title: `Journée des dépôts du ${fmtD(j)}`, rows, sort: { k: 'nom', dir: 1 }, pageSize: 40, onRow: (r) => { p.depot = r.id; drawOps(); draw(); },
       foot: S(['pris', 'disp', 'vcReseau', 'vkReseau', 'aVerserFood', 'aVerserRice', 'verse', 'resteFood', 'resteRice', 'nbOps']),
       cols: [{ k: 'nom', l: 'Dépôt', v: (r) => r.nom + (r.responsable ? ` · ${r.responsable}` : ''), f: (r) => `<b>${esc(r.nom)}</b>${r.responsable ? `<br><small class="muted">${esc(r.responsable)}</small>` : ''}` },
-        { k: 'pris', l: 'Cartons pris', num: 1, x: (r) => r.pris, f: (r) => `${r.pris ? `<b>${fmtQ(r.pris)}</b>` : '0'}${[r.recuFoods && `Food ${fmtQ(r.recuFoods)}`, r.recuRice && `Rice ${fmtQ(r.recuRice)}`, r.recuGross && `grossiste ${fmtQ(r.recuGross)}`, r.recuTransfert && `+${fmtQ(r.recuTransfert)} d’un dépôt`, r.transfere && `−${fmtQ(r.transfere)} vers un dépôt`].filter(Boolean).map((t) => `<br><small class="muted">${t}</small>`).join('')}` },
+        { k: 'pris', l: 'Cartons pris', num: 1, x: (r) => r.pris, f: (r) => `${r.pris ? `<b>${fmtQ(r.pris)}</b>` : '0'}${[r.recuFoods && `Food ${fmtQ(r.recuFoods)}`, r.recuRice && `Rice ${fmtQ(r.recuRice)}`, r.recuGross && `grossiste ${fmtQ(r.recuGross)}`].filter(Boolean).map((t) => `<br><small class="muted">${t}</small>`).join('')}` },
         { k: 'disp', l: 'Remis agents', num: 1, f: (r) => fmtQ(r.disp) },
         { k: 'vcReseau', l: 'Vendus cpt', num: 1, f: (r) => fmtQ(r.vcReseau) }, { k: 'vkReseau', l: 'Vendus crédit', num: 1, f: (r) => fmtQ(r.vkReseau) },
         { k: 'aVerserFood', l: 'À remettre Food', num: 1, f: (r) => (r.aVerserFood ? `<b>${fmtN(r.aVerserFood)}</b>` : '0') },
@@ -295,17 +293,15 @@ export function renderSaisieRapide(root) {
      <section class="tuiles">${tuile('s-vente', 'cash', 'Vente', 'Au comptant ou à crédit')}
       ${tuile('s-vers', 'wallet', 'Versement ou remboursement', 'Argent versé à la caisse ou chez le grossiste ; crédit remboursé')}
       ${tuile('s-appro', 'warehouse', 'Approvisionnement d’un dépôt', 'Cartons reçus d’Oriba Food, d’Oriba Rice ou d’un grossiste')}
-      ${tuile('s-remise', 'users', 'Remise à un agent', 'Cartons donnés par le dépôt à un de ses agents')}
-      ${tuile('s-transf', 'truck', 'Transfert entre dépôts', 'Cartons envoyés d’un dépôt à un autre')}</section>
+      ${tuile('s-remise', 'users', 'Remise à un agent', 'Cartons donnés par le dépôt à un de ses agents')}</section>
      <h2 class="sec-t">Importer les fichiers Excel</h2>
-     <section class="fichiers">${fichier('f-circ', 'Classeur du jour (dépôts)', 'Approvisionnements, remises, transferts, ventes, versements, dépenses, objectifs et budgets. Seules les nouvelles lignes sont ajoutées.', can)}
+     <section class="fichiers">${fichier('f-circ', 'Classeur du jour (dépôts)', 'Approvisionnements, remises, ventes, versements, dépenses, objectifs et budgets. Seules les nouvelles lignes sont ajoutées.', can)}
      ${fichier('f-tb', 'Fichiers « TB » des équipes', 'Ventes, crédits et remboursements des fichiers TB de chaque zone. Seules les nouvelles lignes sont ajoutées.', peutMettreAJour())}
      ${fichier('f-obj', 'Objectifs des agents', 'Fichier « Liste des agents et objectif de vente » (Agent, Équipe, Fonction, Objectif).', peutImporter('objectifs'))}</section>
      <p class="muted small">Imports plus rares (historiques, référentiels, dépenses, budgets…) : <a href="#saisie">Imports avancés</a>, dans « Autres modules ».</p>`;
   if (can) {
     $('#s-appro', root).addEventListener('click', () => formMouvement('prise'));
     $('#s-remise', root).addEventListener('click', () => formMouvement('dispatch'));
-    $('#s-transf', root).addEventListener('click', () => formMouvement('transfert'));
     $('#s-vente', root).addEventListener('click', () => formVente());
     $('#s-vers', root).addEventListener('click', () => formVersement());
   }

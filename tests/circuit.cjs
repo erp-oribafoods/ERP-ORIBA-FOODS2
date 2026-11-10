@@ -89,7 +89,7 @@ const n = (s) => Number(String(s).replace(/[^\d,-]/g, '').replace(',', '.')) || 
   await aller('circuit'); const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#c-mod')]);
   const fm = path.join(OUT, 'modele_circuit.xlsx'); await dl.saveAs(fm);
   const wm = XLSX.readFile(fm);
-  verif(['Grossistes', 'Dépôts', 'Agents', 'Clients', '1-Appro grossistes', '2-Appro dépôts', '3-Remises agents', '4-Ventes', '5-Versements', '6-Transferts'].every((s) => wm.SheetNames.includes(s)), `Modèle : ${wm.SheetNames.join(', ')}`);
+  verif(['Grossistes', 'Dépôts', 'Agents', 'Clients', '1-Appro grossistes', '2-Appro dépôts', '3-Remises agents', '4-Ventes', '5-Versements'].every((s) => wm.SheetNames.includes(s)) && !wm.SheetNames.includes('6-Transferts'), `Modèle : ${wm.SheetNames.join(', ')}`);
   t = await imp(fm);
   verif(t.every((r) => r[3] === '0'), `Modèle réimporté tel quel : aucun rejet (${t.map((r) => r[1]).join('/')} à ajouter = lignes d’exemple)`);
   // Plateforme vide (comme en production) : le classeur crée tout et donne les mêmes chiffres

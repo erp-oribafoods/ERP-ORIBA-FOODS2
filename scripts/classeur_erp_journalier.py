@@ -222,7 +222,6 @@ txt = [
     ('5-Versements : argent versé (Ventes comptant), remboursement d’un crédit (avec le N° de la vente), ou règlement d’un grossiste. Indiquez pour Oriba Food ou Oriba Rice.', None),
     ('2-Appro dépôts : cartons reçus par un dépôt, d’Oriba Food, d’Oriba Rice ou d’un grossiste.', None),
     ('3-Remises agents : cartons donnés par un dépôt à un de ses agents.', None),
-    ('6-Transferts : cartons envoyés d’un dépôt à un autre dépôt.', None),
     ('1-Appro grossistes : cartons reçus par un grossiste, d’Oriba Food ou d’Oriba Rice.', None),
     ('7-Dépenses : une ligne par dépense (salaires, carburant, réparations, vidanges, assurances…). Vidange et assurance : indiquez le véhicule. Les dépenses importées arrivent « à valider » dans Logistique et charges > Validation.', None),
     ('8-Objectifs : objectif du mois en cartons par agent (ou par équipe). Déjà rempli pour novembre et décembre 2026 ; modifiez un chiffre puis réimportez.', None),
@@ -303,9 +302,6 @@ j5 = feuille('5-Versements', '5 · Versements et remboursements', 'Argent versé
              [13, 32, 22, 14, 18, 26, 15, 18], HIST_R, vides=LIGNES, dates=(1,), nombres=(7,))
 liste(j5, 'B', '=Choix!$K$2:$K$291', NR, 'Dépôt, agent ou grossiste qui verse'); liste(j5, 'C', '=Choix!$I$2:$I$4', NR, 'Objet du versement')
 liste(j5, 'E', '=Choix!$L$2:$L$3', NR, 'Caisse Oriba ou Chez le grossiste'); liste(j5, 'F', '=Choix!$F$2:$F$101', NR, 'Grossiste'); liste(j5, 'H', '=Choix!$J$2:$J$3', NR, 'Oriba Food ou Oriba Rice')
-j6 = feuille('6-Transferts', '6 · Transferts entre dépôts', 'Cartons envoyés d’un dépôt à un autre (ex. Dépôt Niamey 1 → Dépôt Niamey 2).',
-             ['Date', 'Dépôt qui envoie', 'Dépôt qui reçoit', 'Produit', 'Cartons', 'Observation'], [13, 22, 22, 22, 10, 30], vides=LIGNES, couleur=VIOLET, dates=(1,))
-liste(j6, 'B', '=Choix!$A$2:$A$40', LIGNES, 'Dépôt qui envoie'); liste(j6, 'C', '=Choix!$A$2:$A$40', LIGNES, 'Dépôt qui reçoit'); liste(j6, 'D', '=Choix!$E$2:$E$20', LIGNES, 'Produit')
 # Dépenses : celles du 03/11/2026 (reprise du fichier Budget) déjà enregistrées dans l'ERP — reconnues à l'import, jamais en double
 J03 = dt.date(2026, 11, 3)
 dep_rows = [[J03, e, n, v, None, None, None, f'Reprise du fichier Budget Équipes Commerciales — {e} — {n}'] for e, vals in BUD.items() for n, v in zip(NATURES_B, vals) if v]
@@ -349,7 +345,6 @@ IND = [
     ('Règlements des grossistes', '5-Versements', 'G', ",'5-Versements'!C:C,\"Règlement grossiste\"", 'FCFA'),
     ('Cartons reçus par les dépôts', '2-Appro dépôts', 'E', '', 'cartons'),
     ('Cartons remis aux agents', '3-Remises agents', 'E', '', 'cartons'),
-    ('Cartons transférés entre dépôts', '6-Transferts', 'E', '', 'cartons'),
     ('Cartons reçus par les grossistes', '1-Appro grossistes', 'E', '', 'cartons'),
     ('Dépenses', '7-Dépenses', 'D', '', 'FCFA'),
 ]
@@ -597,7 +592,7 @@ ch.sheet_state = 'hidden'
 def eclaircir(hexa, t=0.85):
     r, g, b = (int(hexa[i:i + 2], 16) for i in (0, 2, 4))
     return '%02X%02X%02X' % tuple(int(x + (255 - x) * t) for x in (r, g, b))
-COUL = {'4-Ventes': NAVY, '5-Versements': VERT2, '2-Appro dépôts': BLEU2, '3-Remises agents': BLEU2, '6-Transferts': BLEU2, '1-Appro grossistes': '2F5597',
+COUL = {'4-Ventes': NAVY, '5-Versements': VERT2, '2-Appro dépôts': BLEU2, '3-Remises agents': BLEU2, '1-Appro grossistes': '2F5597',
         '7-Dépenses': ROUGE, '8-Objectifs': '7030A0', '9-Budgets': 'BF8F00', 'Dépôts': 'BF8F00', 'Agents': 'BF8F00', 'Clients': 'BF8F00', 'Grossistes': 'BF8F00', 'Paramètres': 'BF8F00'}
 fin3 = Side(style='thin', color='D9D9D9'); B3 = Border(left=fin3, right=fin3, top=fin3, bottom=fin3)
 for nom, col in COUL.items():
@@ -646,7 +641,7 @@ bandeau(lm, 4, 1, 6, 'SOMMAIRE  ·  cliquez sur un onglet pour l’ouvrir', BLEU
 TUILES = [('Tableau de bord', NAVY, 'CA, encaissements, créances, plafond, équipes, marchés, produits, mois'), ('Créances par client', ROUGE, 'Ce que chaque client doit encore, top 10 des débiteurs'),
           ('Tableau du jour', VERT2, 'Les totaux d’une journée et du mois'), ('4-Ventes', NAVY, 'Ventes au comptant et à crédit (à saisir chaque jour)'),
           ('5-Versements', VERT2, 'Versements, remboursements de crédits, règlements des grossistes'), ('2-Appro dépôts', BLEU2, 'Cartons reçus par les dépôts'),
-          ('3-Remises agents', BLEU2, 'Cartons confiés aux agents'), ('6-Transferts', BLEU2, 'Cartons envoyés d’un dépôt à un autre'),
+          ('3-Remises agents', BLEU2, 'Cartons confiés aux agents'),
           ('1-Appro grossistes', '2F5597', 'Cartons reçus par les grossistes'), ('7-Dépenses', ROUGE, 'Salaires, carburant, réparations, vidanges, assurances…'),
           ('8-Objectifs', '7030A0', 'Objectifs du mois par agent ou équipe'), ('9-Budgets', 'BF8F00', 'Budgets du mois par équipe et nature'),
           ('Dépôts', 'BF8F00', 'Les dépôts et leur chef d’équipe'), ('Agents', 'BF8F00', 'Les agents et leur marché'), ('Clients', 'BF8F00', 'Les clients'), ('Grossistes', 'BF8F00', 'Les grossistes')]
@@ -666,7 +661,7 @@ for t in textes[2:]:
         c = lm.cell(row=r, column=2, value=t); c.alignment = Alignment(wrap_text=True, vertical='top'); c.font = Font(size=10)
         lm.row_dimensions[r].height = 30 if len(t) > 140 else 16
     r += 1
-ordre = ['Lisez-moi', 'Tableau de bord', 'Tableau du jour', 'Créances par client', '4-Ventes', '5-Versements', '2-Appro dépôts', '3-Remises agents', '6-Transferts', '1-Appro grossistes', '7-Dépenses', '8-Objectifs', '9-Budgets',
+ordre = ['Lisez-moi', 'Tableau de bord', 'Tableau du jour', 'Créances par client', '4-Ventes', '5-Versements', '2-Appro dépôts', '3-Remises agents', '1-Appro grossistes', '7-Dépenses', '8-Objectifs', '9-Budgets',
          'Dépôts', 'Agents', 'Clients', 'Grossistes', 'Paramètres', 'Choix']
 wb._sheets = [wb[n] for n in ordre]
 wb.active = 2

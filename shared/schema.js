@@ -292,7 +292,7 @@ export const CATS_LOGISTIQUE = ['CARB', 'VIDA', 'FILT', 'VIGN', 'ASSU', 'REPA', 
 export const AXES_OBJECTIF = { agent: 'Agent', zone: 'Zone', equipe: 'Équipe', marche: 'Marché', produit: 'Produit', global: 'Global (tout le service)' };
 
 // Circuit de distribution : usine / Oriba Rice → grossistes → agents-dépôts → sous-agents → clients
-export const CIRCUIT_TYPES = { appro: 'Approvisionnement d’un grossiste', prise: 'Approvisionnement d’un dépôt', dispatch: 'Remise à un agent', transfert: 'Transfert entre dépôts' };
+export const CIRCUIT_TYPES = { appro: 'Approvisionnement d’un grossiste', prise: 'Approvisionnement d’un dépôt', dispatch: 'Remise à un agent' };
 export const FOURNISSEURS = ['Oriba Food', 'Oriba Rice'];
 export const OBJETS_VERSEMENT = { ventes_comptant: 'Ventes comptant', reglement_grossiste: 'Règlement grossiste' };
 export const LIEUX_VERSEMENT = { caisse: 'Caisse Oriba', grossiste: 'Chez le grossiste' };

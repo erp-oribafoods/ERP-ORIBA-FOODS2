@@ -271,11 +271,7 @@ console.log('Circuit de distribution (grossistes → agents-dépôts → sous-ag
   await expectErr(call(sessions.com, 'circuit.save', { type: 'dispatch', date: today(), agent_id: depA.id, sous_agent_id: ag.id, produit_id: prod.id, cartons: 5 }), 'Dispatch refusé vers un agent qui n’est pas son sous-agent', /agent de ce dépôt/);
   await call(sessions.com, 'circuit.save', { type: 'dispatch', date: today(), agent_id: depA.id, sous_agent_id: sa.id, produit_id: prod.id, cartons: 12 });
   const depB = await ref('agents', { code: 'D-NY2', nom: 'Dépôt Niamey 2', equipe_id: eq.id, zone_id: eq.zone_id, role_circuit: 'depot' });
-  const tr = await call(sessions.com, 'circuit.save', { type: 'transfert', date: today(), agent_id: depA.id, depot_dest_id: depB.id, produit_id: prod.id, cartons: 6 });
-  ok(tr.mvt.type === 'transfert' && tr.mvt.depot_dest_id === depB.id, `Transfert ${tr.mvt.numero} : Dépôt Niamey 1 → Dépôt Niamey 2 (6 ctn)`);
-  await expectErr(call(sessions.com, 'circuit.save', { type: 'transfert', date: today(), agent_id: depA.id, depot_dest_id: depA.id, produit_id: prod.id, cartons: 2 }), 'Transfert vers le même dépôt refusé', /différents/);
-  await expectErr(call(sessions.com, 'circuit.save', { type: 'transfert', date: today(), agent_id: depA.id, depot_dest_id: sa.id, produit_id: prod.id, cartons: 2 }), 'Transfert vers un agent (pas un dépôt) refusé', /pas déclaré comme dépôt/);
-  await expectErr(call(sessions.dg, 'circuit.save', { type: 'transfert', date: today(), agent_id: depA.id, depot_dest_id: depB.id, produit_id: prod.id, cartons: 2 }), 'La DG ne peut pas saisir de transfert', /Responsable Commercial/);
+  await expectErr(call(sessions.com, 'circuit.save', { type: 'transfert', date: today(), agent_id: depA.id, depot_dest_id: depB.id, produit_id: prod.id, cartons: 6 }), 'Les transferts entre dépôts sont supprimés', /n’existent plus/);
   const vs = await call(sessions.com, 'vente.create', { vente: { date: today(), mode: 'comptant', agent_id: sa.id }, lignes: [{ produit_id: prod.id, unite: 'carton', quantite: 4, prix_unitaire: 13000 }] });
   ok(vs.vente && !vs.vente.marche_id, 'Un sous-agent vend sans marché précisé');
   const v1 = await call(sessions.com, 'versement.save', { date: today(), objet: 'ventes_comptant', agent_id: depA.id, lieu: 'grossiste', lieu_grossiste_id: gro.id, montant: 52000 });
@@ -297,18 +293,18 @@ console.log('Circuit de distribution (grossistes → agents-dépôts → sous-ag
   await db.update('circuit_mvts', ap2.mvt.id, { created_at: new Date(Date.now() - 30 * 3600 * 1000).toISOString() });
   await expectErr(call(sessions.com, 'circuit.cancel', { id: ap2.mvt.id, motif: 'trop tard' }), 'Opération de la veille : annulation refusée (définitive)', /définitive/);
   const D = (await call(sessions.dg, 'data.bootstrap')).data;
-  ok(D.grossistes.length === 1 && D.circuit_mvts.length === 6 && D.versements.length === 3, `La DG consulte le circuit (lecture) : ${D.circuit_mvts.length} mouvements, ${D.versements.length} versements`);
+  ok(D.grossistes.length === 1 && D.circuit_mvts.length === 5 && D.versements.length === 3, `La DG consulte le circuit (lecture) : ${D.circuit_mvts.length} mouvements, ${D.versements.length} versements`);
   await call(sessions.com, 'circuit.depart', { date: addDays(today(), -7) });
   ok((await call(sessions.dg, 'data.bootstrap')).data.parametres.find((x) => x.cle === 'circuit_date_depart')?.valeur?.date === addDays(today(), -7), 'Date des stocks initiaux du circuit enregistrée');
   if (mode === 'pg') await expectErr(globalThis.__pool.query('delete from circuit_mvts'), 'Suppression de mouvement interdite en base', /Suppression interdite/);
   // Écraser les jours d'un classeur
   const sec = { sections: { mouvements: { dispatch: [today()], transfert: [today()] }, versements: [today()] } };
   const pv = await call(sessions.com, 'purge.jours', { ...sec, preview: true });
-  ok(pv.compte.circuit_mvts === 2 && pv.compte.versements === 3, `Écraser les jours : aperçu ${JSON.stringify(pv.compte)}`);
+  ok(pv.compte.circuit_mvts === 1 && pv.compte.versements === 3, `Écraser les jours : aperçu ${JSON.stringify(pv.compte)}`);
   await expectErr(call(sessions.dg, 'purge.jours', { ...sec, motif: 'x' }), 'La DG ne peut pas écraser', /Responsable Commercial/);
   const ec = await call(sessions.com, 'purge.jours', { ...sec, motif: 'Écrasement par le classeur test.xlsx' });
   const D2 = (await call(sessions.com, 'data.bootstrap')).data;
-  ok(ec.compte.circuit_mvts === 2 && D2.circuit_mvts.filter((m) => ['dispatch', 'transfert'].includes(m.type)).length === 0 && D2.circuit_mvts.length === 4 && D2.versements.length === 0, 'Écrasement : seuls les onglets et jours du fichier sont effacés');
+  ok(ec.compte.circuit_mvts === 1 && D2.circuit_mvts.filter((m) => ['dispatch', 'transfert'].includes(m.type)).length === 0 && D2.circuit_mvts.length === 4 && D2.versements.length === 0, 'Écrasement : seuls les onglets et jours du fichier sont effacés');
 }
 console.log('Suppression définitive (Responsable commercial seul)');
 {

@@ -141,8 +141,8 @@ export function renderGrossistes(root) {
 const libType = { appro: 'Appro. grossiste', prise: 'Appro. dépôt', dispatch: 'Remise à un agent', transfert: 'Transfert entre dépôts' };
 export function renderMouvements(root) {
   const f = F();
-  root.innerHTML = pageHead('Mouvements de stock du circuit', 'Approvisionnements des grossistes et des dépôts, transferts entre dépôts et remises aux agents.',
-    `${actions()}${peutSaisir() ? `<button class="btn primary" data-n="prise">${icon('plus')} Approvisionnement d’un dépôt</button><button class="btn" data-n="dispatch">${icon('plus')} Remise à un agent</button><button class="btn" data-n="transfert">${icon('plus')} Transfert entre dépôts</button><button class="btn" data-n="appro">${icon('plus')} Approvisionnement d’un grossiste</button>` : ''}`) + aide() +
+  root.innerHTML = pageHead('Mouvements de stock du circuit', 'Approvisionnements des grossistes et des dépôts, et remises aux agents.',
+    `${actions()}${peutSaisir() ? `<button class="btn primary" data-n="prise">${icon('plus')} Approvisionnement d’un dépôt</button><button class="btn" data-n="dispatch">${icon('plus')} Remise à un agent</button><button class="btn" data-n="appro">${icon('plus')} Approvisionnement d’un grossiste</button>` : ''}`) + aide() +
     `<div class="filters"><label class="ff"><span>Type</span><select id="m-type"><option value="">Tous</option>${Object.entries(libType).map(([k, l]) => `<option value="${k}" ${f.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
      <label class="ff"><span>Du</span><input type="date" id="m-du" value="${f.du}"></label><label class="ff"><span>Au</span><input type="date" id="m-au" value="${f.au}"></label>
      <label class="chk" style="align-self:end"><input type="checkbox" id="m-ann" ${f.annules ? 'checked' : ''}> <span>Afficher les annulés</span></label></div><article class="card" id="mt"></article>`;

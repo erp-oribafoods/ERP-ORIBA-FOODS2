@@ -25,7 +25,7 @@ let echecs = 0; const verif = (ok, msg) => { console.log(`${ok ? '✓' : '✗'} 
   console.log('  ', t.map((r) => r.join(' / ')).join(' ; '));
   verif(t.every((r) => r[3] === '0') && !rej, `Contrôle : aucune ligne refusée${rej ? ' — ' + rej.slice(0, 300) : ''}`);
   const n = (k) => Number(t.find((r) => r[0].startsWith(k))?.[1] || 0);
-  verif(n('2-Appro') === 2 && n('3-Remises') === 2 && n('4-Ventes') === 3 && n('6-Transferts') === 1 && n('5-Versements (versements)') === 1 && n('5-Versements (rembours') === 1, 'Toutes les lignes du jour sont reconnues (2 appro, 2 remises, 3 ventes, 1 versement, 1 remboursement, 1 transfert)');
+  verif(n('2-Appro') === 2 && n('3-Remises') === 2 && n('4-Ventes') === 3 && n('5-Versements (versements)') === 1 && n('5-Versements (rembours') === 1, 'Toutes les lignes du jour sont reconnues (2 appro, 2 remises, 3 ventes, 1 versement, 1 remboursement, 1 transfert)');
   await p.screenshot({ path: path.join(OUT, 'journalier-controle.png') });
   await p.click('.modal [data-go]'); await p.waitForSelector('.modal .note.ok', { timeout: 120000 });
   console.log('  ', (await p.textContent('.modal .note.ok')).replace(/\s+/g, ' ').slice(0, 900));

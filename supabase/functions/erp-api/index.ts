@@ -119,6 +119,19 @@ function mapError(e: any) {
   return { status: 500, message: "Erreur serveur inattendue. Réessayez ; si le problème persiste, contactez l’administrateur." };
 }
 
+// Le mot de passe de la Gestion commerciale doit être différent de celui de la Veille & Enquêtes (veille.comptes).
+async function differentDeVeille(action: string, p: any, userId?: string) {
+  const cible = action === "auth.change_password" ? userId : action === "user.reset_password" ? p.id : null;
+  const mdp = action === "auth.change_password" ? p.nouveau : action === "user.reset_password" ? p.password : null;
+  if (!userId || !cible || !mdp) return;
+  if (action === "user.reset_password") {
+    const pr = (await pool.query(`select r.permissions from ${SCHEMA}.utilisateurs u join ${SCHEMA}.roles r on r.id = u.role_id where u.id::text = $1`, [userId])).rows[0];
+    if (!Array.isArray(pr?.permissions?.utilisateurs) || !pr.permissions.utilisateurs.includes("modifier")) return; // le cœur refusera
+  }
+  const r = (await pool.query(`select mot_de_passe_hash from veille.comptes where user_id::text = $1`, [String(cible)])).rows[0];
+  if (r && (await bcrypt.compare(String(mdp), r.mot_de_passe_hash || ""))) throw new AppError("Ce mot de passe est celui de la Veille & Enquêtes : choisissez un mot de passe différent pour la Gestion commerciale.", 400);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors(req) });
   if (req.method !== "POST") return json(req, { ok: false, error: "Méthode non autorisée" }, 405);
@@ -128,8 +141,9 @@ Deno.serve(async (req: Request) => {
     let userId: string | undefined, tokenVersion: number | undefined;
     const auth = req.headers.get("authorization") || "";
     if (auth.startsWith("Bearer ")) {
-      try { const { payload } = await jwtVerify(auth.slice(7), await secret()); userId = payload.sub as string; tokenVersion = Number(payload.tv || 0); } catch { /* non connecté */ }
+      try { const { payload } = await jwtVerify(auth.slice(7), await secret()); if (!payload.app) { userId = payload.sub as string; tokenVersion = Number(payload.tv || 0); } } catch { /* non connecté (un jeton Veille n'ouvre pas la Gestion commerciale) */ }
     }
+    await differentDeVeille(String(body?.action || ""), body.payload || {}, userId);
     const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || null;
     const result: any = await handle(db, String(body?.action || ""), body.payload || {}, { userId, tokenVersion, crypto: cryptoImpl, blobs, ip });
     if (result?.userRow) { result.token = await issue(result.userRow); delete result.userRow; }

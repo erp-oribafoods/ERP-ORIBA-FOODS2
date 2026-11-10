@@ -11,6 +11,7 @@ import { renderStock } from './pages/stock.js';
 import { renderDepenses, renderPilotage, renderBudgets, renderCloture } from './pages/depenses.js';
 import { renderReferentiels, renderParametres, renderUtilisateurs, renderRoles, renderCompte, passwordForm, bindPasswordForm } from './pages/admin.js';
 import { renderAudit } from './pages/audit.js';
+import { renderDocuments, renderArchives, renderCatalogue } from './pages/documents.js';
 import { renderReprise } from './pages/reprise.js';
 import { renderTerrain, renderAgents, renderClients } from './pages/terrain.js';
 import { renderLogistique } from './pages/logistique.js';
@@ -27,8 +28,9 @@ import { ouvrirRapports } from './lib/rapports.js';
 
 const DEMO = !!window.ERP_DEMO || (() => { try { return new URLSearchParams(location.search).has('demo'); } catch { return false; } })();
 
-const NAV_ICONS = { ventes: 'cash', cartons: 'truck', caisse: 'wallet', 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'target', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', suppression: 'alert', audit: 'eye', accueil: 'home', depots: 'warehouse', 'saisie-rapide': 'plus', credits: 'receipt', circuit: 'chart', 'circuit-depots': 'users', 'circuit-grossistes': 'warehouse', 'circuit-mouvements': 'truck', 'circuit-versements': 'wallet' };
+const NAV_ICONS = { ventes: 'cash', cartons: 'truck', caisse: 'wallet', 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'target', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', suppression: 'alert', audit: 'eye', accueil: 'home', depots: 'warehouse', 'saisie-rapide': 'plus', credits: 'receipt', circuit: 'chart', 'circuit-depots': 'users', 'circuit-grossistes': 'warehouse', 'circuit-mouvements': 'truck', 'circuit-versements': 'wallet', documents: 'file', archives: 'archive', 'catalogue-documents': 'book' };
 const ESSENTIEL = 'Essentiel';
+const DOCS_G = 'Documents et archives';
 const NAV = [
   // Un seul tableau de bord, un seul espace de saisie ; les pages en double ont été regroupées
   [ESSENTIEL, [
@@ -38,15 +40,27 @@ const NAV = [
     ['ventes', 'Ventes', () => App.can('ventes') || App.can('creances'), renderVentesUnique],
     ['credits', 'Crédits à relancer', () => App.can('circuit') || App.can('creances'), renderCreditsEssentiel],
   ]],
-  ['Suivi commercial', [
-    ['agents', 'Agents et objectifs', () => App.can('ventes') || App.can('dashboard') || App.can('objectifs'), renderAgentsObjectifs],
-    ['clients', 'Clients et grossistes', () => App.can('ventes') || App.can('creances') || App.can('dashboard') || App.can('circuit'), onglets('clients', [['cl', 'Clients', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderClients], ['gr', 'Grossistes', () => App.can('circuit'), renderGrossistes]])],
+  // Partie réservée aux documents administratifs (manuel de procédures, section 11) : toujours visible
+  [DOCS_G, [
+    ['documents', 'Établir un document', () => App.can('circuit'), renderDocuments],
+    ['archives', 'Archives et classement', () => App.can('circuit'), renderArchives],
+    ['catalogue-documents', 'Catalogue des documents', () => App.can('circuit'), renderCatalogue],
+  ]],
+  // Organisation du manuel : opérations FV-02 à FV-09, planification FV-01, dépenses FV-10, contrôle FV-11
+  ['Opérations Force de Vente', [
     ['cartons', 'Mouvements de cartons', () => App.can('circuit'), renderMouvements],
     ['caisse', 'Versements et remboursements', () => App.can('circuit') || App.can('remboursements'), onglets('caisse', [['vers', 'Versements et caisse', () => App.can('circuit'), renderVersements], ['remb', 'Remboursements des crédits', () => App.can('remboursements'), renderRemboursements]])],
+    ['clients', 'Clients et grossistes', () => App.can('ventes') || App.can('creances') || App.can('dashboard') || App.can('circuit'), onglets('clients', [['cl', 'Clients', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderClients], ['gr', 'Grossistes', () => App.can('circuit'), renderGrossistes]])],
   ]],
-  ['Dépenses et logistique', [
-    ['logistique', 'Logistique et charges', () => App.can('depenses'), onglets('logistique', [['log', 'Logistique et charges', () => App.can('depenses'), renderLogistique], ['pil', 'Pilotage des dépenses', () => App.can('depenses'), renderPilotage], ['val', 'Validation des dépenses', () => App.can('depenses', 'valider'), renderDepenses]])],
+  ['Planification et suivi', [
+    ['agents', 'Agents et objectifs', () => App.can('ventes') || App.can('dashboard') || App.can('objectifs'), renderAgentsObjectifs],
     ['budgets', 'Budgets', () => App.can('budgets'), renderBudgets],
+  ]],
+  ['Dépenses et véhicules', [
+    ['logistique', 'Logistique et charges', () => App.can('depenses'), onglets('logistique', [['log', 'Logistique et charges', () => App.can('depenses'), renderLogistique], ['pil', 'Pilotage des dépenses', () => App.can('depenses'), renderPilotage], ['val', 'Validation des dépenses', () => App.can('depenses', 'valider'), renderDepenses]])],
+  ]],
+  ['Contrôle et anomalies', [
+    ['audit', 'Audit et anomalies', () => App.can('audit') || App.can('audit', 'creer'), renderAudit],
   ]],
   ['Administration', [
     ['referentiels', 'Référentiels', () => App.can('referentiels'), renderReferentiels],
@@ -56,7 +70,6 @@ const NAV = [
     ['reprise', 'Reprise de données', () => App.can('import', 'creer'), renderReprise],
     ['saisie', 'Imports avancés', () => peutSaisirOuImporter(), renderSaisie],
     ['suppression', 'Suppression de données', () => App.can('suppression', 'supprimer'), renderSuppression],
-    ['audit', 'Audit et anomalies', () => App.can('audit') || App.can('audit', 'creer'), renderAudit],
   ]],
 ];
 // Anciennes pages : hors du menu (regroupées ailleurs) mais les liens existants restent valables
@@ -117,7 +130,7 @@ let current = null;
 const lsNav = { get() { try { return localStorage.getItem('oriba_nav_complet') === '1'; } catch { return false; } }, set(v) { try { localStorage.setItem('oriba_nav_complet', v ? '1' : '0'); } catch { /* ignoré */ } } };
 const groupe = ([g, items]) => { const vis = items.filter((i) => i[2]()); return vis.length ? `<div class="nav-g"><span>${g}</span>${vis.map((i) => `<a href="#${i[0]}" data-p="${i[0]}">${icon(NAV_ICONS[i[0]] || 'spark')}<span>${i[1]}</span></a>`).join('')}</div>` : ''; };
 function navHtml() {
-  const ess = NAV.filter(([g]) => g === ESSENTIEL), autres = NAV.filter(([g]) => g !== ESSENTIEL);
+  const ess = NAV.filter(([g]) => g === ESSENTIEL || g === DOCS_G), autres = NAV.filter(([g]) => g !== ESSENTIEL && g !== DOCS_G);
   const essHtml = ess.map(groupe).join('');
   if (!essHtml) return autres.map(groupe).join('');
   const n = autres.reduce((s, [, items]) => s + items.filter((i) => i[2]()).length, 0);

@@ -323,6 +323,32 @@ console.log('Suppression définitive (Responsable commercial seul)');
   const au = (await call(sessions.admin, 'audit.list', {})).rows;
   ok(au.some((r) => r.action === 'SUPPRESSION'), 'La suppression est tracée dans le journal d’audit');
 }
+{
+  console.log('\nDOC — Documents administratifs et archives');
+  const D0 = (await call(sessions.com, 'data.bootstrap')).data;
+  const ag = D0.agents[0];
+  const d1 = (await call(sessions.com, 'doc.emettre', { code: 'BLD', agent_id: ag.id, date: '2026-11-10', contenu: { champs: { Cédant: 'Oriba Food' } } })).document;
+  const d2 = (await call(sessions.com, 'doc.emettre', { code: 'BLD', agent_id: ag.id, date: '2026-11-11' })).document;
+  ok(/^BLD-[A-Z0-9]+-2026-0001$/.test(d1.numero) && d2.numero.endsWith('-0002'), `Numérotation CODE-ÉQUIPE-ANNÉE : ${d1.numero}, ${d2.numero}`);
+  const d3 = (await call(sessions.com, 'doc.emettre', { code: 'OBJ', date: '2026-11-10' })).document;
+  ok(d3.numero === 'OBJ-DIR-2026-0001', `Document de direction sans dépôt : ${d3.numero}`);
+  await expectErr(call(sessions.dg, 'doc.emettre', { code: 'BLD', agent_id: ag.id }), 'La DG ne peut pas émettre de document (lecture seule)', /Responsable Commercial/);
+  await expectErr(call(sessions.com, 'doc.emettre', { code: 'XXX' }), 'Type de document inconnu refusé', /inconnu/);
+  const a1 = (await call(sessions.com, 'doc.archiver', { id: d1.id, base64: Buffer.from('%PDF-1.4 test').toString('base64'), type: 'application/pdf', nom: 'BLD signe.pdf' })).document;
+  ok(a1.statut === 'archive' && a1.fichier_cle, 'Pièce signée jointe : document archivé');
+  const f = await call(sessions.dg, 'doc.fichier', { id: d1.id });
+  ok(Buffer.from(f.base64, 'base64').toString().startsWith('%PDF'), 'La DG consulte la pièce archivée');
+  await expectErr(call(sessions.com, 'doc.archiver', { code: 'FJD', base64: 'AAAA', type: 'application/x-msdownload', nom: 'x.exe' }), 'Format de fichier non admis refusé', /Format/);
+  const t1 = (await call(sessions.com, 'doc.archiver', { code: 'FJD', agent_id: ag.id, date: '2026-11-09', numero: 'FJD-PAPIER-0007', base64: 'AAAA', type: 'image/jpeg', nom: 'fjd.jpg' })).document;
+  ok(t1.source === 'televerse' && t1.numero === 'FJD-PAPIER-0007', 'Pièce papier numérisée archivée sans génération');
+  await expectErr(call(sessions.com, 'doc.archiver', { code: 'FJD', numero: 'FJD-PAPIER-0007', base64: 'AAAA', type: 'image/jpeg', nom: 'fjd.jpg' }), 'Numéro déjà archivé refusé', /existe déjà/);
+  await expectErr(call(sessions.com, 'doc.annuler', { id: d2.id }), 'Annulation sans motif refusée', /motif/);
+  const an = (await call(sessions.com, 'doc.annuler', { id: d2.id, motif: 'Erreur de quantité' })).document;
+  const D1 = (await call(sessions.dg, 'data.bootstrap')).data;
+  ok(an.statut === 'annule' && D1.documents.length === 4 && D1.documents.some((d) => d.id === d2.id), 'Document annulé conservé aux archives (rien n’est effacé), visible par la DG');
+  const au = (await call(sessions.admin, 'audit.list', { table: 'documents' })).rows;
+  ok(['DOCUMENT_EMIS', 'DOCUMENT_ARCHIVE', 'DOCUMENT_ANNULE'].every((a) => au.some((r) => r.action === a)), 'Émission, archivage et annulation tracés dans l’audit');
+}
 for (let i = 0; i < 5; i++) { try { await call(null, 'auth.login', { identifiant: 'dg', password: 'mauvais' }); } catch {} }
 await expectErr(call(null, 'auth.login', { identifiant: 'dg', password: 'Nouveau2026' }), 'Verrouillage après 5 échecs', /verrouillé/);
 

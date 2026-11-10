@@ -255,6 +255,7 @@ A['data.bootstrap'] = async ({ t, user, perms }) => {
   D.grossistes = await t.select('grossistes');
   D.circuit_mvts = P('circuit') ? await t.select('circuit_mvts') : [];
   D.versements = P('circuit') ? await t.select('versements') : [];
+  D.documents = P('circuit') ? await t.select('documents') : [];
   if (P('depenses')) {
     const cats = new Map(D.categories_depense.map((c) => [c.id, c]));
     const all = (await t.select('depenses')).filter((d) => inScope(user, d.equipe_id, d.zone_id) || d.created_by === user.id);
@@ -672,6 +673,87 @@ A['dep.file'] = async ({ t, user, perms, payload, blobs }) => {
   const f = await blobs.get(d.justificatif_cle);
   if (!f) fail('Fichier introuvable.', 404);
   return { nom: d.justificatif_nom, type: f.type, base64: f.base64 };
+};
+
+// ---------- Documents administratifs et archives (manuel de procédures, section 11) ----------
+// Numérotation : CODE-ÉQUIPE-ANNÉE-0001. Seul le profil qui saisit (circuit : créer) émet, archive ou annule.
+const DOC_CODES = new Set(['OBJ', 'PLA', 'BUD', 'BLG', 'RSG', 'RRG', 'BCI', 'BLD', 'RSD', 'FDR', 'FJV', 'RCA', 'BCR', 'RRC', 'RVA', 'FRJ', 'BVC', 'FJD', 'EHC', 'LRC', 'AVB', 'DCL', 'FRH', 'FIN', 'PVP', 'FRG', 'DDE', 'DCA', 'DEV', 'CBV', 'FPA', 'DEL', 'FEA', 'FAN', 'RAN', 'PEC', 'FEP', 'FRP', 'FAC', 'FCI', 'RHB', 'TBM']);
+const MIME_ARCHIVE = [...MIME_OK, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+async function codeEquipe(t, agentId) {
+  if (!agentId) return 'DIR';
+  const a = await one(t, 'agents', agentId, 'Dépôt');
+  let c = a.code;
+  if (!c && a.equipe_id) c = (await t.select('equipes', { id: a.equipe_id }))[0]?.code;
+  if (!c) c = String(a.nom || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/^(depot|dépôt)\s+/i, '').replace(/[^A-Za-z0-9]/g, '').slice(0, 4);
+  return String(c || 'DEP').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'DEP';
+}
+function blobEntrant(payload) {
+  if (!MIME_ARCHIVE.includes(payload.type)) fail('Format accepté : PDF, JPG, PNG, WEBP ou Word.');
+  const size = Math.floor(String(payload.base64 || '').length * 0.75);
+  if (!size) fail('Fichier vide.');
+  if (size > 4 * 1024 * 1024) fail('Fichier trop lourd (4 Mo maximum). Réduisez la photo ou le scan et réessayez.');
+}
+A['doc.emettre'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'circuit', 'creer')) fail('Seul le Responsable Commercial peut émettre des documents numérotés.', 403);
+  const code = String(payload.code || '').toUpperCase();
+  if (!DOC_CODES.has(code)) fail('Type de document inconnu.');
+  const date = payload.date || today();
+  if (!isDate(date)) fail('Date invalide.');
+  const eq = await codeEquipe(t, payload.agent_id || null);
+  const y = date.slice(0, 4);
+  const n = await t.nextSeq(`DOC-${code}-${eq}-${y}`);
+  const row = {
+    id: uid(), code, numero: `${code}-${eq}-${y}-${String(n).padStart(4, '0')}`, titre: clean(payload.titre), agent_id: payload.agent_id || null, date_doc: date,
+    source: 'genere', lien_table: clean(payload.lien_table), lien_id: clean(payload.lien_id), contenu: payload.contenu || null,
+    fichier_cle: null, fichier_nom: null, fichier_type: null, statut: 'emis', motif: null, observation: clean(payload.observation),
+    created_by: user.id, created_at: nowISO(), updated_by: null, updated_at: null,
+  };
+  const r = await t.insert('documents', row);
+  await audit(t, user, 'DOCUMENT_EMIS', 'documents', r.id, null, { numero: r.numero, code, lien: row.lien_table && `${row.lien_table}:${row.lien_id}` }, null, ip);
+  return { document: r };
+};
+A['doc.archiver'] = async ({ t, user, perms, payload, blobs, ip }) => {
+  if (!can(perms, 'circuit', 'creer')) fail('Seul le Responsable Commercial peut archiver des pièces.', 403);
+  blobEntrant(payload);
+  let d;
+  if (payload.id) {
+    d = await one(t, 'documents', payload.id, 'Document');
+    if (d.statut === 'annule') fail('Ce document est annulé : impossible d’y joindre une pièce.');
+  } else {
+    const code = String(payload.code || '').toUpperCase();
+    if (!DOC_CODES.has(code)) fail('Choisissez le type de document de la pièce.');
+    const date = payload.date || today();
+    if (!isDate(date)) fail('Date invalide.');
+    const numero = clean(payload.numero);
+    if (numero && (await t.select('documents', { numero })).length) fail(`Le numéro ${numero} existe déjà dans les archives.`);
+    d = await t.insert('documents', {
+      id: uid(), code, numero, titre: clean(payload.titre), agent_id: payload.agent_id || null, date_doc: date, source: 'televerse', lien_table: null, lien_id: null, contenu: null,
+      fichier_cle: null, fichier_nom: null, fichier_type: null, statut: 'archive', motif: null, observation: clean(payload.observation), created_by: user.id, created_at: nowISO(), updated_by: null, updated_at: null,
+    });
+  }
+  const key = `docs/${d.id}/${Date.now()}-${String(payload.nom || 'piece').replace(/[^\w.\-]+/g, '_').slice(0, 80)}`;
+  await blobs.put(key, payload.base64, { type: payload.type, nom: payload.nom });
+  const r = await t.update('documents', d.id, { fichier_cle: key, fichier_nom: payload.nom, fichier_type: payload.type, statut: 'archive', updated_by: user.id, updated_at: nowISO() });
+  await audit(t, user, 'DOCUMENT_ARCHIVE', 'documents', d.id, d.fichier_nom ? { fichier: d.fichier_nom } : null, { numero: r.numero, fichier: payload.nom }, null, ip);
+  return { document: r };
+};
+A['doc.fichier'] = async ({ t, perms, payload, blobs }) => {
+  if (!can(perms, 'circuit', 'lire')) fail('Droit insuffisant.', 403);
+  const d = await one(t, 'documents', payload.id, 'Document');
+  if (!d.fichier_cle) fail('Aucune pièce numérisée pour ce document.', 404);
+  const f = await blobs.get(d.fichier_cle);
+  if (!f) fail('Fichier introuvable.', 404);
+  return { nom: d.fichier_nom, type: f.type || d.fichier_type, base64: f.base64 };
+};
+A['doc.annuler'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'circuit', 'annuler')) fail('Droit insuffisant pour annuler un document.', 403);
+  const d = await one(t, 'documents', payload.id, 'Document');
+  if (d.statut === 'annule') fail('Document déjà annulé.');
+  const motif = clean(payload.motif);
+  if (!motif) fail('Indiquez le motif de l’annulation (le numéro reste réservé).');
+  const r = await t.update('documents', d.id, { statut: 'annule', motif, updated_by: user.id, updated_at: nowISO() });
+  await audit(t, user, 'DOCUMENT_ANNULE', 'documents', d.id, { statut: d.statut }, { statut: 'annule' }, motif, ip);
+  return { document: r };
 };
 
 async function decideDepense(t, user, perms, id, decision, commentaire, ip) {
@@ -1390,7 +1472,7 @@ A['audit.list'] = async ({ t, perms, payload }) => {
 
 // Point d'entrée
 const PUBLIC = new Set(['auth.status', 'auth.init_admin', 'auth.login']);
-const READ_ONLY = new Set(['auth.status', 'auth.me', 'data.bootstrap', 'dep.file', 'audit.list', 'purge.preview']);
+const READ_ONLY = new Set(['auth.status', 'auth.me', 'data.bootstrap', 'dep.file', 'doc.fichier', 'audit.list', 'purge.preview']);
 
 export async function handle(db, action, payload, ctx = {}) {
   const fn = A[action];

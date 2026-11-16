@@ -250,7 +250,7 @@ A["users.list"] = async ({ d }) => {
   const rows = (await q(`select u.id, u.username, u.prenom, u.nom, u.email, u.telephone, u.statut, u.last_login, r.nom as role_nom, r.permissions, a.niveau,
       c.user_id as a_mdp, c.must_change_password, c.verrou_jusqua
     from erp.utilisateurs u left join erp.roles r on r.id = u.role_id left join veille.acces a on a.user_id = u.id left join veille.comptes c on c.user_id = u.id
-    where u.statut <> 'desactive' order by u.nom`)).rows;
+    where u.statut not in ('desactive', 'supprime') order by u.nom`)).rows;
   return { users: rows.map((r: any) => ({ id: r.id, username: r.username, prenom: r.prenom, nom: r.nom, email: r.email, telephone: r.telephone, statut: r.statut, last_login: r.last_login,
     must_change_password: !!r.must_change_password, sans_mot_de_passe_veille: !r.a_mdp, verrouille: !!(r.verrou_jusqua && new Date(r.verrou_jusqua) > new Date()), role_nom: r.role_nom,
     niveau: r.niveau || niveauDefaut(r.permissions || {}), defini: !!r.niveau, enqueteur: r.role_nom === "Enquêteur Veille marché" })) };
@@ -308,6 +308,7 @@ A["users.set_statut"] = async ({ user, d, payload, ip }) => {
   const u = await cible(payload.id);
   const statut = payload.statut === "actif" ? "actif" : "suspendu";
   if (u.id === user.id) fail("Vous ne pouvez pas suspendre votre propre compte.");
+  if (u.statut === "supprime") fail("Ce compte a été supprimé.");
   await q(`update erp.utilisateurs set statut = $2, token_version = coalesce(token_version,0) + 1, echecs = 0, verrou_jusqua = null, updated_at = now() where id = $1`, [u.id, statut]);
   await q(`update veille.comptes set token_version = token_version + 1, echecs = 0, verrou_jusqua = null where user_id = $1`, [u.id]);
   await audit(user, statut === "actif" ? "REACTIVATION" : "SUSPENSION", "utilisateurs", u.id, { username: u.username, app: "veille" }, ip);

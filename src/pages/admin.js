@@ -67,13 +67,15 @@ export function renderUtilisateurs(root) {
   const can = App.can('utilisateurs', 'modifier');
   root.innerHTML = pageHead('Utilisateurs', 'Comptes nominatifs. Les mots de passe sont chiffrés : personne, pas même l’administrateur, ne peut les lire.',
     can ? `<button class="btn primary" id="new">${icon('plus')} Nouveau compte</button>` : '') + '<div class="card" id="tb"></div>';
-  new Table({ title: 'Utilisateurs', rows: App.D.utilisateurs, pageSize: 30, sort: { k: 'nom', dir: 1 }, onRow: can ? (r) => userForm(r) : null,
+  const supprimes = App.D.utilisateurs.filter((u) => u.statut === 'supprime').length;
+  new Table({ title: 'Utilisateurs', rows: App.D.utilisateurs.filter((u) => u.statut !== 'supprime'), pageSize: 30, sort: { k: 'nom', dir: 1 }, onRow: can ? (r) => userForm(r) : null,
     cols: [{ k: 'nom', l: 'Nom', v: (r) => [r.prenom, r.nom].filter(Boolean).join(' ') }, { k: 'username', l: 'Identifiant' }, { k: 'email', l: 'E-mail' },
       { k: 'role', l: 'Rôle', v: (r) => App.I.roles.get(r.role_id)?.nom || '—' },
       { k: 'perim', l: 'Périmètre', v: (r) => (r.perimetre_type === 'global' ? 'Global' : `${r.perimetre_type === 'zone' ? 'Zone' : 'Équipe'} : ${(r.perimetre_ids || []).map((i) => (r.perimetre_type === 'zone' ? nm.zone(i) : nm.equipe(i))).join(', ')}`) },
       { k: 'statut', l: 'Statut', f: (r) => pill({ actif: 'Actif', suspendu: 'Suspendu', desactive: 'Désactivé' }[r.statut], { actif: 'ok', suspendu: 'warn', desactive: 'mute' }[r.statut]) + (r.must_change_password ? ' ' + pill('Mot de passe initial', 'info') : '') },
       { k: 'last_login', l: 'Dernière connexion', f: (r) => (r.last_login ? new Date(r.last_login).toLocaleString('fr-FR', { timeZone: 'Africa/Niamey' }) : 'Jamais') },
       { k: 'created_at', l: 'Créé le', f: (r) => fmtD(r.created_at) }] }).mount($('#tb', root));
+  if (supprimes) $('#tb', root).insertAdjacentHTML('beforeend', `<p class="muted small" style="margin:10px 4px 0">${supprimes} compte${supprimes > 1 ? 's' : ''} supprimé${supprimes > 1 ? 's' : ''} : retiré${supprimes > 1 ? 's' : ''} de la liste, nom conservé dans l’historique des opérations.</p>`);
   $('#new', root)?.addEventListener('click', () => userForm(null));
 }
 
@@ -96,7 +98,7 @@ function userForm(u) {
       <div class="fld span2" id="perim"></div>
       ${u ? '' : `<label class="fld span2"><span>Mot de passe initial *</span><input name="password" type="text" value="${pass}" autocomplete="off"><small>À communiquer à la personne : elle devra le changer à sa première connexion.</small></label>`}
       </div><p class="err" hidden></p></form>`,
-    footer: `${u ? '<button class="btn ghost" id="reset">Réinitialiser le mot de passe</button>' : ''}<span class="grow"></span><button class="btn ghost" data-close>Annuler</button><button class="btn primary" id="save">Enregistrer</button>`,
+    footer: `${u ? '<button class="btn ghost" id="reset">Réinitialiser le mot de passe</button>' : ''}${u && u.id !== App.user?.id ? `<button class="btn danger ghost" id="del">${icon('x')} Supprimer le compte</button>` : ''}<span class="grow"></span><button class="btn ghost" data-close>Annuler</button><button class="btn primary" id="save">Enregistrer</button>`,
     onMount: (m, close) => {
       const ids = new Set(u?.perimetre_ids || []);
       const drawP = () => {
@@ -118,6 +120,17 @@ function userForm(u) {
           close();
         } catch (e) { showErr(m, e.message); }
       }));
+      $('#del', m.parentElement)?.addEventListener('click', async () => {
+        const nom = esc([u.prenom, u.nom].filter(Boolean).join(' ') || u.username);
+        const motif = await confirmBox({ title: `Supprimer le compte de ${nom}`, danger: true, motif: true, motifLabel: 'Motif de la suppression', okLabel: 'Supprimer définitivement',
+          message: `La personne ne pourra plus se connecter, ni à la Gestion commerciale ni à la Veille &amp; Enquêtes, et le compte disparaît de la liste.<br>Si elle a déjà saisi des opérations, son nom reste affiché dans l’historique (ventes, audit…) ; sinon le compte est entièrement effacé.<br>Cette action ne peut pas être annulée.` });
+        if (!motif) return;
+        try {
+          const r = await App.act('user.delete', { id: u.id, motif }, null);
+          toast(r?.supprime === 'definitif' ? 'Compte supprimé.' : 'Compte supprimé (son nom reste dans l’historique des opérations).');
+          close();
+        } catch (e) { toast(e.message, 'err'); }
+      });
       $('#reset', m.parentElement)?.addEventListener('click', async () => {
         const np = genPassword();
         const ok = await confirmBox({ title: 'Réinitialiser le mot de passe', message: `Nouveau mot de passe temporaire : <b class="mono">${np}</b><br>Notez-le pour le transmettre. La personne devra le changer à la connexion ; ses sessions ouvertes seront fermées.`, okLabel: 'Réinitialiser' });

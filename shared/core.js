@@ -1,6 +1,6 @@
 // Cœur applicatif : toutes les opérations passent par ici, avec contrôle des droits côté serveur,
 // règles de gestion et journal d'audit. Le même code tourne dans la fonction Netlify et dans la démo.
-import { MODULES, REFS, WRITABLE, DEFAULT_PARAMS, DEFAULT_ROLES, STOCK_TYPES, AXES_OBJECTIF, SUIVI_CHAMPS } from './schema.js';
+import { MODULES, TABLES, REFS, WRITABLE, DEFAULT_PARAMS, DEFAULT_ROLES, STOCK_TYPES, AXES_OBJECTIF, SUIVI_CHAMPS } from './schema.js';
 import {
   buildIndex, creditInfo, encoursClient, plafondClient, niveauPlafond, lots, lineCalc, today, nowISO, moisDe,
   isDate, num, round2, addDays, moisClos, fmtF, fmtQ, jourSaisie, estVerrouille,
@@ -1085,6 +1085,43 @@ A['user.reset_password'] = async ({ t, user, perms, payload, crypto, ip }) => {
   await t.update('utilisateurs', u.id, { mot_de_passe_hash: await crypto.hash(payload.password), must_change_password: true, echecs: 0, verrou_jusqua: null, token_version: (u.token_version || 0) + 1, updated_at: nowISO() });
   await audit(t, user, 'REINITIALISATION_MOT_DE_PASSE', 'utilisateurs', u.id, null, null, null, ip);
   return { ok: true };
+};
+
+// Suppression d'un compte. Sans aucune opération enregistrée, le compte est effacé (et son accès à la Veille avec lui).
+// S'il a déjà saisi ou validé quelque chose, il est retiré de la liste et ne peut plus se connecter, mais son nom reste
+// attaché à l'historique (ventes, audit…) ; son identifiant et son e-mail sont libérés pour un nouveau compte.
+A['user.delete'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'utilisateurs', 'modifier')) fail('Droit insuffisant pour supprimer des comptes.', 403);
+  const u = await one(t, 'utilisateurs', payload.id, 'Compte');
+  if (u.statut === 'supprime') fail('Ce compte est déjà supprimé.');
+  if (u.id === user.id) fail('Vous ne pouvez pas supprimer votre propre compte.');
+  const motif = clean(payload.motif);
+  if (!motif) fail('Indiquez le motif de la suppression.');
+  const roles = await t.select('roles');
+  const gere = (x) => can(roles.find((r) => r.id === x.role_id)?.permissions || {}, 'utilisateurs', 'modifier');
+  if (gere(u) && !(await t.select('utilisateurs')).some((x) => x.id !== u.id && x.statut === 'actif' && gere(x))) fail('Impossible : c’est le dernier compte capable de gérer les utilisateurs.');
+  // Le compte a-t-il laissé une trace dans les données (hors connexions) ?
+  const COLS = ['created_by', 'updated_by', 'valide_par', 'controle_par', 'traite_par', 'verse_par', 'user_id'];
+  let trace = false;
+  for (const table of TABLES) {
+    if (['utilisateurs', 'roles', 'audit_log', 'compteurs', 'config', 'fichiers'].includes(table)) continue;
+    const rows = await t.select(table);
+    if (rows.some((r) => COLS.some((c) => r[c] === u.id))) { trace = true; break; }
+  }
+  if (!trace) trace = (await t.select('audit_log', { user_id: u.id })).some((a) => !/^(CONNEXION|DECONNEXION|LOGIN|LOGOUT|ECHEC|MOT_DE_PASSE)/.test(a.action || ''));
+  const avant = stripUser(u);
+  if (!trace) {
+    await t.remove('utilisateurs', { id: u.id });
+    await audit(t, user, 'SUPPRESSION', 'utilisateurs', u.id, avant, null, motif, ip);
+    return { supprime: 'definitif' };
+  }
+  const suffixe = String(u.id).slice(0, 8);
+  const r = await t.update('utilisateurs', u.id, {
+    statut: 'supprime', username: `supprime-${suffixe}`, email: `supprime-${suffixe}@oriba.invalid`, telephone: null,
+    token_version: (u.token_version || 0) + 1, must_change_password: true, updated_at: nowISO(),
+  });
+  await audit(t, user, 'SUPPRESSION', 'utilisateurs', u.id, avant, stripUser(r), motif, ip);
+  return { supprime: 'historique' };
 };
 
 A['role.save'] = async ({ t, user, perms, payload, ip }) => {

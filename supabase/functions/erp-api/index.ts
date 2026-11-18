@@ -119,7 +119,7 @@ function mapError(e: any) {
   return { status: 500, message: "Erreur serveur inattendue. Réessayez ; si le problème persiste, contactez l’administrateur." };
 }
 
-// Le mot de passe de la Gestion commerciale doit être différent de celui de la Veille & Enquêtes (veille.comptes).
+// Le mot de passe de la Gestion commerciale doit être différent de celui de la Veille & Enquêtes.
 async function differentDeVeille(action: string, p: any, userId?: string) {
   const cible = action === "auth.change_password" ? userId : action === "user.reset_password" ? p.id : null;
   const mdp = action === "auth.change_password" ? p.nouveau : action === "user.reset_password" ? p.password : null;
@@ -128,7 +128,11 @@ async function differentDeVeille(action: string, p: any, userId?: string) {
     const pr = (await pool.query(`select r.permissions from ${SCHEMA}.utilisateurs u join ${SCHEMA}.roles r on r.id = u.role_id where u.id::text = $1`, [userId])).rows[0];
     if (!Array.isArray(pr?.permissions?.utilisateurs) || !pr.permissions.utilisateurs.includes("modifier")) return; // le cœur refusera
   }
-  const r = (await pool.query(`select mot_de_passe_hash from veille.comptes where user_id::text = $1`, [String(cible)])).rows[0];
+  // La Veille a ses propres comptes (veille.utilisateurs), rapprochés par e-mail. Si la table change, le contrôle est ignoré plutôt que de bloquer.
+  let r: any = null;
+  try {
+    r = (await pool.query(`select v.mot_de_passe_hash from veille.utilisateurs v join ${SCHEMA}.utilisateurs u on lower(u.email) = lower(v.email) where u.id::text = $1 limit 1`, [String(cible)])).rows[0];
+  } catch (e) { console.error("controle Veille ignore", e); }
   if (r && (await bcrypt.compare(String(mdp), r.mot_de_passe_hash || ""))) throw new AppError("Ce mot de passe est celui de la Veille & Enquêtes : choisissez un mot de passe différent pour la Gestion commerciale.", 400);
 }
 

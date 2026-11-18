@@ -1,6 +1,6 @@
 // Cœur applicatif : toutes les opérations passent par ici, avec contrôle des droits côté serveur,
 // règles de gestion et journal d'audit. Le même code tourne dans la fonction Netlify et dans la démo.
-import { MODULES, TABLES, REFS, WRITABLE, DEFAULT_PARAMS, DEFAULT_ROLES, STOCK_TYPES, AXES_OBJECTIF, SUIVI_CHAMPS } from './schema.js';
+import { MODULES, TABLES, REFS, WRITABLE, DEFAULT_PARAMS, DEFAULT_ROLES, STOCK_TYPES, AXES_OBJECTIF, SUIVI_CHAMPS, MAYO_PRODUITS, MAYO_MARQUES } from './schema.js';
 import {
   buildIndex, creditInfo, encoursClient, plafondClient, niveauPlafond, lots, lineCalc, today, nowISO, moisDe,
   isDate, num, round2, addDays, moisClos, fmtF, fmtQ, jourSaisie, estVerrouille,
@@ -256,6 +256,7 @@ A['data.bootstrap'] = async ({ t, user, perms }) => {
   D.circuit_mvts = P('circuit') ? await t.select('circuit_mvts') : [];
   D.versements = P('circuit') ? await t.select('versements') : [];
   D.documents = P('circuit') ? await t.select('documents') : [];
+  for (const k of ['mayo_fiches', 'mayo_lignes', 'mayo_visites', 'mayo_objectifs']) D[k] = P('mayo') ? await t.select(k) : [];
   if (P('depenses')) {
     const cats = new Map(D.categories_depense.map((c) => [c.id, c]));
     const all = (await t.select('depenses')).filter((d) => inScope(user, d.equipe_id, d.zone_id) || d.created_by === user.id);
@@ -673,6 +674,137 @@ A['dep.file'] = async ({ t, user, perms, payload, blobs }) => {
   const f = await blobs.get(d.justificatif_cle);
   if (!f) fail('Fichier introuvable.', 404);
   return { nom: d.justificatif_nom, type: f.type, base64: f.base64 };
+};
+
+// ---------- Vente de mayonnaise (équipe de nuit) ----------
+// Fiche journalière d'un vendeur : stock initial, packs vendus au comptant et à crédit par produit (Oriba, Aïda, Délice),
+// observations et réactions du terrain. Visites des vendeurs (prise de commande, marques présentes). Objectifs mensuels.
+const MAYO_PK = new Set(MAYO_PRODUITS.map((p) => p.k));
+const MAYO_MK = new Set(MAYO_MARQUES.map((m) => m.k));
+const nombre = (v, lib) => { const n = v === '' || v == null ? 0 : Number(v); if (!Number.isFinite(n) || n < 0) fail(`« ${lib} » : nombre positif attendu.`); return round2(n); };
+// Normalise les marques citées (« BISTRO », « STOCK CHAMPION », « crédit avec leur grossiste LESIEUR »…) vers la liste connue.
+const MAYO_ALIAS = [[/BISTRO/, 'BISTROS'], [/EVRE ?DAY|EVERY ?DAY/, 'EVERYDAY'], [/ADLECO|ADELCO/, 'ADELCO'], [/PETIT ?MATIN/, 'PETIT MATIN'], [/DELICE/, 'DELICE'], [/AIDA/, 'AIDA']];
+function marquesPropres(l) {
+  return [...new Set((Array.isArray(l) ? l : String(l || '').split(/[\/,;+]/)).map((m) => {
+    let x = String(m).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().replace(/\s+/g, ' ');
+    if (!x) return '';
+    for (const [re, k] of MAYO_ALIAS) if (re.test(x)) return k;
+    const connue = MAYO_MARQUES.find((b) => x === b.k || x.split(' ').includes(b.k));
+    return connue ? connue.k : x.slice(0, 40);
+  }).filter((m) => m))].slice(0, 12);
+}
+A['mayo.fiche.save'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'mayo', 'creer')) fail('Droit insuffisant pour saisir les ventes de mayonnaise.', 403);
+  const f = payload.fiche || {};
+  if (!isDate(f.date)) fail('Date de la fiche invalide.');
+  if (f.date > today()) fail('La date ne peut pas être dans le futur.');
+  const vendeur = clean(f.vendeur); if (!vendeur) fail('Indiquez le vendeur.');
+  const p = await getParams(t);
+  const lignes = [];
+  for (const l of Array.isArray(f.lignes) ? f.lignes : []) {
+    if (!MAYO_PK.has(l.produit)) fail('Produit inconnu.');
+    const lib = MAYO_PRODUITS.find((x) => x.k === l.produit).l;
+    const si = nombre(l.stock_initial, `${lib} — stock initial`), vc = nombre(l.vendu_comptant, `${lib} — vendu au comptant`), vk = nombre(l.vendu_credit, `${lib} — vendu à crédit`);
+    if (!si && !vc && !vk) continue;
+    if (vc + vk > si) fail(`${lib} : ${vc + vk} packs vendus pour ${si} en stock initial. Corrigez le stock ou les ventes.`);
+    if (vk > 0 && !clean(l.client_credit)) fail(`${lib} : indiquez le client à qui le crédit a été accordé.`);
+    lignes.push({ produit: l.produit, stock_initial: si, vendu_comptant: vc, vendu_credit: vk, prix: num(p[MAYO_PRODUITS.find((x) => x.k === l.produit).prix]), client_credit: clean(l.client_credit) });
+  }
+  if (!lignes.length) fail('Saisissez au moins un produit (stock et ventes).');
+  const memes = (await t.select('mayo_fiches', { date: f.date })).filter((x) => x.statut !== 'annulee' && low(x.vendeur) === low(vendeur) && x.id !== f.id);
+  if (memes.length) fail(`Une fiche existe déjà pour ${vendeur} le ${f.date.split('-').reverse().join('/')} (${memes[0].numero}). Ouvrez-la pour la corriger.`);
+  const head = { date: f.date, vendeur, axe: clean(f.axe), observation: clean(f.observation), reaction: clean(f.reaction) };
+  let fiche;
+  if (f.id) {
+    const old = await one(t, 'mayo_fiches', f.id, 'Fiche');
+    if (old.statut === 'annulee') fail('Fiche annulée : elle ne peut plus être modifiée.');
+    verrouJour(old, 'Cette fiche');
+    fiche = await t.update('mayo_fiches', old.id, { ...head, updated_by: user.id, updated_at: nowISO() });
+    await t.remove('mayo_lignes', { fiche_id: old.id });
+    await audit(t, user, 'MODIFICATION', 'mayo_fiches', old.id, old, { ...head, lignes }, null, ip);
+  } else {
+    fiche = await t.insert('mayo_fiches', { id: uid(), numero: await nextNumero(t, 'MY', f.date), ...head, statut: 'validee', motif: null, ref_externe: clean(f.ref_externe), created_by: user.id, created_at: nowISO(), updated_by: null, updated_at: null });
+    await audit(t, user, 'CREATION', 'mayo_fiches', fiche.id, null, { numero: fiche.numero, ...head, lignes }, null, ip);
+  }
+  for (const l of lignes) await t.insert('mayo_lignes', { id: uid(), fiche_id: fiche.id, ...l });
+  return { fiche };
+};
+A['mayo.fiche.annuler'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'mayo', 'annuler')) fail('Droit insuffisant pour annuler.', 403);
+  const f = await one(t, 'mayo_fiches', payload.id, 'Fiche');
+  if (f.statut === 'annulee') fail('Fiche déjà annulée.');
+  verrouJour(f, 'Cette fiche');
+  const motif = clean(payload.motif); if (!motif) fail('Indiquez le motif de l’annulation.');
+  const r = await t.update('mayo_fiches', f.id, { statut: 'annulee', motif, updated_by: user.id, updated_at: nowISO() });
+  await audit(t, user, 'ANNULATION', 'mayo_fiches', f.id, { statut: f.statut }, { statut: 'annulee' }, motif, ip);
+  return { fiche: r };
+};
+function visitePropre(v) {
+  if (!isDate(v.date)) fail('Date de visite invalide.');
+  if (v.date > today()) fail('La date de visite ne peut pas être dans le futur.');
+  const client = clean(v.client); if (!client) fail('Indiquez le nom du vendeur visité (ou « Client 1 », « Client 2 »…).');
+  const prise = v.prise === true || /^(oui|o|1|true)$/i.test(String(v.prise || ''));
+  return {
+    date: v.date, axe: clean(v.axe), agent: clean(v.agent), client, telephone: clean(v.telephone), lieu: clean(v.lieu), prise,
+    marques: marquesPropres(v.marques), motif: clean(v.motif), observation: clean(v.observation), date_relance: isDate(v.date_relance) ? v.date_relance : null,
+  };
+}
+A['mayo.visite.save'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'mayo', 'creer')) fail('Droit insuffisant pour saisir les visites.', 403);
+  const v = visitePropre(payload.visite || {});
+  if (payload.visite?.id) {
+    const old = await one(t, 'mayo_visites', payload.visite.id, 'Visite');
+    if (old.statut === 'annulee') fail('Visite annulée.');
+    verrouJour(old, 'Cette visite');
+    const r = await t.update('mayo_visites', old.id, { ...v, updated_by: user.id, updated_at: nowISO() });
+    await audit(t, user, 'MODIFICATION', 'mayo_visites', old.id, old, v, null, ip);
+    return { visite: r };
+  }
+  const r = await t.insert('mayo_visites', { id: uid(), ...v, statut: 'validee', motif_annulation: null, ref_externe: null, created_by: user.id, created_at: nowISO(), updated_by: null, updated_at: null });
+  await audit(t, user, 'CREATION', 'mayo_visites', r.id, null, v, null, ip);
+  return { visite: r };
+};
+A['mayo.visite.annuler'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'mayo', 'annuler')) fail('Droit insuffisant pour annuler.', 403);
+  const v = await one(t, 'mayo_visites', payload.id, 'Visite');
+  if (v.statut === 'annulee') fail('Visite déjà annulée.');
+  verrouJour(v, 'Cette visite');
+  const motif = clean(payload.motif); if (!motif) fail('Indiquez le motif de l’annulation.');
+  const r = await t.update('mayo_visites', v.id, { statut: 'annulee', motif_annulation: motif, updated_by: user.id, updated_at: nowISO() });
+  await audit(t, user, 'ANNULATION', 'mayo_visites', v.id, null, { statut: 'annulee' }, motif, ip);
+  return { visite: r };
+};
+// Import des onglets « Axe » du classeur de suivi des vendeurs : une ligne = une visite ; les lignes déjà importées sont ignorées.
+A['mayo.visites.import'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'mayo', 'creer')) fail('Droit insuffisant pour importer.', 403);
+  const rows = Array.isArray(payload.visites) ? payload.visites.slice(0, 3000) : [];
+  const deja = new Set((await t.select('mayo_visites')).map((v) => v.ref_externe).filter(Boolean));
+  const st = { recues: rows.length, ajoutees: 0, deja: 0, erreurs: [] };
+  for (const x of rows) {
+    const ref = clean(x.ref_externe);
+    if (ref && deja.has(ref)) { st.deja++; continue; }
+    try {
+      const v = visitePropre(x);
+      await t.insert('mayo_visites', { id: uid(), ...v, statut: 'validee', motif_annulation: null, ref_externe: ref, created_by: user.id, created_at: nowISO(), updated_by: null, updated_at: null });
+      if (ref) deja.add(ref);
+      st.ajoutees++;
+    } catch (e) { st.erreurs.push({ ref, erreur: e.message }); }
+  }
+  await audit(t, user, 'IMPORT', 'mayo_visites', null, null, { fichier: clean(payload.fichier), ajoutees: st.ajoutees, deja: st.deja, erreurs: st.erreurs.length }, null, ip);
+  return st;
+};
+A['mayo.objectif.save'] = async ({ t, user, perms, payload, ip }) => {
+  if (!can(perms, 'mayo', 'creer')) fail('Droit insuffisant pour fixer les objectifs.', 403);
+  const mois = String(payload.mois || ''); if (!/^\d{4}-\d{2}$/.test(mois)) fail('Mois invalide.');
+  const res = [];
+  for (const o of Array.isArray(payload.objectifs) ? payload.objectifs : []) {
+    if (!MAYO_PK.has(o.produit) && o.produit !== 'visites') fail('Produit inconnu.');
+    const val = nombre(o.objectif, 'Objectif');
+    const ex = (await t.select('mayo_objectifs', { mois, produit: o.produit }))[0];
+    if (ex) { if (num(ex.objectif) !== val) { res.push(await t.update('mayo_objectifs', ex.id, { objectif: val, updated_by: user.id, updated_at: nowISO() })); await audit(t, user, 'MODIFICATION', 'mayo_objectifs', ex.id, { objectif: ex.objectif }, { mois, produit: o.produit, objectif: val }, null, ip); } }
+    else if (val > 0) { const r = await t.insert('mayo_objectifs', { id: uid(), mois, produit: o.produit, objectif: val, created_by: user.id, created_at: nowISO(), updated_by: null, updated_at: null }); res.push(r); await audit(t, user, 'CREATION', 'mayo_objectifs', r.id, null, { mois, produit: o.produit, objectif: val }, null, ip); }
+  }
+  return { objectifs: res };
 };
 
 // ---------- Documents administratifs et archives (manuel de procédures, section 11) ----------

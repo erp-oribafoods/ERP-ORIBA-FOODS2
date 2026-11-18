@@ -19,6 +19,7 @@ export const MODULES = [
   { k: 'import', l: 'Reprise de données', a: ['creer'] },
   { k: 'suppression', l: 'Suppression définitive de données', a: ['supprimer'] },
   { k: 'audit', l: "Journal d'audit & anomalies", a: ['lire', 'creer'] },
+  { k: 'mayo', l: 'Vente de mayonnaise (équipe de nuit)', a: ['lire', 'creer', 'annuler', 'exporter'] },
 ];
 
 export const ACTION_LABELS = {
@@ -36,7 +37,7 @@ export const DEFAULT_ROLES = [
       dashboard: ['lire'], ventes: ['lire', 'exporter'], remboursements: ['lire', 'exporter'],
       creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], circuit: ['lire', 'exporter'], objectifs: ['lire', 'modifier'], suivi: ['lire'], depenses: ['lire', 'valider', 'exporter'],
       salaires: ['lire'], budgets: ['lire', 'modifier'], cloture: ['lire'], referentiels: ['lire'],
-      parametres: ['lire'], audit: ['lire', 'creer'],
+      parametres: ['lire'], audit: ['lire', 'creer'], mayo: ['lire', 'exporter'],
     },
   },
   {
@@ -47,6 +48,7 @@ export const DEFAULT_ROLES = [
       creances: all('creances'), stock: all('stock'), circuit: all('circuit'), objectifs: ['lire', 'modifier'], suivi: ['lire', 'modifier'],
       depenses: ['lire', 'creer', 'modifier', 'controler', 'exporter'], budgets: ['lire'],
       cloture: ['lire'], referentiels: ['lire', 'modifier'], parametres: ['lire'], import: ['creer'], suppression: ['supprimer'],
+      mayo: all('mayo'),
     },
   },
   {
@@ -55,7 +57,7 @@ export const DEFAULT_ROLES = [
     permissions: {
       dashboard: ['lire'], ventes: ['lire', 'exporter'], remboursements: ['lire', 'exporter'],
       creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], circuit: ['lire', 'exporter'], objectifs: ['lire'], suivi: ['lire'], depenses: ['lire', 'exporter'],
-      budgets: ['lire'], cloture: ['lire'], referentiels: ['lire'], parametres: ['lire'], audit: ['lire', 'creer'],
+      budgets: ['lire'], cloture: ['lire'], referentiels: ['lire'], parametres: ['lire'], audit: ['lire', 'creer'], mayo: ['lire', 'exporter'],
     },
   },
   {
@@ -65,7 +67,7 @@ export const DEFAULT_ROLES = [
       dashboard: ['lire'], ventes: ['lire', 'exporter'], remboursements: ['lire', 'exporter'],
       creances: ['lire', 'exporter'], stock: ['lire', 'exporter'], circuit: ['lire', 'exporter'], objectifs: ['lire'], suivi: ['lire'],
       depenses: ['lire', 'valider', 'annuler', 'exporter'], salaires: ['lire'], budgets: ['lire', 'modifier'],
-      cloture: ['lire', 'modifier'], referentiels: ['lire'], parametres: ['lire', 'modifier'], audit: ['lire', 'creer'],
+      cloture: ['lire', 'modifier'], referentiels: ['lire'], parametres: ['lire', 'modifier'], audit: ['lire', 'creer'], mayo: ['lire', 'exporter'],
     },
   },
   {
@@ -107,6 +109,7 @@ export const DEFAULT_PARAMS = {
   prime_note_min: 8,
   prime_montant: 25000,
   circuit_date_depart: { date: null },
+  mayo_prix_oriba: 9500, mayo_prix_aida: 11000, mayo_prix_delice: 9500,
 };
 
 export const PARAM_DEFS = [
@@ -123,6 +126,9 @@ export const PARAM_DEFS = [
   { k: 'seuils_budget', l: "Seuils d'alerte budgets (%)", t: 'list', g: 'Dépenses' },
   { k: 'seuil_depense_elevee', l: 'Montant de dépense à signaler (FCFA)', t: 'number', g: 'Dépenses' },
   { k: 'jours_saisie_tardive', l: 'Saisie tardive au-delà de (jours)', t: 'number', g: 'Dépenses' },
+  { k: 'mayo_prix_oriba', l: 'Prix du pack Mayonnaise Oriba (FCFA)', t: 'number', g: 'Vente de mayonnaise' },
+  { k: 'mayo_prix_aida', l: 'Prix du pack Mayonnaise Aïda (FCFA)', t: 'number', g: 'Vente de mayonnaise' },
+  { k: 'mayo_prix_delice', l: 'Prix du pack Mayonnaise Délice (FCFA)', t: 'number', g: 'Vente de mayonnaise' },
   { k: 'double_controle', l: 'Double contrôle : interdire de valider ses propres saisies (dépenses, demandes carburant/vidange)', t: 'bool', g: 'Dépenses' },
   { k: 'prime_note_min', l: 'Note minimale pour la prime mensuelle (sur 10)', t: 'number', g: 'Agents terrain' },
   { k: 'prime_montant', l: 'Montant de la prime mensuelle (FCFA)', t: 'number', g: 'Agents terrain' },
@@ -275,6 +281,7 @@ export const TABLES = [
   'parametres', 'roles', 'utilisateurs', 'compteurs', 'ventes', 'vente_lignes', 'remboursements', 'relances',
   'stock_mouvements', 'depenses', 'depense_repartitions', 'depense_validations', 'budgets', 'clotures',
   'anomalies', 'imports', 'audit_log', 'objectifs', 'suivi_agents', 'demandes', 'grossistes', 'circuit_mvts', 'versements', 'documents',
+  'mayo_fiches', 'mayo_lignes', 'mayo_visites', 'mayo_objectifs',
 ];
 
 // Fiche mensuelle d'un agent terrain (présence, activité, évaluation)
@@ -296,3 +303,17 @@ export const CIRCUIT_TYPES = { appro: 'Approvisionnement d’un grossiste', pris
 export const FOURNISSEURS = ['Oriba Food', 'Oriba Rice'];
 export const OBJETS_VERSEMENT = { ventes_comptant: 'Ventes comptant', reglement_grossiste: 'Règlement grossiste' };
 export const LIEUX_VERSEMENT = { caisse: 'Caisse Oriba', grossiste: 'Chez le grossiste' };
+
+// ---------- Vente de mayonnaise (équipe de nuit) ----------
+export const MAYO_PRODUITS = [
+  { k: 'oriba', l: 'Mayonnaise Oriba', prix: 'mayo_prix_oriba' },
+  { k: 'aida', l: 'Mayonnaise Aïda', prix: 'mayo_prix_aida' },
+  { k: 'delice', l: 'Mayonnaise Délice', prix: 'mayo_prix_delice' },
+];
+// Marques relevées chez les vendeurs (présence sur le marché). « nous » = marques d'Oriba Foods.
+export const MAYO_MARQUES = [
+  { k: 'ORIBA', l: 'Oriba', nous: true }, { k: 'AIDA', l: 'Aïda', nous: true }, { k: 'DELICE', l: 'Délice', nous: true }, { k: 'ADELCO', l: 'Adelco', nous: true },
+  { k: 'CHAMPION', l: 'Champion' }, { k: 'BISTROS', l: 'Bistro' }, { k: 'LAZIZ', l: 'Laziz' }, { k: 'LESIEUR', l: 'Lesieur' },
+  { k: 'EVERYDAY', l: 'Everyday' }, { k: 'WILIKAM', l: 'Wilikam' }, { k: 'PETIT MATIN', l: 'Petit Matin' },
+];
+export const MAYO_AXES = ['Rond-point ENAM → Gendarmerie Koira-Tégui', 'Rond-point Yantala → Koubia', 'Rond-point Francophonie → Rond-point Oriba'];

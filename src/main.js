@@ -1,5 +1,6 @@
 // Démarrage, authentification, navigation.
 import { renderTbVentes } from './pages/tbVentes.js';
+import { renderMayo } from './pages/mayo.js';
 import { App } from './app.js';
 import { serverApi, demoApi } from './api.js';
 import { esc, $, $$, toast, icon, modal, field, readForm, showErr, busy, setExportContext, setSaver, destroyCharts } from './lib/ui.js';
@@ -28,7 +29,7 @@ import { ouvrirRapports } from './lib/rapports.js';
 
 const DEMO = !!window.ERP_DEMO || (() => { try { return new URLSearchParams(location.search).has('demo'); } catch { return false; } })();
 
-const NAV_ICONS = { ventes: 'cash', cartons: 'truck', caisse: 'wallet', 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'target', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', suppression: 'alert', audit: 'eye', accueil: 'home', depots: 'warehouse', 'saisie-rapide': 'plus', credits: 'receipt', circuit: 'chart', 'circuit-depots': 'users', 'circuit-grossistes': 'warehouse', 'circuit-mouvements': 'truck', 'circuit-versements': 'wallet', documents: 'file', archives: 'archive', 'catalogue-documents': 'book' };
+const NAV_ICONS = { ventes: 'cash', cartons: 'truck', caisse: 'wallet', 'tableau-de-bord': 'home', saisie: 'upload', analyses: 'chart', terrain: 'map', agents: 'target', clients: 'store', objectifs: 'target', 'suivi-agents': 'check', 'ventes-comptant': 'cash', 'ventes-credit': 'credit', remboursements: 'wallet', creances: 'receipt', stock: 'warehouse', depenses: 'coins', logistique: 'truck', 'pilotage-depenses': 'pie', budgets: 'calc', cloture: 'lock', referentiels: 'db', parametres: 'settings', utilisateurs: 'users', roles: 'shield', reprise: 'upload', suppression: 'alert', audit: 'eye', accueil: 'home', depots: 'warehouse', 'saisie-rapide': 'plus', credits: 'receipt', circuit: 'chart', 'circuit-depots': 'users', 'circuit-grossistes': 'warehouse', 'circuit-mouvements': 'truck', 'circuit-versements': 'wallet', mayonnaise: 'chart', documents: 'file', archives: 'archive', 'catalogue-documents': 'book' };
 const ESSENTIEL = 'Essentiel';
 const DOCS_G = 'Documents et archives';
 const NAV = [
@@ -39,6 +40,7 @@ const NAV = [
     ['depots', 'Dépôts', () => App.can('circuit'), renderDepotsEssentiel],
     ['ventes', 'Ventes', () => App.can('ventes') || App.can('creances'), renderVentesUnique],
     ['credits', 'Crédits à relancer', () => App.can('circuit') || App.can('creances'), renderCreditsEssentiel],
+    ['mayonnaise', 'Vente de mayonnaise', () => App.can('mayo'), renderMayo],
   ]],
   // Partie réservée aux documents administratifs (manuel de procédures, section 11) : toujours visible
   [DOCS_G, [

@@ -56,7 +56,6 @@ const NAV = [
     ['clients', 'Clients et grossistes', () => App.can('ventes') || App.can('creances') || App.can('dashboard') || App.can('circuit'), onglets('clients', [['cl', 'Clients', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderClients], ['gr', 'Grossistes', () => App.can('circuit'), renderGrossistes]])],
   ]],
   ['Planification et suivi', [
-    ['agents', 'Hôtesses et objectifs', () => App.can('ventes') || App.can('dashboard') || App.can('objectifs'), renderAgentsObjectifs],
     ['previsions', 'Prévisions', () => App.can('objectifs') || App.can('dashboard'), renderPrevisions],
     ['budgets', 'Budgets', () => App.can('budgets'), renderBudgets],
   ]],
@@ -64,7 +63,7 @@ const NAV = [
     ['logistique', 'Logistique et charges', () => App.can('depenses'), onglets('logistique', [['log', 'Logistique et charges', () => App.can('depenses'), renderLogistique], ['pil', 'Pilotage des dépenses', () => App.can('depenses'), renderPilotage], ['val', 'Validation des dépenses', () => App.can('depenses', 'valider'), renderDepenses]])],
   ]],
   ['Contrôle et anomalies', [
-    ['audit', 'Audit et anomalies', () => App.can('audit') || App.can('audit', 'creer'), renderAudit],
+    ['audit', 'Audit et anomalies', () => App.can('audit') || App.can('audit', 'creer') || App.can('utilisateurs', 'modifier'), renderAudit],
   ]],
   ['Administration', [
     ['referentiels', 'Référentiels', () => App.can('referentiels'), renderReferentiels],
@@ -85,7 +84,6 @@ const CACHEES = [
   ['ventes-comptant', 'Ventes au comptant', () => App.can('ventes'), (r) => renderVentes(r, 'comptant')],
   ['ventes-credit', 'Ventes à crédit', () => App.can('ventes') || App.can('creances'), (r) => renderVentes(r, 'credit')],
   ['creances', 'Créances et alertes', () => App.can('creances'), renderCreances],
-  ['objectifs', 'Objectifs des hôtesses', () => App.can('objectifs'), renderObjectifs],
   ['terrain', 'Zones et équipes', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderTerrain],
   ['suivi-agents', 'Suivi des hôtesses terrain', () => App.can('suivi'), renderSuivi],
   ['depenses', 'Saisie et validation', () => App.can('depenses'), renderDepenses],
@@ -195,7 +193,7 @@ function shell() {
     <div class="body">
       <header class="top"><button class="btn-icon menu" aria-label="Menu">${icon('menu')}</button><span class="crumb" id="crumb"></span><span class="grow"></span>
         <button class="btn sm ghost" id="mdp" title="Changer mon mot de passe">${icon('lock')}<span class="hide-sm">Mot de passe</span></button>
-        <button class="btn sm" id="rapports" title="Rapport hebdomadaire ou mensuel, en PDF ou Excel">${icon('file')}<span class="hide-sm">Rapports</span></button>
+        ${App.can('dashboard') || App.can('ventes') ? `<button class="btn sm" id="rapports" title="Rapport hebdomadaire ou mensuel, en PDF ou Excel">${icon('file')}<span class="hide-sm">Rapports</span></button>` : ''}
         <button class="btn sm ghost" id="refresh" title="Actualiser les données">${icon('refresh')}<span class="hide-sm">Actualiser</span></button>
         <button class="btn sm ghost" id="logout">${icon('logout')}<span class="hide-sm">Déconnexion</span></button></header>
       <main id="main" tabindex="-1"></main>
@@ -204,7 +202,7 @@ function shell() {
   $('.menu').addEventListener('click', () => document.body.classList.toggle('nav-open'));
   $('.nav-plus')?.addEventListener('click', (e) => { const b = e.currentTarget; const ouvert = b.getAttribute('aria-expanded') !== 'true'; b.setAttribute('aria-expanded', ouvert); $('.nav-autres').hidden = !ouvert; lsNav.set(ouvert); });
   $('#logout').addEventListener('click', () => logout());
-  $('#rapports').addEventListener('click', () => ouvrirRapports('hebdo'));
+  $('#rapports')?.addEventListener('click', () => ouvrirRapports('hebdo'));
   $('#mdp').addEventListener('click', () => modal({ title: 'Changer mon mot de passe', body: `<p class="muted small">Chaque utilisateur peut changer lui-même son mot de passe, sans passer par l’administrateur : saisissez l’actuel puis le nouveau (8 caractères au moins, avec lettres et chiffres).</p>${passwordForm()}`,
     onMount: (m, close) => bindPasswordForm(m, () => { close(); toast('Mot de passe modifié. Utilisez-le à votre prochaine connexion.'); }) }));
   $('#refresh').addEventListener('click', (e) => busy(e.currentTarget, async () => { try { await App.refresh(); App.rerender(); toast('Données actualisées.'); } catch (er) { handleErr(er); } }));

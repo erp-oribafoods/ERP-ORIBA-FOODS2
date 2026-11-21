@@ -43,7 +43,7 @@ await expectErr(call(null, 'auth.login', { identifiant: 'admin', password: 'faux
 const lg = await call(null, 'auth.login', { identifiant: 'ADMIN@oriba.test', password: 'Admin2026!' });
 ok(lg.user.role_nom === 'Administrateur ERP', 'Connexion par e-mail, rôle Administrateur');
 
-const B = (await call(sessions.admin, 'data.bootstrap')).data;
+let B = (await call(sessions.admin, 'data.bootstrap')).data;
 const role = (n) => B.roles.find((r) => r.nom.startsWith(n)).id;
 console.log('REC-01 Création de comptes');
 const mk = async (k, r) => (await call(sessions.admin, 'user.save', { user: { nom: k.toUpperCase(), prenom: 'Test', username: k, email: `${k}@oriba.test`, role_id: role(r) }, password: 'Initial2026' })).user;
@@ -56,6 +56,7 @@ for (const u of [uCom, uDG, uDAF, uCG]) await call(u.id, 'auth.change_password',
 { const lgc = await call(null, 'auth.login', { identifiant: 'commercial', password: 'Nouveau2026' }); ok(lgc.user && !lgc.user.must_change_password, 'Chaque utilisateur change lui-même son mot de passe et se reconnecte avec'); }
 await expectErr(call(null, 'auth.login', { identifiant: 'commercial', password: 'Initial2026' }), 'L’ancien mot de passe ne fonctionne plus');
 sessions.com = uCom.id; sessions.dg = uDG.id; sessions.daf = uDAF.id; sessions.cg = uCG.id;
+B = (await call(sessions.com, 'data.bootstrap')).data; // l'administrateur technique ne voit pas les référentiels commerciaux
 
 console.log('REC-02 Droits par profil');
 await expectErr(call(sessions.dg, 'vente.create', { vente: {}, lignes: [] }), 'DG ne peut pas saisir de vente', /Responsable Commercial/);
@@ -213,8 +214,8 @@ ok(im.integrees.length === 1 && Number(D.suivi_agents.find((r) => r.agent_id ===
 im = await call(sessions.daf, 'import.run', { type: 'budgets', mode: 'courant', rows: [{ ligne: 2, data: { mois: '2027-01', equipe_id: eq.id, montant: 300000 } }, { ligne: 3, data: { mois: '2027-01', equipe_id: eq.id, montant: 350000 } }] });
 D = (await call(sessions.daf, 'data.bootstrap')).data;
 ok(im.integrees.length === 2 && D.budgets.filter((b) => b.mois === '2027-01').length === 1 && Number(D.budgets.find((b) => b.mois === '2027-01').montant) === 350000, 'Budget créé puis mis à jour par fichier, sans doublon');
-im = await call(sessions.admin, 'import.run', { type: 'agents', mode: 'courant', rows: [{ ligne: 2, data: { id: ag.id, telephone: '90 00 00 00' } }, { ligne: 3, data: { code: 'A99', nom: 'Agent importé', equipe_id: eq.id } }] });
-D = (await call(sessions.admin, 'data.bootstrap')).data;
+im = await call(sessions.com, 'import.run', { type: 'agents', mode: 'courant', rows: [{ ligne: 2, data: { id: ag.id, telephone: '90 00 00 00' } }, { ligne: 3, data: { code: 'A99', nom: 'Agent importé', equipe_id: eq.id } }] });
+D = (await call(sessions.com, 'data.bootstrap')).data;
 ok(im.integrees.length === 2 && D.agents.find((a) => a.id === ag.id).telephone === '90 00 00 00' && D.agents.some((a) => a.code === 'A99'), 'Référentiel agents : mise à jour et ajout par fichier');
 im = await call(sessions.com, 'import.run', { type: 'depenses', mode: 'courant', rows: [{ ligne: 2, data: { date: today(), equipe_id: eq.id, categorie_id: cats.CARB.id, montant: 12000, reference_piece: 'T-1' } }, { ligne: 3, data: { date: today(), equipe_id: eq.id, categorie_id: cats.CARB.id, montant: 13000, sans_piece: true, description: 'Ticket perdu' } }] });
 ok(im.integrees.length === 2 && im.brouillons.length === 1, `Dépenses importées : 1 soumise, 1 en brouillon (${im.brouillons[0]?.motif})`);
@@ -320,7 +321,7 @@ console.log('Suppression définitive (Responsable commercial seul)');
   ok(pr.compte.ventes === nbCredit && !apres.ventes.some((v) => v.mode === 'credit') && !apres.remboursements.length && apres.ventes.some((v) => v.mode === 'comptant'), 'Ventes à crédit et remboursements supprimés, ventes au comptant conservées');
   const imp = apres.imports.find((i) => i.type === 'ventes_comptant');
   if (imp) { const pi = await call(sessions.com, 'purge.run', { cible: 'import', import_id: imp.id, confirmation: 'SUPPRIMER', motif: 'Défaire un import' }); ok(pi.compte.imports === 1, `Un import est défait (${pi.compte.ventes || 0} vente(s) retirée(s))`); }
-  const au = (await call(sessions.admin, 'audit.list', {})).rows;
+  const au = (await call(sessions.dg, 'audit.list', {})).rows;
   ok(au.some((r) => r.action === 'SUPPRESSION'), 'La suppression est tracée dans le journal d’audit');
 }
 {
@@ -346,12 +347,24 @@ console.log('Suppression définitive (Responsable commercial seul)');
   const an = (await call(sessions.com, 'doc.annuler', { id: d2.id, motif: 'Erreur de quantité' })).document;
   const D1 = (await call(sessions.dg, 'data.bootstrap')).data;
   ok(an.statut === 'annule' && D1.documents.length === 4 && D1.documents.some((d) => d.id === d2.id), 'Document annulé conservé aux archives (rien n’est effacé), visible par la DG');
-  const au = (await call(sessions.admin, 'audit.list', { table: 'documents' })).rows;
+  const au = (await call(sessions.dg, 'audit.list', { table: 'documents' })).rows;
   ok(['DOCUMENT_EMIS', 'DOCUMENT_ARCHIVE', 'DOCUMENT_ANNULE'].every((a) => au.some((r) => r.action === a)), 'Émission, archivage et annulation tracés dans l’audit');
 }
 for (let i = 0; i < 5; i++) { try { await call(null, 'auth.login', { identifiant: 'dg', password: 'mauvais' }); } catch {} }
 await expectErr(call(null, 'auth.login', { identifiant: 'dg', password: 'Nouveau2026' }), 'Verrouillage après 5 échecs', /verrouillé/);
 
+console.log('REC-ADM Administration technique sans accès aux données');
+{
+  const BA = (await call(sessions.admin, 'data.bootstrap')).data;
+  ok(['ventes', 'vente_lignes', 'clients', 'agents', 'marches', 'grossistes', 'stock_mouvements', 'depenses', 'circuit_mvts', 'objectifs', 'mayo_fiches'].every((k) => !(BA[k] || []).length), 'L’administrateur technique ne reçoit ni ventes, ni clients, ni hôtesses, ni stocks, ni dépenses');
+  ok(BA.utilisateurs.length > 1 && BA.roles.length > 1 && BA.parametres !== undefined, 'Il voit les comptes, les rôles et les paramètres');
+  const rp = await call(sessions.admin, 'param.save', { cle: 'prev_effet_tabaski', valeur: 80, motif: 'Recette' });
+  ok(!!rp, 'Il peut modifier un paramètre');
+  const nu = await call(sessions.admin, 'user.save', { user: { nom: 'Compte Recette', username: 'recette_adm', email: 'recette_adm@oriba.test', role_id: B.roles.find((r) => r.nom.startsWith('Superviseur')).id }, password: 'Passe2026!' });
+  ok(!!nu.user?.id, 'Il peut créer un compte');
+  const del = await call(sessions.admin, 'user.delete', { id: nu.user.id, motif: 'Recette' });
+  ok(!!del, 'Il peut supprimer un compte');
+}
 console.log(`\n${pass} contrôles réussis, ${failN} en échec`);
 await stop();
 process.exit(failN ? 1 : 0);

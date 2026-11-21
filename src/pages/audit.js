@@ -22,14 +22,16 @@ function diff(a, b) {
 }
 
 export function renderAudit(root) {
-  const canRead = App.can('audit', 'lire');
+  const adminSeul = !App.can('audit', 'lire') && App.can('utilisateurs', 'modifier'); // administration technique : historique des comptes uniquement
+  const canRead = App.can('audit', 'lire') || adminSeul;
+  const OBJETS = adminSeul ? Object.fromEntries(Object.entries(TABLES_LBL).filter(([k]) => ['utilisateurs', 'roles', 'parametres'].includes(k))) : TABLES_LBL;
   App.filters.audit = App.filters.audit || { du: addDays(today(), -30), au: today(), table: '', user_id: '' };
   const f = App.filters.audit;
-  root.innerHTML = pageHead('Audit et anomalies', 'Journal non modifiable : auteur, date et heure, action, objet, ancienne et nouvelle valeur, motif.') +
-    `<article class="card"><header><h3>Anomalies signalées</h3>${App.can('audit', 'creer') ? `<button class="btn sm" id="newano">${icon('flag')} Signaler une anomalie</button>` : ''}</header><div id="ano"></div></article>
+  root.innerHTML = pageHead(adminSeul ? 'Historique des comptes' : 'Audit et anomalies', adminSeul ? 'Créations, modifications et suppressions de comptes, de rôles et de paramètres (les opérations commerciales ne sont pas visibles).' : 'Journal non modifiable : auteur, date et heure, action, objet, ancienne et nouvelle valeur, motif.') +
+    `${adminSeul ? '<div hidden>' : ''}<article class="card"><header><h3>Anomalies signalées</h3>${App.can('audit', 'creer') ? `<button class="btn sm" id="newano">${icon('flag')} Signaler une anomalie</button>` : ''}</header><div id="ano"></div></article>${adminSeul ? '</div>' : ''}
      ${canRead ? `<article class="card"><header><h3>Journal d’audit</h3></header><div class="filters">
        <label class="ff"><span>Du</span><input type="date" id="a-du" value="${f.du}"></label><label class="ff"><span>Au</span><input type="date" id="a-au" value="${f.au}"></label>
-       <label class="ff"><span>Objet</span><select id="a-t"><option value="">Tous</option>${Object.entries(TABLES_LBL).map(([k, l]) => `<option value="${k}" ${f.table === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+       <label class="ff"><span>Objet</span><select id="a-t"><option value="">Tous</option>${Object.entries(OBJETS).map(([k, l]) => `<option value="${k}" ${f.table === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
        <label class="ff"><span>Utilisateur</span><select id="a-u"><option value="">Tous</option>${App.D.utilisateurs.map((u) => `<option value="${u.id}" ${f.user_id === u.id ? 'selected' : ''}>${esc(nm.user(u.id))}</option>`).join('')}</select></label>
        <button class="btn sm" id="a-go">Afficher</button></div><div id="log"><p class="muted">Chargement…</p></div></article>` : ''}`;
   const anos = (App.D.anomalies || []).slice().sort((a, b) => b.created_at.localeCompare(a.created_at));

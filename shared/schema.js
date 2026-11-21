@@ -72,11 +72,8 @@ export const DEFAULT_ROLES = [
   },
   {
     nom: 'Administrateur ERP',
-    description: 'Comptes, rôles, référentiels et paramètres. Aucune validation financière.',
-    permissions: {
-      dashboard: ['lire'], referentiels: ['lire', 'modifier'], parametres: ['lire', 'modifier'],
-      utilisateurs: ['lire', 'modifier'], import: ['creer'], audit: ['lire'],
-    },
+    description: 'Administration technique : comptes, rôles et paramètres uniquement. Aucun accès aux données commerciales (ventes, clients, stocks, dépenses).',
+    permissions: { parametres: ['lire', 'modifier'], utilisateurs: ['lire', 'modifier'] },
   },
   {
     nom: "Superviseur / Responsable d'équipe",

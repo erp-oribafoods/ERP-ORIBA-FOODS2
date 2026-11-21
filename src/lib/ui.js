@@ -23,7 +23,7 @@ export function icon(name) {
     pie: 'M12 3v9h9A9 9 0 1 1 12 3zm3 0a6 6 0 0 1 6 6h-6V3z', spark: 'M12 3v4m0 10v4M3 12h4m10 0h4M6 6l2.5 2.5m7 7L18 18M6 18l2.5-2.5m7-7L18 6',
     home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1v-9z', map: 'M9 4l-6 2v14l6-2 6 2 6-2V4l-6 2-6-2zm0 0v14m6-12v14', tag: 'M3 12V4h8l10 10-8 8L3 12zm4-4h.01',
     clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0-13v5l3 2', check2: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm-4-9l3 3 5-6', lock: 'M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4',
-    settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm8-3l2-1-2-4-2 .5-1.5-1.5L16 4h-4l-.5 2L10 7.5 8 7 6 11l2 1v0l-2 1 2 4 2-.5 1.5 1.5.5 2h4l.5-2 1.5-1.5 2 .5 2-4-2-1z', db: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zm0 0v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3', eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', upload: 'M12 20V9m0 0l-4 4m4-4l4 4M5 5h14', archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4', book: 'M4 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4zM20 4h-6M20 4v14h-6',
+    settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm8-3l2-1-2-4-2 .5-1.5-1.5L16 4h-4l-.5 2L10 7.5 8 7 6 11l2 1v0l-2 1 2 4 2-.5 1.5 1.5.5 2h4l.5-2 1.5-1.5 2 .5 2-4-2-1z', db: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zm0 0v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3', eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', eyeoff: 'M3 3l18 18M10.6 6.1A10 10 0 0 1 12 6c6 0 10 6 10 6a17 17 0 0 1-3.1 3.6M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7c1.7 0 3.2-.5 4.5-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2', upload: 'M12 20V9m0 0l-4 4m4-4l4 4M5 5h14', archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4', book: 'M4 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4zM20 4h-6M20 4v14h-6',
   };
   return `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="${P[name] || ''}"/></svg>`;
 }
@@ -90,6 +90,7 @@ export function field(f, value, opts = {}) {
   else if (f.t === 'options') input = `<select id="${id}" name="${f.k}"${dis}>${f.empty === false ? '' : `<option value="">${esc(f.emptyLabel || '—')}</option>`}${(f.options || []).map((o) => `<option value="${esc(o.v)}" ${String(o.v) === String(v) ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select>`;
   else input = `<input id="${id}" name="${f.k}" type="${f.t === 'number' ? 'number' : f.t === 'date' ? 'date' : f.t === 'month' ? 'month' : f.t === 'password' ? 'password' : f.t === 'email' ? 'email' : 'text'}" ${f.t === 'number' ? `step="${f.step || 'any'}" min="${f.min ?? ''}"` : ''} value="${esc(v)}" ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ''} ${f.auto ? `autocomplete="${f.auto}"` : ''}${dis}>`;
   // Listes : on choisit avec la flèche OU on écrit (voir initCombos)
+  if (f.t === 'password') input = `<span class="pw-w">${input}<button type="button" class="pw-eye" data-pw="${id}" aria-label="Afficher le mot de passe" title="Afficher le mot de passe">${icon('eye')}</button></span>`;
   if (input.startsWith('<select') && f.combo !== false && !f.disabled) {
     const table = f.table || (f.t?.startsWith('ref:') ? f.t.slice(4) : f.options?.table) || '';
     const sel = input.replace('<select ', `<select class="combo-sel" tabindex="-1" data-table="${esc(table)}" `);
@@ -405,3 +406,14 @@ export function initCombos() {
   new MutationObserver((ms) => { for (const m of ms) { const sel = m.target.closest?.('select.combo-sel') || (m.target.matches?.('select.combo-sel') && m.target); if (sel) syncTexte(sel); } })
     .observe(document.body, { childList: true, subtree: true });
 }
+
+// Afficher / masquer le mot de passe saisi (bouton œil sur chaque champ mot de passe)
+if (typeof document !== 'undefined') document.addEventListener('click', (e) => {
+  const b = e.target.closest?.('.pw-eye'); if (!b) return;
+  const inp = document.getElementById(b.dataset.pw); if (!inp) return;
+  const voir = inp.type === 'password';
+  inp.type = voir ? 'text' : 'password';
+  b.innerHTML = icon(voir ? 'eyeoff' : 'eye');
+  b.setAttribute('aria-label', voir ? 'Masquer le mot de passe' : 'Afficher le mot de passe'); b.title = b.getAttribute('aria-label');
+  b.classList.toggle('on', voir); inp.focus();
+});

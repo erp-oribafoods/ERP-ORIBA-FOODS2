@@ -233,8 +233,10 @@ A['auth.change_password'] = async ({ t, user, payload, crypto, ip }) => {
 
 A['data.bootstrap'] = async ({ t, user, perms }) => {
   const P = (m, a = 'lire') => can(perms, m, a);
-  const names = ['zones', 'equipes', 'agents', 'marches', 'clients', 'produits', 'vehicules', 'categories_depense', 'parametres', 'roles', 'utilisateurs', 'clotures'];
-  const D = {};
+  // Un compte d'administration technique (comptes, rôles, paramètres) ne reçoit aucune donnée commerciale.
+  const metier = Object.entries(perms || {}).some(([k, a]) => !['utilisateurs', 'parametres'].includes(k) && Array.isArray(a) && a.length);
+  const names = metier ? ['zones', 'equipes', 'agents', 'marches', 'clients', 'produits', 'vehicules', 'categories_depense', 'parametres', 'roles', 'utilisateurs', 'clotures'] : ['zones', 'equipes', 'parametres', 'roles', 'utilisateurs'];
+  const D = { agents: [], marches: [], clients: [], produits: [], vehicules: [], categories_depense: [], clotures: [] };
   for (const n of names) D[n] = await t.select(n);
   D.utilisateurs = D.utilisateurs.map((u) => {
     const r = stripUser(u);
@@ -252,7 +254,7 @@ A['data.bootstrap'] = async ({ t, user, perms }) => {
     D.relances = (await t.select('relances')).filter((r) => ids.has(r.vente_id));
   } else { D.ventes = []; D.vente_lignes = []; D.remboursements = []; D.relances = []; }
   D.stock_mouvements = P('stock') || P('dashboard') ? await t.select('stock_mouvements') : [];
-  D.grossistes = await t.select('grossistes');
+  D.grossistes = metier ? await t.select('grossistes') : [];
   D.circuit_mvts = P('circuit') ? await t.select('circuit_mvts') : [];
   D.versements = P('circuit') ? await t.select('versements') : [];
   D.documents = P('circuit') ? await t.select('documents') : [];
@@ -280,7 +282,7 @@ A['data.bootstrap'] = async ({ t, user, perms }) => {
   D.objectifs = P('objectifs') || P('dashboard') || P('suivi') ? (await t.select('objectifs')).filter((o) => o.actif !== false) : [];
   D.demandes = P('depenses') ? (await t.select('demandes')).filter((d) => inScope(user, d.equipe_id, d.zone_id) || d.created_by === user.id) : [];
   D.suivi_agents = P('suivi') ? (await t.select('suivi_agents')).filter((r) => { const a = agents.get(r.agent_id); return a && inScope(user, a.equipe_id, a.zone_id); }) : [];
-  D.anomalies = P('audit') ? await t.select('anomalies') : (await t.select('anomalies', { created_by: user.id }));
+  D.anomalies = P('audit') ? await t.select('anomalies') : metier ? await t.select('anomalies', { created_by: user.id }) : [];
   D.imports = P('import', 'creer') || P('audit') ? await t.select('imports') : [];
   return { data: D, user: publicUser(user, D.roles), serverDate: today() };
 };
@@ -1634,8 +1636,14 @@ A['purge.run'] = async ({ t, perms, user, payload, ip }) => {
 };
 
 A['audit.list'] = async ({ t, perms, payload }) => {
-  if (!can(perms, 'audit', 'lire')) fail('Accès au journal d’audit réservé.', 403);
-  const rows = await t.auditList({ du: payload.du, au: payload.au, table: payload.table, user_id: payload.user_id, limit: Math.min(num(payload.limit) || 500, 2000) });
+  // L'administration technique ne voit que la trace des comptes, rôles et paramètres (jamais les opérations commerciales).
+  const ADMIN_TABLES = ['utilisateurs', 'roles', 'parametres'];
+  const complet = can(perms, 'audit', 'lire');
+  if (!complet && !can(perms, 'utilisateurs', 'lire')) fail('Accès au journal d’audit réservé.', 403);
+  if (!complet && payload.table && !ADMIN_TABLES.includes(payload.table)) fail('Accès réservé à l’historique des comptes, rôles et paramètres.', 403);
+  const lim = Math.min(num(payload.limit) || 500, 2000);
+  let rows = await t.auditList({ du: payload.du, au: payload.au, table: payload.table, user_id: payload.user_id, limit: complet ? lim : 2000 });
+  if (!complet) rows = rows.filter((r) => ADMIN_TABLES.includes(r.table_name)).slice(0, lim);
   return { rows };
 };
 

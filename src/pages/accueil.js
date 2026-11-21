@@ -63,8 +63,8 @@ export function renderAccueil(root) {
        <article class="card"><header><h3>Évolution des ventes</h3><span class="muted small" id="eg-l"></span></header><div class="cv h260"><canvas id="g-ventes"></canvas></div></article>
        <article class="card"><header><h3>Objectif du mois par dépôt</h3><span class="muted small">cartons vendus / objectif</span></header><div class="cv h260"><canvas id="g-obj"></canvas></div></article>
      </div><p class="muted small" id="eg-vide" hidden>Les graphiques s’afficheront dès que des ventes seront enregistrées.</p>
-     <article class="card"><header><h3>Les dépôts (chefs d’équipe)</h3><span class="muted small">Cliquez sur un dépôt pour voir ses agents</span></header><div id="et"></div></article>
-     <article class="card"><header><h3>Ventes par marché</h3><span class="muted small">Ventes des agents et des dépôts, par marché</span></header><div id="em"></div></article>
+     <article class="card"><header><h3>Les dépôts (chefs d’équipe)</h3><span class="muted small">Cliquez sur un dépôt pour voir ses hôtesses</span></header><div id="et"></div></article>
+     <article class="card"><header><h3>Ventes par marché</h3><span class="muted small">Ventes des hôtesses et des dépôts, par marché</span></header><div id="em"></div></article>
      <div class="grid2 acc-bas"><article class="card" id="ec"></article><article class="card" id="ea"></article></div>`;
   const draw = () => {
     const [du, au] = bornes(), C = contexte(App.D, App.I);
@@ -100,7 +100,7 @@ export function renderAccueil(root) {
       kpi('Stock chez les grossistes', ctn(stG), `${C.grossistes.length} grossiste(s) · approvisionnés par Oriba Food et Oriba Rice`, stG < 0 ? 'warn' : ''),
       C.stockConnu ? kpi('Stock chez les dépôts', ctn(stD), `chefs d’équipe · reçu sur la période ${fmtQ(S(dep, 'recuGross'))} des grossistes, ${fmtQ(S(dep, 'recuFoods') + S(dep, 'recuRice'))} d’Oriba`, stD < 0 ? 'warn' : '')
         : kpi('Stock chez les dépôts', 'Non renseigné', 'Saisissez le stock de départ ou les approvisionnements des dépôts'),
-      kpi('Stock chez les agents', ctn(stA), `agents déployés sur les marchés · total réseau ${ctn(stG + stD + stA)}`, stA < 0 ? 'warn' : ''),
+      kpi('Stock chez les hôtesses', ctn(stA), `hôtesses déployéees sur les marchés · total réseau ${ctn(stG + stD + stA)}`, stA < 0 ? 'warn' : ''),
     ].join('');
     // Contrôle des créances (comme le TB des équipes) : plafond global, retards, clients débiteurs
     const plafond = num(App.I.p.plafond_creances_cartons), seuil = num(App.I.p.seuil_alerte_creance_jours) || 7;
@@ -184,13 +184,13 @@ export function renderDepotsEssentiel(root) {
   const depots = (App.D.agents || []).filter((a) => a.role_circuit === 'depot' && a.actif !== false).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
   if (!depots.some((d) => d.id === p.depot)) p.depot = depots[0]?.id || '';
   const can = App.can('circuit', 'creer');
-  root.innerHTML = pageHead('Dépôts', 'Cliquez sur un dépôt pour voir ses agents. Chiffres de la période choisie.',
-    can && p.depot ? `<button class="btn primary" id="d-appro">${icon('plus')} Approvisionner un dépôt</button><button class="btn" id="d-remise">${icon('plus')} Remettre à un agent</button>` : '') +
+  root.innerHTML = pageHead('Dépôts', 'Cliquez sur un dépôt pour voir ses hôtesses. Chiffres de la période choisie.',
+    can && p.depot ? `<button class="btn primary" id="d-appro">${icon('plus')} Approvisionner un dépôt</button><button class="btn" id="d-remise">${icon('plus')} Remettre à une hôtesse</button>` : '') +
     (depots.length ? '' : noteVide()) +
     `<article class="card tb-sec bleu" id="jr-c"><header><h3>Journée des dépôts</h3><label class="ff"><span>Journée du</span><input type="date" id="jr-date" value="${p.jour || today()}" max="${today()}"></label></header>
-      <p class="muted small">Pour chaque dépôt (chef d’équipe et ses agents) : cartons pris, remis, vendus, et argent à remettre à la caisse d’Oriba Food et d’Oriba Rice ce jour-là. Cliquez sur un dépôt pour voir le détail de ses opérations. « À remettre » : ventes au comptant du jour à verser à la caisse ; « Reste dû » : cumul non encore versé. Une opération devient définitive à la fin de sa journée de saisie.</p>
+      <p class="muted small">Pour chaque dépôt (chef d’équipe et ses hôtesses) : cartons pris, remis, vendus, et argent à remettre à la caisse d’Oriba Food et d’Oriba Rice ce jour-là. Cliquez sur un dépôt pour voir le détail de ses opérations. « À remettre » : ventes au comptant du jour à verser à la caisse ; « Reste dû » : cumul non encore versé. Une opération devient définitive à la fin de sa journée de saisie.</p>
       <div id="jr"></div><h4 class="sec" id="jo-t"></h4><div id="jo"></div></article>` + barre() +
-    '<section class="zgrid" id="dz"></section><article class="card" id="dt-c"><header><h3 id="dt-t">Agents du dépôt</h3></header><div id="dt"></div></article>';
+    '<section class="zgrid" id="dz"></section><article class="card" id="dt-c"><header><h3 id="dt-t">Hôtesses du dépôt</h3></header><div id="dt"></div></article>';
   $('#d-appro', root)?.addEventListener('click', () => formMouvement('prise', p.depot));
   $('#d-remise', root)?.addEventListener('click', () => formMouvement('dispatch', p.depot));
   const draw = () => {
@@ -218,12 +218,12 @@ export function renderDepotsEssentiel(root) {
         <span><small>Créances</small><b class="${x.enRetard > 0 ? 't-crit' : ''}">${fmtF(x.enCours)}</b></span><span><small>Clients</small><b>${fmtN(x.clients)}</b></span>
       </span></button>`).join('');
     $$('#dz [data-d]', root).forEach((b) => b.addEventListener('click', () => { p.depot = b.dataset.d; draw(); $('#dt-c', root).scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
-    $('#dt-t', root).textContent = `Agents de ${d.nom} — ${libPer()}`;
+    $('#dt-t', root).textContent = `Hôtesses de ${d.nom} — ${libPer()}`;
     const lignes = [{ ...d, nom: d.responsable ? `${d.responsable} (chef d’équipe)` : `${d.nom} (vente directe)`, recu: d.recu + d.recuTransfert, si: d.si, sf: d.sf, fonction: 'Dépôt — chef d’équipe', _depot: true,
       objectif: d.objPropre, venduMois: d.venduMoisPropre, taux: d.objPropre > 0 ? (d.venduMoisPropre / d.objPropre) * 100 : null }, ...d.sousAgents];
-    new Table({ title: `Agents — ${d.nom}`, rows: lignes, sort: { k: 'objectif', dir: -1 }, pageSize: 30,
+    new Table({ title: `Hôtesses — ${d.nom}`, rows: lignes, sort: { k: 'objectif', dir: -1 }, pageSize: 30,
       foot: (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : ['si', 'vc', 'vk', 'sf', 'objectif', 'venduMois', 'enCours'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + num(r[c.k]), 0))}</b>` : ''),
-      cols: [{ k: 'nom', l: 'Agent' }, { k: 'fonction', l: 'Fonction' }, { k: 'marche', l: 'Marché', v: (r) => (r.marche_id ? nm.marche(r.marche_id) : ''), f: (r) => (r.marche_id ? esc(nm.marche(r.marche_id)) : '<span class="muted">—</span>') }, { k: 'si', l: 'Stock début', num: 1, f: (r) => fmtQ(r.si) }, { k: 'recu', l: 'Reçu', num: 1, f: (r) => fmtQ(r.recu) + (r._depot ? ' <small class="muted">(fournisseurs et autres dépôts)</small>' : ' <small class="muted">(du dépôt)</small>') },
+      cols: [{ k: 'nom', l: 'Hôtesse' }, { k: 'fonction', l: 'Fonction' }, { k: 'marche', l: 'Marché', v: (r) => (r.marche_id ? nm.marche(r.marche_id) : ''), f: (r) => (r.marche_id ? esc(nm.marche(r.marche_id)) : '<span class="muted">—</span>') }, { k: 'si', l: 'Stock début', num: 1, f: (r) => fmtQ(r.si) }, { k: 'recu', l: 'Reçu', num: 1, f: (r) => fmtQ(r.recu) + (r._depot ? ' <small class="muted">(fournisseurs et autres dépôts)</small>' : ' <small class="muted">(du dépôt)</small>') },
         { k: 'vc', l: 'Vendu comptant', num: 1, f: (r) => fmtQ(r.vc) }, { k: 'vk', l: 'Vendu crédit', num: 1, f: (r) => fmtQ(r.vk) }, { k: 'sf', l: 'Stock fin', num: 1, f: (r) => (r.sf < 0 ? `<b class="t-crit">${fmtQ(r.sf)}</b>` : `<b>${fmtQ(r.sf)}</b>`) },
         { k: 'objectif', l: 'Objectif du mois', num: 1, f: (r) => (r.objectif ? fmtQ(r.objectif) : '—') }, { k: 'venduMois', l: 'Vendu du mois', num: 1, f: (r) => fmtQ(r.venduMois) },
         { k: 'taux', l: 'Réalisé', num: 1, v: (r) => r.taux ?? -1, f: (r) => pct(r.taux) }, { k: 'enCours', l: 'Crédits en cours (FCFA)', num: 1, f: (r) => (r.enRetard > 0 ? `<b class="t-crit">${fmtN(r.enCours)}</b>` : fmtN(r.enCours)) }] }).mount($('#dt', root));
@@ -238,7 +238,7 @@ export function renderDepotsEssentiel(root) {
       foot: S(['pris', 'disp', 'vcReseau', 'vkReseau', 'aVerserFood', 'aVerserRice', 'verse', 'resteFood', 'resteRice', 'nbOps']),
       cols: [{ k: 'nom', l: 'Dépôt', v: (r) => r.nom + (r.responsable ? ` · ${r.responsable}` : ''), f: (r) => `<b>${esc(r.nom)}</b>${r.responsable ? `<br><small class="muted">${esc(r.responsable)}</small>` : ''}` },
         { k: 'pris', l: 'Cartons pris', num: 1, x: (r) => r.pris, f: (r) => `${r.pris ? `<b>${fmtQ(r.pris)}</b>` : '0'}${[r.recuFoods && `Food ${fmtQ(r.recuFoods)}`, r.recuRice && `Rice ${fmtQ(r.recuRice)}`, r.recuGross && `grossiste ${fmtQ(r.recuGross)}`].filter(Boolean).map((t) => `<br><small class="muted">${t}</small>`).join('')}` },
-        { k: 'disp', l: 'Remis agents', num: 1, f: (r) => fmtQ(r.disp) },
+        { k: 'disp', l: 'Remis hôtesses', num: 1, f: (r) => fmtQ(r.disp) },
         { k: 'vcReseau', l: 'Vendus cpt', num: 1, f: (r) => fmtQ(r.vcReseau) }, { k: 'vkReseau', l: 'Vendus crédit', num: 1, f: (r) => fmtQ(r.vkReseau) },
         { k: 'aVerserFood', l: 'À remettre Food', num: 1, f: (r) => (r.aVerserFood ? `<b>${fmtN(r.aVerserFood)}</b>` : '0') },
         { k: 'aVerserRice', l: 'À remettre Rice', num: 1, f: (r) => (r.aVerserRice ? `<b>${fmtN(r.aVerserRice)}</b>` : '0') },
@@ -273,7 +273,7 @@ function operationsDepot(C, depotId, j) {
   for (const m of C.mv) {
     if (m.date !== j) continue;
     if (m.type === 'prise' && m.agent_id === depotId) add(m, { type: 'Cartons pris', qui: nm.agent(depotId), detail: `${nm.produit(m.produit_id)} · chez ${src(m)}${m.mode === 'credit' ? ' · à crédit' : ''}`, cartons: num(m.cartons), montant: num(m.montant) });
-    else if (m.type === 'dispatch' && m.agent_id === depotId) add(m, { type: 'Remise à un agent', qui: nm.agent(m.sous_agent_id), detail: nm.produit(m.produit_id), cartons: num(m.cartons), montant: 0 });
+    else if (m.type === 'dispatch' && m.agent_id === depotId) add(m, { type: 'Remise à une hôtesse', qui: nm.agent(m.sous_agent_id), detail: nm.produit(m.produit_id), cartons: num(m.cartons), montant: 0 });
     else if (m.type === 'transfert' && m.agent_id === depotId) add(m, { type: 'Transfert envoyé', qui: nm.agent(depotId), detail: `vers ${nm.agent(m.depot_dest_id)} · ${nm.produit(m.produit_id)}`, cartons: num(m.cartons), montant: 0 });
     else if (m.type === 'transfert' && m.depot_dest_id === depotId) add(m, { type: 'Transfert reçu', qui: nm.agent(m.agent_id), detail: `de ${nm.agent(m.agent_id)} · ${nm.produit(m.produit_id)}`, cartons: num(m.cartons), montant: 0 });
   }
@@ -293,11 +293,11 @@ export function renderSaisieRapide(root) {
      <section class="tuiles">${tuile('s-vente', 'cash', 'Vente', 'Au comptant ou à crédit')}
       ${tuile('s-vers', 'wallet', 'Versement ou remboursement', 'Argent versé à la caisse ou chez le grossiste ; crédit remboursé')}
       ${tuile('s-appro', 'warehouse', 'Approvisionnement d’un dépôt', 'Cartons reçus d’Oriba Food, d’Oriba Rice ou d’un grossiste')}
-      ${tuile('s-remise', 'users', 'Remise à un agent', 'Cartons donnés par le dépôt à un de ses agents')}</section>
+      ${tuile('s-remise', 'users', 'Remise à une hôtesse', 'Cartons donnés par le dépôt à un de ses hôtesses')}</section>
      <h2 class="sec-t">Importer les fichiers Excel</h2>
      <section class="fichiers">${fichier('f-circ', 'Classeur du jour (dépôts)', 'Approvisionnements, remises, ventes, versements, dépenses, objectifs et budgets. Seules les nouvelles lignes sont ajoutées.', can)}
      ${fichier('f-tb', 'Fichiers « TB » des équipes', 'Ventes, crédits et remboursements des fichiers TB de chaque zone. Seules les nouvelles lignes sont ajoutées.', peutMettreAJour())}
-     ${fichier('f-obj', 'Objectifs des agents', 'Fichier « Liste des agents et objectif de vente » (Agent, Équipe, Fonction, Objectif).', peutImporter('objectifs'))}</section>
+     ${fichier('f-obj', 'Objectifs des hôtesses', 'Fichier « Liste des hôtesses et objectif de vente » (Hôtesse, Équipe, Fonction, Objectif).', peutImporter('objectifs'))}</section>
      <p class="muted small">Imports plus rares (historiques, référentiels, dépenses, budgets…) : <a href="#saisie">Imports avancés</a>, dans « Autres modules ».</p>`;
   if (can) {
     $('#s-appro', root).addEventListener('click', () => formMouvement('prise'));
@@ -324,9 +324,9 @@ export function formVente() {
     body: `<form class="form" id="vf"><div class="grid2">
       ${field({ k: 'date', l: 'Date', t: 'date', req: 1 }, today())}
       ${field({ k: 'mode', l: 'Paiement', t: 'options', options: [{ v: 'comptant', l: 'Comptant' }, { v: 'credit', l: 'À crédit' }], empty: false })}
-      ${comboField({ k: 'vendeur', l: 'Vendu par', req: 1, options: vendeurs(), placeholder: 'Choisir ou écrire le nom de l’agent' })}
+      ${comboField({ k: 'vendeur', l: 'Vendu par', req: 1, options: vendeurs(), placeholder: 'Choisir ou écrire le nom de l’hôtesse' })}
       ${comboField({ k: 'client', l: 'Client (obligatoire à crédit)', options: clients(), placeholder: 'Choisir ou écrire le nom du client' })}
-      <div data-newdep hidden class="span2">${field({ k: 'depot_nouveau', l: 'Dépôt de ce nouvel agent', t: 'options', options: depots, req: 1 })}</div>
+      <div data-newdep hidden class="span2">${field({ k: 'depot_nouveau', l: 'Dépôt de ce nouvelle hôtesse', t: 'options', options: depots, req: 1 })}</div>
       ${field({ k: 'produit_id', l: 'Produit', t: 'options', options: prods, req: 1 }, prods.find((o) => /dadi/i.test(o.l))?.v || prods[0]?.v)}
       ${field({ k: 'quantite', l: 'Cartons', t: 'number', req: 1, min: 0 })}
       ${field({ k: 'prix_unitaire', l: 'Prix du carton (FCFA)', t: 'number', req: 1, min: 0 })}
@@ -338,7 +338,7 @@ export function formVente() {
       const majVendeur = () => {
         const r = comboLire(v('vendeur').value, vendeurs());
         $('[data-newdep]', m).hidden = !(r.texte && !r.id);
-        hint('vendeur', r.texte && !r.id ? `Nouvel agent « ${r.texte} » : il sera ajouté à la liste, rattaché au dépôt choisi ci-dessous.` : '');
+        hint('vendeur', r.texte && !r.id ? `Nouvelle hôtesse « ${r.texte} » : il sera ajouté à la liste, rattaché au dépôt choisi ci-dessous.` : '');
         const p = prixDe(r.id || v('depot_nouveau').value); if (p) v('prix_unitaire').value = p;
       };
       const majClient = () => { const r = comboLire(v('client').value, clients()); hint('client', r.texte && !r.id ? `Nouveau client « ${r.texte} » : il sera ajouté à la liste.` : ''); };
@@ -352,17 +352,17 @@ export function formVente() {
         try {
           if (!ve.texte) throw new Error('Indiquez qui a vendu : choisissez dans la liste ou écrivez le nom.');
           if (d.mode === 'credit' && !cl.texte) throw new Error('Pour une vente à crédit, indiquez le client.');
-          if (!ve.id && !d.depot_nouveau) throw new Error(`Choisissez le dépôt auquel rattacher le nouvel agent « ${ve.texte} ».`);
+          if (!ve.id && !d.depot_nouveau) throw new Error(`Choisissez le dépôt auquel rattacher le nouvelle hôtesse « ${ve.texte} ».`);
           if (!(Number(d.quantite) > 0)) throw new Error('Indiquez le nombre de cartons.');
           let agentId = ve.id, clientId = cl.id;
           // Nouveaux noms tapés à la main : ajoutés aux listes avant la vente
           if (!agentId) {
             const dep = agents().find((a) => a.id === d.depot_nouveau);
-            agentId = (await App.api.call('ref.save', { table: 'agents', row: { nom: ve.texte, fonction: 'Agent commercial', role_circuit: 'sous_agent', depot_id: dep.id, equipe_id: dep.equipe_id || null, zone_id: dep.zone_id || null }, motif: 'Créé depuis la saisie d’une vente' })).row.id;
+            agentId = (await App.api.call('ref.save', { table: 'agents', row: { nom: ve.texte, fonction: 'Hôtesse', role_circuit: 'sous_agent', depot_id: dep.id, equipe_id: dep.equipe_id || null, zone_id: dep.zone_id || null }, motif: 'Créé depuis la saisie d’une vente' })).row.id;
           }
           if (cl.texte && !clientId) clientId = (await App.api.call('ref.save', { table: 'clients', row: { nom: cl.texte, type: 'Boutique' }, motif: 'Créé depuis la saisie d’une vente' })).row.id;
           await App.act('vente.create', { vente: { date: d.date, mode: d.mode, agent_id: agentId, client_id: clientId, echeance: d.mode === 'credit' ? d.echeance : null }, lignes: [{ produit_id: d.produit_id, unite: 'carton', quantite: d.quantite, prix_unitaire: d.prix_unitaire }] },
-            `Vente enregistrée.${!ve.id ? ` Agent « ${ve.texte} » ajouté.` : ''}${cl.texte && !cl.id ? ` Client « ${cl.texte} » ajouté.` : ''}`);
+            `Vente enregistrée.${!ve.id ? ` Hôtesse « ${ve.texte} » ajouté.` : ''}${cl.texte && !cl.id ? ` Client « ${cl.texte} » ajouté.` : ''}`);
           close();
         } catch (e) { await App.refresh().catch(() => {}); showErr(m, e.message); }
       }));
@@ -381,7 +381,7 @@ export function renderCreditsEssentiel(root) {
     kpi('Échéance dans 2 jours ou moins', fmtN(proches.length), '', proches.length ? 'warn' : ''), kpi('Plus gros retard', retard.length ? `${Math.max(...retard.map((c) => c.joursRetard))} jours` : '—', '', retard.length ? 'crit' : '')].join('');
   const rang = (c) => (c.statut === 'En retard' ? 0 : c.proche ? 1 : 2);
   new Table({ title: 'Crédits clients', rows: cr.sort((a, b) => rang(a) - rang(b) || b.joursRetard - a.joursRetard), pageSize: 30, empty: 'Aucun crédit en cours.',
-    cols: [{ k: 'client', l: 'Client', v: (r) => nm.client(r.client_id), f: (r) => `<b>${esc(nm.client(r.client_id))}</b>` }, { k: 'vendeur', l: 'Agent', v: (r) => nm.agent(r.agent_id) },
+    cols: [{ k: 'client', l: 'Client', v: (r) => nm.client(r.client_id), f: (r) => `<b>${esc(nm.client(r.client_id))}</b>` }, { k: 'vendeur', l: 'Hôtesse', v: (r) => nm.agent(r.agent_id) },
       { k: 'depot', l: 'Dépôt', v: (r) => { const a = App.I.agents.get(r.agent_id); return a?.role_circuit === 'depot' ? a.nom : nm.agent(a?.depot_id); } },
       { k: 'date', l: 'Vendu le', f: (r) => fmtD(r.date) }, { k: 'echeance', l: 'À rembourser le', f: (r) => fmtD(r.echeance) }, { k: 'solde', l: 'Reste dû (FCFA)', num: 1, f: (r) => `<b>${fmtN(r.solde)}</b>` },
       { k: 'statut', l: 'Situation', v: (r) => rang(r), f: (r) => (r.statut === 'En retard' ? pill(`En retard de ${r.joursRetard} j`, 'crit') : r.proche ? pill('Échéance proche', 'warn') : pill('En cours', 'info')) }] }).mount($('#ct', root));

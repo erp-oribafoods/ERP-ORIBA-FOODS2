@@ -41,7 +41,7 @@ export const opts = (table, label = 'nom', { all = false, filter } = {}) => Obje
 // Barre de filtres réutilisable
 const FILTER_DEFS = {
   periode: null,
-  agent_id: { l: 'Agent', o: () => opts('agents', 'nom', { all: true }) },
+  agent_id: { l: 'Hôtesse', o: () => opts('agents', 'nom', { all: true }) },
   marche_id: { l: 'Marché / village', o: () => opts('marches', 'nom', { all: true }) },
   zone_id: { l: 'Région / zone', o: () => opts('zones', 'nom', { all: true }) },
   equipe_id: { l: 'Équipe', o: () => opts('equipes', 'nom', { all: true }) },

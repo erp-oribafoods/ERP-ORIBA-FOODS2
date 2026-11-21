@@ -19,16 +19,30 @@ const map = { 'chart.umd.min.js': 'chart.js/dist/chart.umd.js', 'xlsx.full.min.j
     await page.fill('[name=identifiant]', 'commercial'); await page.fill('[name=password]', 'Demo2026'); await page.click('#lf button[type=submit]');
     await page.waitForSelector('.layout', { timeout: 30000 });
     if (!(await page.$('a[data-p="previsions"]'))) errors.push('Entrée de menu absente');
-    for (const axe of ['agent', 'marche', 'zone', 'depot', 'pics']) {
+    for (const axe of ['annee', 'agent', 'marche', 'zone', 'depot', 'pics']) {
       await page.evaluate(() => { location.hash = 'previsions'; }); await page.waitForTimeout(400);
       await page.click(`[data-axe="${axe}"]`); await page.waitForTimeout(700);
       const ov = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1); if (ov) errors.push(`[${vp.width}] débordement ${axe}`);
       await page.screenshot({ path: `${OUT}/${vp.width}-${axe}.png`, fullPage: vp.width > 500 });
+      if (axe === 'annee') {
+        const n = await page.$$eval('#pa-t tbody tr', (t) => t.length); if (!n) errors.push('Proposition annuelle vide');
+        await page.click('#pa-t tbody tr'); await page.waitForTimeout(600);
+        await page.screenshot({ path: `${OUT}/${vp.width}-annee-detail.png` });
+        await page.click('.modal-f [data-close]'); await page.waitForTimeout(300);
+        for (const v of ['marche', 'zone']) { await page.click(`[data-vue="${v}"]`); await page.waitForTimeout(500); await page.screenshot({ path: `${OUT}/${vp.width}-annee-${v}.png`, fullPage: vp.width > 500 }); }
+        await page.click('[data-vue="agent"]'); await page.waitForTimeout(400);
+        if (vp.width > 500 && await page.$('#pa-ok')) {
+          await page.click('#pa-ok'); await page.waitForTimeout(400);
+          await page.fill('#cb-motif', 'Objectifs 2027 issus de la projection'); await page.click('.modal [data-ok]'); await page.waitForTimeout(2500);
+          const t = await page.textContent('#toasts').catch(() => ''); if (!/enregistrés \(12 mois\)/.test(t || '')) errors.push('Enregistrement 2027 : ' + t);
+          await page.screenshot({ path: `${OUT}/${vp.width}-annee-apres.png`, fullPage: true });
+        }
+      }
       if (axe === 'agent') {
         const n = await page.$$eval('#pv-t tbody tr', (t) => t.length); if (!n) errors.push('Tableau agents vide');
         await page.click('#pv-t tbody tr'); await page.waitForTimeout(600);
         await page.screenshot({ path: `${OUT}/${vp.width}-detail.png` });
-        await page.click('[data-close]'); await page.waitForTimeout(300);
+        await page.click('.modal-f [data-close]'); await page.waitForTimeout(300);
         // mois futur puis passé
         await page.fill('#pv-m', '2027-05'); await page.dispatchEvent('#pv-m', 'change'); await page.waitForTimeout(600);
         await page.screenshot({ path: `${OUT}/${vp.width}-agent-mai27.png`, fullPage: vp.width > 500 });

@@ -34,7 +34,7 @@ export function renderVentes(root, mode) {
       .filter((r) => !credit || !f.statut_credit || r.t.statut === f.statut_credit);
     const cols = [
       { k: 'numero', l: 'N°' }, { k: 'date', l: 'Date', f: (r) => fmtD(r.date) },
-      { k: 'agent', l: 'Agent', v: (r) => nm.agent(r.agent_id) }, { k: 'marche', l: 'Marché', v: (r) => nm.marche(r.marche_id) },
+      { k: 'agent', l: 'Hôtesse', v: (r) => nm.agent(r.agent_id) }, { k: 'marche', l: 'Marché', v: (r) => nm.marche(r.marche_id) },
       { k: 'client', l: credit ? 'Client / débiteur' : 'Client / acheteur', v: (r) => (r.client_id ? nm.client(r.client_id) : '—') },
       { k: 'articles', l: 'Articles', v: (r) => lignesResume(r), cls: 'wrap' },
       { k: 'cartons', l: 'Qté (ctn éq.)', num: 1, v: (r) => r.t.cartons, f: (r) => fmtQ(r.t.cartons) },
@@ -73,7 +73,7 @@ export function venteForm({ mode, vente = null }) {
   const body = `<form class="form" id="vf" autocomplete="off">
     <div class="grid2">
       ${field({ k: 'date', l: 'Date de vente', t: 'date', req: 1 }, h.date)}
-      ${field({ k: 'agent_id', l: 'Agent', t: 'options', req: 1, options: opts('agents', 'nom', { all: corr }) }, h.agent_id)}
+      ${field({ k: 'agent_id', l: 'Hôtesse', t: 'options', req: 1, options: opts('agents', 'nom', { all: corr }) }, h.agent_id)}
       ${field({ k: 'marche_id', l: 'Marché / village', t: 'options', req: 1, options: opts('marches', 'nom', { all: corr }) }, h.marche_id)}
       ${field({ k: 'client_id', l: credit ? 'Client / débiteur' : 'Client / acheteur (facultatif)', t: 'options', req: credit ? 1 : 0, options: opts('clients', 'nom', { all: corr }) }, h.client_id)}
       ${credit ? field({ k: 'echeance', l: 'Date de promesse / échéance', t: 'date', help: `Par défaut : date + ${num(I.p.delai_paiement_jours)} jours` }, h.echeance) : ''}
@@ -170,7 +170,7 @@ export function openVente(id) {
       <div class="det-amt">${fmtF(t.montant)}${credit ? `<small>Solde : <b>${fmtF(ci.solde)}</b></small>` : ''}</div>
     </div>
     <dl class="dl">
-      <dt>Date</dt><dd>${fmtD(v.date)}</dd><dt>Agent</dt><dd>${esc(nm.agent(v.agent_id))}</dd>
+      <dt>Date</dt><dd>${fmtD(v.date)}</dd><dt>Hôtesse</dt><dd>${esc(nm.agent(v.agent_id))}</dd>
       <dt>Marché / village</dt><dd>${esc(nm.marche(v.marche_id))}</dd><dt>Client</dt><dd>${v.client_id ? `<a href="#" data-client="${v.client_id}">${esc(nm.client(v.client_id))}</a>` : '—'}</dd>
       ${credit ? `<dt>Échéance</dt><dd>${fmtD(v.echeance)}${ci.joursRetard ? ` · <span class="t-crit">${ci.joursRetard} j de retard</span>` : ''}</dd><dt>Quantité restant due</dt><dd>${fmtQ(ci.cartonsRestants)} ctn éq.</dd>` : ''}
       <dt>Observation</dt><dd>${esc(v.observation || '—')}</dd><dt>Saisie</dt><dd>${esc(nm.user(v.created_by))}, ${new Date(v.created_at).toLocaleString('fr-FR', { timeZone: 'Africa/Niamey' })}</dd>
@@ -275,7 +275,7 @@ export function renderRemboursements(root) {
       foot: (c, rs) => (c.k === 'montant' ? `<b>${fmtN(rs.filter((r) => r.statut === 'valide').reduce((s, r) => s + r.montant, 0))}</b>` : c.k === 'numero' ? '<b>Total valide</b>' : ''),
       cols: [
         { k: 'numero', l: 'N°' }, { k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'vente', l: 'Vente', v: (r) => r.v.numero },
-        { k: 'client', l: 'Client', v: (r) => nm.client(r.v.client_id) }, { k: 'agent', l: 'Agent', v: (r) => nm.agent(r.v.agent_id) },
+        { k: 'client', l: 'Client', v: (r) => nm.client(r.v.client_id) }, { k: 'agent', l: 'Hôtesse', v: (r) => nm.agent(r.v.agent_id) },
         { k: 'mode', l: 'Mode' }, { k: 'reference', l: 'Référence' }, { k: 'montant', l: 'Montant FCFA', num: 1, f: (r) => fmtN(r.montant) },
         { k: 'statut', l: 'Statut', v: (r) => (r.statut === 'valide' ? 'Valide' : 'Annulé'), f: (r) => (r.statut === 'valide' ? pill('Valide', 'ok') : pill('Annulé', 'mute')) },
         { k: 'par', l: 'Enregistré par', v: (r) => nm.user(r.created_by) },

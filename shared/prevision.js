@@ -107,3 +107,24 @@ export function series(faits, cle, mesure) {
   }
   return out;
 }
+
+// Proposition d'objectifs mensuels pour une année entière.
+// base : niveau mensuel « normal » retenu ; croissance : hausse visée sur l'année (%), appliquée progressivement
+// (janvier +1/12 de la hausse … décembre la hausse entière) ; chaque mois est ensuite ajusté par son coefficient saisonnier.
+export function projeterAnnee(base, annee, { eff, croissance = 10, arrondi = 5 }) {
+  return Array.from({ length: 12 }, (_, i) => {
+    const m = `${annee}-${String(i + 1).padStart(2, '0')}`;
+    const coef = coefMois(m, eff), prog = 1 + (num(croissance) / 100) * ((i + 1) / 12);
+    const brut = num(base) * prog * coef;
+    return { mois: m, coef, prog, brut, objectif: arrondi ? Math.ceil(brut / arrondi - 1e-9) * arrondi : brut };
+  });
+}
+
+// Base mensuelle d'une hôtesse : son objectif actuel ; si elle vend déjà plus que cet objectif, son niveau de vente réel.
+export function baseRetenue(objectifActuel, niveauVentes) {
+  const o = objectifActuel === null || objectifActuel === undefined ? null : num(objectifActuel), v = num(niveauVentes);
+  if (o === null && v <= 0) return { base: 0, raison: 'Ni objectif ni vente' };
+  if (o === null) return { base: v, raison: 'Pas d’objectif actuel : niveau de ventes' };
+  if (v > o) return { base: v, raison: 'Vend déjà plus que son objectif : niveau de ventes' };
+  return { base: o, raison: 'Objectif actuel' };
+}

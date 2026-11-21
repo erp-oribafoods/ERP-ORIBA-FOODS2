@@ -6,9 +6,9 @@ export const MODULES = [
   { k: 'remboursements', l: 'Remboursements', a: ['lire', 'creer', 'annuler', 'exporter'] },
   { k: 'creances', l: 'Créances & relances', a: ['lire', 'creer', 'exporter'] },
   { k: 'stock', l: 'Stock confié', a: ['lire', 'creer', 'annuler', 'exporter'] },
-  { k: 'circuit', l: 'Circuit de distribution (grossistes, dépôts, sous-agents, versements)', a: ['lire', 'creer', 'annuler', 'exporter'] },
+  { k: 'circuit', l: 'Circuit de distribution (grossistes, dépôts, hôtesses, versements)', a: ['lire', 'creer', 'annuler', 'exporter'] },
   { k: 'objectifs', l: 'Objectifs commerciaux', a: ['lire', 'modifier'] },
-  { k: 'suivi', l: 'Suivi des agents terrain (présence, déstockage, évaluation)', a: ['lire', 'modifier'] },
+  { k: 'suivi', l: 'Suivi des hôtesses terrain (présence, déstockage, évaluation)', a: ['lire', 'modifier'] },
   { k: 'depenses', l: 'Dépenses commerciales', a: ['lire', 'creer', 'modifier', 'controler', 'valider', 'annuler', 'exporter'] },
   { k: 'salaires', l: 'Détail des dépenses sensibles (salaires)', a: ['lire'] },
   { k: 'budgets', l: 'Budgets de dépenses', a: ['lire', 'modifier'] },
@@ -87,7 +87,7 @@ export const DEFAULT_ROLES = [
   },
   {
     nom: 'Ressources Humaines',
-    description: 'Présence, retards, absences et évaluation mensuelle des agents terrain ; primes.',
+    description: 'Présence, retards, absences et évaluation mensuelle des hôtesses terrain ; primes.',
     permissions: { suivi: ['lire', 'modifier'], objectifs: ['lire'], referentiels: ['lire'] },
   },
 ];
@@ -139,9 +139,9 @@ export const PARAM_DEFS = [
   { k: 'prev_effet_hivernage', l: 'Baisse pendant l’hivernage (%)', t: 'number', g: 'Prévisions' },
   { k: 'prev_croissance_max', l: 'Tendance maximale retenue (% par mois)', t: 'number', g: 'Prévisions' },
   { k: 'double_controle', l: 'Double contrôle : interdire de valider ses propres saisies (dépenses, demandes carburant/vidange)', t: 'bool', g: 'Dépenses' },
-  { k: 'prime_note_min', l: 'Note minimale pour la prime mensuelle (sur 10)', t: 'number', g: 'Agents terrain' },
-  { k: 'prime_montant', l: 'Montant de la prime mensuelle (FCFA)', t: 'number', g: 'Agents terrain' },
-  { k: 'circuit_date_depart', l: 'Date des stocks initiaux du circuit (grossistes, dépôts, sous-agents)', t: 'date', g: 'Circuit de distribution' },
+  { k: 'prime_note_min', l: 'Note minimale pour la prime mensuelle (sur 10)', t: 'number', g: 'Hôtesses terrain' },
+  { k: 'prime_montant', l: 'Montant de la prime mensuelle (FCFA)', t: 'number', g: 'Hôtesses terrain' },
+  { k: 'circuit_date_depart', l: 'Date des stocks initiaux du circuit (grossistes, dépôts, hôtesses)', t: 'date', g: 'Circuit de distribution' },
   { k: 'delai_session_min', l: "Déconnexion automatique après inactivité (minutes)", t: 'number', g: 'Sécurité' },
 ];
 
@@ -156,13 +156,13 @@ export const REFS = {
     ],
   },
   agents: {
-    l: 'Agents commerciaux', one: 'agent',
+    l: 'Hôtesses', one: 'hôtesse',
     f: [
       { k: 'code', l: 'Code', t: 'text' }, { k: 'nom', l: 'Nom complet', t: 'text', req: 1 },
       { k: 'fonction', l: 'Fonction', t: 'text' }, { k: 'telephone', l: 'Téléphone pro.', t: 'text' }, { k: 'equipe_id', l: 'Équipe', t: 'ref:equipes' },
       { k: 'zone_id', l: 'Zone', t: 'ref:zones' }, { k: 'marche_id', l: 'Marché d’affectation', t: 'ref:marches' },
       { k: 'date_affectation', l: "Date d'affectation", t: 'date' },
-      { k: 'role_circuit', l: 'Rôle dans le circuit', t: 'select:depot=Dépôt|sous_agent=Agent d’un dépôt' }, { k: 'responsable', l: 'Chef d’équipe responsable (pour un dépôt)', t: 'text' }, { k: 'depot_id', l: 'Dépôt (pour un agent)', t: 'ref:agents' },
+      { k: 'role_circuit', l: 'Rôle dans le circuit', t: 'select:depot=Dépôt|sous_agent=Hôtesse d’un dépôt' }, { k: 'responsable', l: 'Chef d’équipe responsable (pour un dépôt)', t: 'text' }, { k: 'depot_id', l: 'Dépôt (pour une hôtesse)', t: 'ref:agents' },
       { k: 'stock_initial', l: 'Stock initial (cartons)', t: 'number' }, { k: 'prix_carton', l: 'Prix du carton DADI (FCFA, pour un dépôt)', t: 'number' },
       { k: 'solde_initial_food', l: 'Reste à encaisser au départ — Oriba Food (FCFA, pour un dépôt)', t: 'number' }, { k: 'solde_initial_rice', l: 'Reste à encaisser au départ — Oriba Rice (FCFA, pour un dépôt)', t: 'number' },
     ],
@@ -305,10 +305,10 @@ export const CATS_VALIDITE = ['ASSU', 'VIGN', 'VTEC', 'PATE', 'AUTO'];
 export const DOCS_VEHICULE = [['ASSU', 'Assurance'], ['VIGN', 'Vignette'], ['VTEC', 'Visite technique']];
 export const CATS_LOGISTIQUE = ['CARB', 'VIDA', 'FILT', 'VIGN', 'ASSU', 'REPA', 'VTEC', 'INSA', 'AUTO'];
 
-export const AXES_OBJECTIF = { agent: 'Agent', zone: 'Zone', equipe: 'Équipe', marche: 'Marché', produit: 'Produit', global: 'Global (tout le service)' };
+export const AXES_OBJECTIF = { agent: 'Hôtesse', zone: 'Zone', equipe: 'Équipe', marche: 'Marché', produit: 'Produit', global: 'Global (tout le service)' };
 
 // Circuit de distribution : usine / Oriba Rice → grossistes → agents-dépôts → sous-agents → clients
-export const CIRCUIT_TYPES = { appro: 'Approvisionnement d’un grossiste', prise: 'Approvisionnement d’un dépôt', dispatch: 'Remise à un agent' };
+export const CIRCUIT_TYPES = { appro: 'Approvisionnement d’un grossiste', prise: 'Approvisionnement d’un dépôt', dispatch: 'Remise à une hôtesse' };
 export const FOURNISSEURS = ['Oriba Food', 'Oriba Rice'];
 export const OBJETS_VERSEMENT = { ventes_comptant: 'Ventes comptant', reglement_grossiste: 'Règlement grossiste' };
 export const LIEUX_VERSEMENT = { caisse: 'Caisse Oriba', grossiste: 'Chez le grossiste' };

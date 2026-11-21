@@ -268,7 +268,7 @@ console.log('Circuit de distribution (grossistes → agents-dépôts → sous-ag
   const ap = await call(sessions.com, 'circuit.save', { type: 'appro', date: today(), grossiste_id: gro.id, fournisseur: 'Usine Oriba Foods', produit_id: prod.id, cartons: 100, prix: 12000 });
   ok(ap.mvt.montant === 1200000 && /^CM-/.test(ap.mvt.numero), `Approvisionnement ${ap.mvt.numero} : 100 × 12 000 = ${ap.mvt.montant}`);
   await call(sessions.com, 'circuit.save', { type: 'prise', date: today(), agent_id: depA.id, grossiste_id: gro.id, produit_id: prod.id, cartons: 30, prix: 12500, mode: 'Crédit' });
-  await expectErr(call(sessions.com, 'circuit.save', { type: 'dispatch', date: today(), agent_id: depA.id, sous_agent_id: ag.id, produit_id: prod.id, cartons: 5 }), 'Dispatch refusé vers un agent qui n’est pas son sous-agent', /agent de ce dépôt/);
+  await expectErr(call(sessions.com, 'circuit.save', { type: 'dispatch', date: today(), agent_id: depA.id, sous_agent_id: ag.id, produit_id: prod.id, cartons: 5 }), 'Dispatch refusé vers un agent qui n’est pas son sous-agent', /hôtesse de ce dépôt/);
   await call(sessions.com, 'circuit.save', { type: 'dispatch', date: today(), agent_id: depA.id, sous_agent_id: sa.id, produit_id: prod.id, cartons: 12 });
   const depB = await ref('agents', { code: 'D-NY2', nom: 'Dépôt Niamey 2', equipe_id: eq.id, zone_id: eq.zone_id, role_circuit: 'depot' });
   await expectErr(call(sessions.com, 'circuit.save', { type: 'transfert', date: today(), agent_id: depA.id, depot_dest_id: depB.id, produit_id: prod.id, cartons: 6 }), 'Les transferts entre dépôts sont supprimés', /n’existent plus/);

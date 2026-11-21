@@ -31,7 +31,7 @@ export function renderTbVentes(root) {
       <article class="card tb-sec violet"><header><h3>Ventes par produit</h3></header><div id="t-pr"></div></article></div>
     <article class="card tb-sec marine"><header><h3>Évolution mensuelle</h3></header><div id="t-mo"></div></article>
     <article class="card tb-sec vert"><header><h3>Ventes par marché / village</h3></header><div id="t-mk"></div></article>
-    <article class="card tb-sec bleu"><header><h3>Ventes par vendeur · chefs d’équipe et agents</h3></header><div id="t-vd"></div></article>
+    <article class="card tb-sec bleu"><header><h3>Ventes par vendeur · chefs d’équipe et hôtesses</h3></header><div id="t-vd"></div></article>
     <article class="card"><header><h3>Top 10 des clients débiteurs</h3><span class="muted small">montant restant dû</span></header><div class="cv h300"><canvas id="t-g4"></canvas></div></article>
     <article class="card tb-sec rouge"><header><h3>Créances par client</h3><span class="muted small">toutes dates</span></header><div id="t-cl"></div></article>`;
   const draw = () => {

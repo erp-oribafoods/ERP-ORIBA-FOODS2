@@ -17,7 +17,7 @@ function factsTable(title, rows) {
     cols: [
       { k: 'numero', l: 'N°', v: (r) => r.v.numero }, { k: 'date', l: 'Date', v: (r) => r.date, f: (r) => fmtD(r.date) },
       { k: 'mode', l: 'Mode', v: (r) => (r.mode === 'credit' ? 'Crédit' : 'Comptant') },
-      { k: 'agent', l: 'Agent', v: (r) => nm.agent(r.agent_id) }, { k: 'client', l: 'Client', v: (r) => nm.client(r.client_id) },
+      { k: 'agent', l: 'Hôtesse', v: (r) => nm.agent(r.agent_id) }, { k: 'client', l: 'Client', v: (r) => nm.client(r.client_id) },
       { k: 'produit', l: 'Produit', v: (r) => nm.produit(r.produit_id) },
       { k: 'cartons', l: 'Qté (ctn éq.)', num: 1, v: (r) => r.cartons, f: (r) => fmtQ(r.cartons) },
       { k: 'montant', l: 'Montant FCFA', num: 1, v: (r) => r.montant, f: (r) => fmtN(r.montant) },
@@ -33,7 +33,7 @@ function creditsTable(title, rows) {
     title, rows, pageSize: 15, sort: { k: 'solde', dir: -1 },
     cols: [
       { k: 'numero', l: 'N°', v: (r) => r.v.numero }, { k: 'date', l: 'Date', v: (r) => r.v.date, f: (r) => fmtD(r.v.date) },
-      { k: 'client', l: 'Client', v: (r) => nm.client(r.v.client_id) }, { k: 'agent', l: 'Agent', v: (r) => nm.agent(r.v.agent_id) },
+      { k: 'client', l: 'Client', v: (r) => nm.client(r.v.client_id) }, { k: 'agent', l: 'Hôtesse', v: (r) => nm.agent(r.v.agent_id) },
       { k: 'echeance', l: 'Échéance', v: (r) => r.v.echeance, f: (r) => fmtD(r.v.echeance) },
       { k: 'solde', l: 'Solde FCFA', num: 1, v: (r) => r.ci.solde, f: (r) => fmtN(r.ci.solde) },
       { k: 'retard', l: 'Retard (j)', num: 1, v: (r) => r.ci.joursRetard },
@@ -107,7 +107,7 @@ function drawDash(host) {
       <ul class="alerts">${A.slice().sort((a, b) => ({ crit: 0, warn: 1, info: 2 }[a.sev] - { crit: 0, warn: 1, info: 2 }[b.sev])).slice(0, 12).map((a) => `<li class="al ${a.sev}" data-page="${a.page}" data-id="${a.id}" tabindex="0"><b>${esc(a.type)}</b><span>${esc(a.msg)}</span></li>`).join('') || '<li class="muted">Aucune alerte.</li>'}</ul>
       ${A.length > 12 ? `<button class="btn sm ghost" data-go="creances">Voir les ${A.length} alertes</button>` : ''}</article>
     <article class="card"><header><h3>Comptant et crédit par mois</h3></header><div class="cv h240"><canvas id="c-mode"></canvas></div></article>
-    <article class="card"><header><h3>Ventes par agent</h3></header><div class="cv h240 scroll-y"><canvas id="c-agent"></canvas></div></article>
+    <article class="card"><header><h3>Ventes par hôtesse</h3></header><div class="cv h240 scroll-y"><canvas id="c-agent"></canvas></div></article>
     <article class="card"><header><h3>Répartition par produit</h3></header><div class="cv h240"><canvas id="c-prod"></canvas></div></article>
     <article class="card"><header><h3>Ventes par marché / village</h3></header><div class="cv h240"><canvas id="c-marche"></canvas></div></article>
     <article class="card"><header><h3>Remboursements et créances ouvertes</h3></header><div class="cv h240"><canvas id="c-remb"></canvas></div></article>
@@ -116,7 +116,7 @@ function drawDash(host) {
     <article class="card"><header><h3>Créances par statut</h3></header><div class="cv h240"><canvas id="c-statut"></canvas></div></article>
     <article class="card span2"><header><h3>Stock confié par lot</h3></header><div class="cv h240"><canvas id="c-stock"></canvas></div></article>
     <article class="card span3"><header><h3>Classements</h3>
-      <div class="seg" role="group"><button data-top="agent_id" class="on">Agents</button><button data-top="marche_id">Marchés</button><button data-top="produit_id">Produits</button><button data-top="client_id">Clients</button></div></header>
+      <div class="seg" role="group"><button data-top="agent_id" class="on">Hôtesses</button><button data-top="marche_id">Marchés</button><button data-top="produit_id">Produits</button><button data-top="client_id">Clients</button></div></header>
       <div id="tops"></div></article>
   </section>`;
 
@@ -217,7 +217,7 @@ function drawDash(host) {
     for (const x of facts) { const k = x[key] || '—'; const o = g.get(k) || { id: k, ca: 0, q: 0, c: 0, k: 0, n: new Set() }; o.ca += x.montant; o.q += x.cartons; if (x.mode === 'comptant') o.c += x.montant; else o.k += x.montant; o.n.add(x.v.id); g.set(k, o); }
     const rows = [...g.values()].map((o, i) => ({ ...o, nb: o.n.size, nom: name(o.id) }));
     new Table({ title: 'Classement', rows, pageSize: 10, sort: { k: 'ca', dir: -1 }, meta: () => `Filtres : ${describeFilters('ventes')}`, cols: [
-      { k: 'nom', l: { agent_id: 'Agent', marche_id: 'Marché', produit_id: 'Produit', client_id: 'Client' }[key] },
+      { k: 'nom', l: { agent_id: 'Hôtesse', marche_id: 'Marché', produit_id: 'Produit', client_id: 'Client' }[key] },
       { k: 'nb', l: 'Ventes', num: 1 }, { k: 'q', l: 'Qté (ctn)', num: 1, f: (r) => fmtQ(r.q) },
       { k: 'c', l: 'Comptant', num: 1, f: (r) => fmtN(r.c) }, { k: 'k', l: 'Crédit', num: 1, f: (r) => fmtN(r.k) },
       { k: 'ca', l: 'CA total FCFA', num: 1, f: (r) => `<b>${fmtN(r.ca)}</b>` },
@@ -231,7 +231,7 @@ function drawDash(host) {
 
 // ---------- Analyses cumulées ----------
 const DIMS = {
-  agent_id: ['Agent', (x) => x.agent_id, nm.agent], marche_id: ['Marché / village', (x) => x.marche_id, nm.marche],
+  agent_id: ['Hôtesse', (x) => x.agent_id, nm.agent], marche_id: ['Marché / village', (x) => x.marche_id, nm.marche],
   client_id: ['Client', (x) => x.client_id, nm.client], produit_id: ['Produit', (x) => x.produit_id, nm.produit],
   zone_id: ['Région / zone', (x) => x.zone_id, nm.zone], equipe_id: ['Équipe', (x) => x.equipe_id, nm.equipe],
   jour: ['Jour', (x) => x.date, fmtD], semaine: ['Semaine', (x) => isoWeek(x.date), (k) => k],

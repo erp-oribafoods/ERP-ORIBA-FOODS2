@@ -163,14 +163,14 @@ export function preremplir(def, { depotId, date, lienId }) {
       const du = def.src === 'semaine' ? lundi(date) : date;
       const s = situationDepots(C, du, date).find((x) => x.id === depot); if (!s) break;
       if (def.code === 'FJD') {
-        lignes[0] = [['Stock de début (cartons)', r0(s.siTotal ?? s.si)], ['Cartons pris chez Oriba Food', s.recuFoods], ['Cartons pris chez Oriba Rice', s.recuRice], ['Cartons pris chez un grossiste', s.recuGross], ['Cartons remis aux agents', s.disp],
+        lignes[0] = [['Stock de début (cartons)', r0(s.siTotal ?? s.si)], ['Cartons pris chez Oriba Food', s.recuFoods], ['Cartons pris chez Oriba Rice', s.recuRice], ['Cartons pris chez un grossiste', s.recuGross], ['Cartons remis aux hôtesses', s.disp],
           ['Cartons vendus au comptant', s.vcReseau], ['Cartons vendus à crédit', s.vkReseau], ['Stock de fin (cartons)', r0(s.stockTotal ?? s.sf)], ['Argent à verser à Oriba Food (FCFA)', r0(s.aVerserFood)], ['Argent à verser à Oriba Rice (FCFA)', r0(s.aVerserRice)],
           ['Argent versé (FCFA)', r0(s.verse)], ['Remboursements encaissés (FCFA)', r0(s.remb)]];
         const net = reseau(depot);
         champs['Numéros des pièces du jour'] = [...(D.circuit_mvts || []).filter((m) => m.statut !== 'annule' && m.date === date && (net.has(m.agent_id))).map((m) => m.numero), ...(D.versements || []).filter((v) => v.statut !== 'annule' && v.date === date && net.has(v.agent_id)).map((v) => v.numero)].filter(Boolean).join(', ');
       } else {
         const credits = creditsCircuit(C, date, { tous: true }).filter((c) => reseau(depot).has(c.agent_id) && c.date >= du && c.date <= date);
-        lignes[0] = [['Stock de début (cartons)', r0(s.siTotal ?? s.si)], ['Cartons reçus', round2(s.recu)], ['Cartons remis aux agents', s.disp], ['Cartons vendus', s.venduReseau], ['Stock de fin (cartons)', r0(s.stockTotal ?? s.sf)],
+        lignes[0] = [['Stock de début (cartons)', r0(s.siTotal ?? s.si)], ['Cartons reçus', round2(s.recu)], ['Cartons remis aux hôtesses', s.disp], ['Cartons vendus', s.venduReseau], ['Stock de fin (cartons)', r0(s.stockTotal ?? s.sf)],
           ['Argent à verser (FCFA)', r0(s.aVerser)], ['Argent versé (FCFA)', r0(s.verse)], ['Crédits accordés (FCFA)', r0(credits.reduce((a, c) => a + c.montant, 0))], ['Remboursements (FCFA)', r0(s.remb)]];
       }
       break;
@@ -186,7 +186,7 @@ export function preremplir(def, { depotId, date, lienId }) {
     case 'objectifs': {
       const mois = (date || App.serverDate).slice(0, 7);
       lignes[0] = (D.objectifs || []).filter((o) => o.actif !== false && o.mois === mois && !o.produit_id && ['agent', 'equipe'].includes(o.axe))
-        .map((o) => [o.axe === 'agent' ? nomAgent(o.cible_id) : nm.equipe(o.cible_id), o.axe === 'agent' ? (I.agents.get(o.cible_id)?.role_circuit === 'depot' ? 'Chef d’équipe (dépôt)' : 'Agent') : 'Équipe', num(o.objectif_cartons), ''])
+        .map((o) => [o.axe === 'agent' ? nomAgent(o.cible_id) : nm.equipe(o.cible_id), o.axe === 'agent' ? (I.agents.get(o.cible_id)?.role_circuit === 'depot' ? 'Chef d’équipe (dépôt)' : 'Hôtesse') : 'Équipe', num(o.objectif_cartons), ''])
         .sort((a, b) => String(a[0]).localeCompare(String(b[0]), 'fr'));
       break;
     }

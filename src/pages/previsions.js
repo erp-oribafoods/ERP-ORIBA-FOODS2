@@ -1,11 +1,12 @@
 // Prévisions de vente mensuelles par agent, marché, zone et dépôt, comparées aux objectifs et aux réalisations.
 import { App, nm, pageHead } from '../app.js';
-import { esc, $, $$, fmtF, fmtN, Table, modal, chart, palette, icon, showErr, busy, confirmBox } from '../lib/ui.js';
+import { esc, $, $$, fmtF, fmtN, Table, modal, chart, palette, icon, toast, busy, confirmBox } from '../lib/ui.js';
 import { salesFacts, moisLabel } from '../lib/facts.js';
 import { today, num } from '../../shared/logic.js';
-import { prevoir, reviser, repartition, series, effets, coefMois, evenementsDuMois, moisSuivant, listeMois, LIB_EVT, EVENEMENTS } from '../../shared/prevision.js';
+import { prevoir, reviser, repartition, series, effets, coefMois, evenementsDuMois, moisSuivant, listeMois, LIB_EVT, EVENEMENTS, projeterAnnee, baseRetenue } from '../../shared/prevision.js';
 
-const AXES = { agent: 'Par agent', marche: 'Par marché', zone: 'Par zone', depot: 'Par dépôt', pics: 'Calendrier des pics' };
+const ANNEE = () => String(+today().slice(0, 4) + (today().slice(5, 7) >= '07' ? 1 : 0));
+const AXES = { annee: `Objectifs ${ANNEE()}`, agent: 'Suivi par hôtesse', marche: 'Par marché', zone: 'Par zone', depot: 'Par dépôt', pics: 'Calendrier des pics' };
 const COL = { real: '#1F4E79', prev: '#C55A11', obj: '#7F7F7F', rev: '#BF8F00' };
 const MOIS_LONG = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const libM = (m) => `${MOIS_LONG[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
@@ -13,7 +14,7 @@ const pct = (a, b) => (b ? (a / b) * 100 : null);
 const signe = (x, f) => (x === null || x === undefined ? '—' : `<b class="${x >= 0 ? 't-ok' : 't-crit'}">${x > 0 ? '+' : ''}${f(x)}</b>`);
 const carte = (lib, val, cls, sous = '') => `<div class="tbc ${cls}"><span class="tbc-l">${lib}</span><span class="tbc-v">${val}</span>${sous ? `<span class="tbc-s">${sous}</span>` : ''}</div>`;
 
-const F = () => (App.filters.prev = App.filters.prev || { axe: 'agent', mois: today().slice(0, 7), mesure: 'cartons', tous: false });
+const F = () => (App.filters.prev = App.filters.prev || { axe: 'annee', mois: today().slice(0, 7), mesure: 'cartons', tous: false, vue: 'agent', croissance: 10 });
 
 // Dépôt d'un agent : lui-même s'il tient un dépôt, sinon le dépôt auquel il est rattaché
 const depotDe = (agentId) => { const a = App.I.agents.get(agentId); return a ? (a.role_circuit === 'depot' ? a.id : a.depot_id || null) : null; };
@@ -77,7 +78,7 @@ export function renderPrevisions(root) {
   const fmt = (x) => (f.mesure === 'cartons' ? `${fmtN(x, 0)} ctn` : fmtF(x));
   root.innerHTML = pageHead('Prévisions de vente', 'Prévision mensuelle construite à partir des ventes déjà enregistrées et des objectifs, ajustée aux périodes de pic (Ramadan, Korité, Tabaski, fêtes, rentrée) et à l’hivernage, puis comparée aux réalisations.', '') +
     `<div class="seg onglets" role="tablist">${Object.entries(AXES).map(([k, l]) => `<button data-axe="${k}" class="${f.axe === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-    <div class="filters" id="pv-f" ${f.axe === 'pics' ? 'hidden' : ''}>
+    <div class="filters" id="pv-f" ${f.axe === 'pics' || f.axe === 'annee' ? 'hidden' : ''}>
       <label class="ff"><span>Mois</span><input type="month" id="pv-m" value="${f.mois}"></label>
       <div class="seg" role="group"><button data-mes="cartons" class="${f.mesure === 'cartons' ? 'on' : ''}" type="button">En cartons</button><button data-mes="montant" class="${f.mesure === 'montant' ? 'on' : ''}" type="button">En FCFA</button></div>
       <label class="chk"><input type="checkbox" id="pv-tous" ${f.tous ? 'checked' : ''}> <span>Afficher aussi les entités sans vente ni objectif</span></label>
@@ -87,7 +88,7 @@ export function renderPrevisions(root) {
   $$('[data-mes]', root).forEach((b) => b.addEventListener('click', () => { f.mesure = b.dataset.mes; renderPrevisions(root); }));
   $('#pv-tous', root).addEventListener('change', (e) => { f.tous = e.target.checked; draw(); });
   const host = $('#pv-host', root);
-  const draw = () => (f.axe === 'pics' ? calendrier(host) : vueAxe(host, fmt));
+  const draw = () => (f.axe === 'pics' ? calendrier(host) : f.axe === 'annee' ? vueAnnee(host) : vueAxe(host, fmt));
   draw();
 }
 
@@ -100,18 +101,18 @@ function vueAxe(root, fmt) {
   const avecObj = vis.filter((r) => r.obj !== null);
   const totObj = S('obj'), realObj = avecObj.reduce((s, r) => s + num(r.real), 0), totPrev = S('prev'), totReal = S('real'), totRev = vis.reduce((s, r) => s + num(r.rev ? r.rev.projection : r.prev), 0), totAtt = vis.reduce((s, r) => s + num(r.rev?.attendu), 0);
   const evts = evenementsDuMois(f.mois), coef = coefMois(f.mois, C.eff);
-  const nomAxe = { agent: 'agent', marche: 'marché', zone: 'zone', depot: 'dépôt' }[f.axe];
+  const nomAxe = { agent: 'hôtesse', marche: 'marché', zone: 'zone', depot: 'dépôt' }[f.axe];
   root.innerHTML = `
     ${enCours && !C.venteMoisCourant ? `<p class="note">Aucune vente n’est encore saisie pour ${libM(mc)} : la prévision du mois est affichée, mais l’écart avec le réalisé et la projection révisée apparaîtront dès les premières saisies.</p>` : ''}
     <section class="tbc-grid">
       ${carte(`Objectif ${libM(f.mois)}`, avecObj.length ? fmt(totObj) : 'Non fixé', 'marine', `${avecObj.length} ${nomAxe}(s) avec objectif`)}
       ${carte('Prévision du mois', fmt(totPrev), 'ambre', `coefficient saisonnier ${fmtN(coef, 2)}${evts.length ? ' · ' + [...new Set(evts.map((e) => LIB_EVT[e.cle]))].join(', ') : ''}`)}
       ${carte(futur ? 'Réalisé' : enCours ? 'Réalisé à ce jour' : 'Réalisé', futur ? '—' : fmt(totReal), 'bleu', enCours && C.venteMoisCourant ? `attendu à ce jour : ${fmt(totAtt)}` : '')}
-      ${carte('Écart réalisé − objectif', futur || !avecObj.length ? '—' : `${realObj - totObj >= 0 ? '+' : ''}${fmt(realObj - totObj)}`, realObj >= totObj ? 'vert' : 'rouge', avecObj.length && !futur ? `${fmtN(pct(realObj, totObj) || 0, 0)} % de l’objectif (agents avec objectif)`.replace('agents', { agent: 'agents', marche: 'marchés', zone: 'zones', depot: 'dépôts' }[f.axe]) : '')}
+      ${carte('Écart réalisé − objectif', futur || !avecObj.length ? '—' : `${realObj - totObj >= 0 ? '+' : ''}${fmt(realObj - totObj)}`, realObj >= totObj ? 'vert' : 'rouge', avecObj.length && !futur ? `${fmtN(pct(realObj, totObj) || 0, 0)} % de l’objectif (hôtesses avec objectif)`.replace('agents', { agent: 'agents', marche: 'marchés', zone: 'zones', depot: 'dépôts' }[f.axe]) : '')}
       ${carte('Écart réalisé − prévision', futur || (enCours && !C.venteMoisCourant) ? '—' : `${(enCours ? totReal - totAtt : totReal - totPrev) >= 0 ? '+' : ''}${fmt(enCours ? totReal - totAtt : totReal - totPrev)}`, 'violet', enCours ? 'par rapport à ce qui était attendu à ce jour' : '')}
       ${carte(enCours ? 'Projection révisée fin de mois' : 'Écart prévision − objectif', enCours ? (C.venteMoisCourant ? fmt(totRev) : '—') : avecObj.length ? `${totPrev - totObj >= 0 ? '+' : ''}${fmt(totPrev - totObj)}` : '—', 'clair', enCours ? 'selon le rythme réellement observé' : 'risque ou marge par rapport à l’objectif')}
     </section>
-    <div class="grid2"><article class="card"><header><h3>Réalisé, objectif et prévision par mois</h3><span class="muted small">total des ${nomAxe}s affichés</span></header><div class="cv h300"><canvas id="pv-g1"></canvas></div></article>
+    <div class="grid2"><article class="card"><header><h3>Réalisé, objectif et prévision par mois</h3><span class="muted small">total des lignes affichées</span></header><div class="cv h300"><canvas id="pv-g1"></canvas></div></article>
       <article class="card"><header><h3>Prévision ${libM(f.mois)} semaine par semaine</h3><span class="muted small">la prévision suit la montée des pics au lieu de rester plate</span></header><div class="cv h300"><canvas id="pv-g2"></canvas></div></article></div>
     <article class="card"><header><h3>Objectif, prévision et réalisé — ${libM(f.mois)}</h3><span class="muted small">cliquez sur une ligne pour voir le détail</span></header><div id="pv-t"></div>
       ${f.axe !== 'depot' && App.can('objectifs', 'modifier') ? `<div class="form-act"><button class="btn" id="pv-obj">${icon('check')} Proposer les prévisions comme objectifs de ${libM(horizon[1])}</button></div>` : ''}</article>
@@ -173,11 +174,11 @@ function vueAxe(root, fmt) {
       const ex = (App.D.objectifs || []).find((o) => o.actif !== false && !o.produit_id && o.axe === f.axe && o.cible_id === r.id && o.mois === m1);
       return { cible_id: r.id, objectif_cartons: f.mesure === 'cartons' ? arr(r.f1) : ex?.objectif_cartons ?? null, objectif_ca: f.mesure === 'montant' ? arr(r.f1) : ex?.objectif_ca ?? null };
     });
-    if (!lignes.length) return showErr(new Error('Aucune prévision positive à reprendre.'));
+    if (!lignes.length) return toast('Aucune prévision positive à reprendre.', 'err');
     const deja = (App.D.objectifs || []).some((o) => o.actif !== false && !o.produit_id && o.axe === f.axe && o.mois === m1);
-    const motif = await confirmBox({ title: `Objectifs de ${libM(m1)}`, message: `${lignes.length} objectif(s) ${f.axe === 'agent' ? 'd’agents' : f.axe === 'marche' ? 'de marchés' : 'de zones'} seront fixés à la valeur prévue (arrondie ${f.mesure === 'cartons' ? 'aux 5 cartons' : 'aux 50 000 F'} supérieurs).${deja ? ' <b>Des objectifs existent déjà pour ce mois : ils seront remplacés pour ces lignes.</b>' : ''}`, motif: true, okLabel: 'Fixer les objectifs' });
+    const motif = await confirmBox({ title: `Objectifs de ${libM(m1)}`, message: `${lignes.length} objectif(s) ${f.axe === 'agent' ? 'd’hôtesses' : f.axe === 'marche' ? 'de marchés' : 'de zones'} seront fixés à la valeur prévue (arrondie ${f.mesure === 'cartons' ? 'aux 5 cartons' : 'aux 50 000 F'} supérieurs).${deja ? ' <b>Des objectifs existent déjà pour ce mois : ils seront remplacés pour ces lignes.</b>' : ''}`, motif: true, okLabel: 'Fixer les objectifs' });
     if (!motif) return;
-    try { await busy(btn, () => App.act('objectif.bulk', { mois: m1, axe: f.axe, produit_id: null, lignes, motif }, 'Objectifs enregistrés.')); } catch (x) { showErr(x); }
+    try { await busy(btn, () => App.act('objectif.bulk', { mois: m1, axe: f.axe, produit_id: null, lignes, motif }, 'Objectifs enregistrés.')); } catch (x) { toast(x.message, 'err'); }
   });
 }
 
@@ -214,4 +215,139 @@ function calendrier(root) {
   new Table({ rows: EVENEMENTS.filter((e) => e.au >= `${moisSuivant(m0, -2)}-01` && e.du < fin).map((e, i) => ({ id: i, ...e, effet: eff[e.cle] })), sort: { k: 'du', dir: 1 }, pageSize: 30, exportable: true, title: 'Périodes de pic',
     cols: [{ k: 'nom', l: 'Période', f: (r) => `<b>${esc(r.nom)}</b>` }, { k: 'du', l: 'Du', f: (r) => r.du.split('-').reverse().join('/') }, { k: 'au', l: 'Au', f: (r) => r.au.split('-').reverse().join('/') },
       { k: 'effet', l: 'Effet sur les ventes', num: 1, f: (r) => `<b class="${r.effet >= 0 ? 't-ok' : 't-crit'}">${r.effet > 0 ? '+' : ''}${r.effet} %</b>`, txt: (r) => `${r.effet} %` }] }).mount($('#pc-t', root));
+}
+
+// ---------------------------------------------------------------- Proposition d'objectifs pour l'année suivante
+const MOIS_COURT = ['Janv.', 'Févr.', 'Mars', 'Avr.', 'Mai', 'Juin', 'Juil.', 'Août', 'Sept.', 'Oct.', 'Nov.', 'Déc.'];
+export function propositionAnnee(annee, croissance) {
+  const t = today(), mc = t.slice(0, 7), dernier = moisSuivant(mc, -1);
+  const eff = effets(App.I.p);
+  const faits = salesFacts(App.I, { preset: 'perso', du: '2000-01-01', au: t });
+  const debut = faits.reduce((m, x) => (!m || x.mois < m ? x.mois : m), null);
+  const SQ = series(faits, (x) => x.agent_id, 'cartons'), SM = series(faits, (x) => x.agent_id, 'montant');
+  const caTot = faits.reduce((s, x) => s + num(x.montant), 0), ctnTot = faits.reduce((s, x) => s + num(x.cartons), 0);
+  const prixMoyen = ctnTot ? caTot / ctnTot : 0;
+  const objs = (App.D.objectifs || []).filter((o) => o.actif !== false && !o.produit_id && o.axe === 'agent' && o.mois < `${annee}-01`);
+  const rows = (App.D.agents || []).filter((a) => a.actif !== false).map((a) => {
+    const os = objs.filter((o) => o.cible_id === a.id && o.objectif_cartons !== null && o.objectif_cartons !== undefined).sort((x, y) => y.mois.localeCompare(x.mois));
+    const obj = os[0] ? num(os[0].objectif_cartons) : null;
+    const sq = SQ.get(a.id) || new Map(), sm = SM.get(a.id) || new Map();
+    const niveau = prevoir(sq, `${annee}-01`, { debut, dernier, eff, croissanceMax: 0 }).niveau || 0;
+    const ventes = [...sq.values()].reduce((s, v) => s + v, 0), ca = [...sm.values()].reduce((s, v) => s + v, 0);
+    const b = baseRetenue(obj, niveau);
+    const mois = projeterAnnee(b.base, annee, { eff, croissance });
+    const prix = ventes > 0 ? ca / ventes : prixMoyen;
+    const marche = App.I.marches.get(a.marche_id), zoneId = a.zone_id || marche?.zone_id || null;
+    return { id: a.id, nom: a.nom, role: a.role_circuit === 'depot' ? 'Dépôt (chef d’équipe)' : 'Hôtesse', equipe: nm.equipe(a.equipe_id), marcheId: a.marche_id || null, marche: marche?.nom || 'Sans marché', zoneId, zone: zoneId ? nm.zone(zoneId) : 'Sans zone',
+      obj, objMois: os[0]?.mois || null, niveau, ventes, ca, prix, base: b.base, raison: b.raison, mois, total: mois.reduce((s, x) => s + x.objectif, 0), caEstime: mois.reduce((s, x) => s + x.objectif, 0) * prix, sq };
+  }).filter((r) => r.base > 0);
+  return { rows, debut, dernier, eff, prixMoyen, mc };
+}
+
+function vueAnnee(root) {
+  const f = F(), an = f.annee || ANNEE();
+  const P = propositionAnnee(an, num(f.croissance));
+  const R = P.rows;
+  const grp = (cle, lib) => { const m = new Map(); for (const r of R) { const k = r[cle] || 'aucun'; if (!m.has(k)) m.set(k, { id: k, nom: r[lib], n: 0, obj: 0, base: 0, mois: Array(12).fill(0), total: 0, caEstime: 0, ventes: 0, info: '' }); const g = m.get(k); g.n++; g.obj += num(r.obj); g.base += r.base; g.total += r.total; g.caEstime += r.caEstime; g.ventes += r.ventes; r.mois.forEach((x, i) => { g.mois[i] += x.objectif; }); } return [...m.values()].map((g) => ({ ...g, info: `${g.n} hôtesse(s)` })); };
+  const lignes = f.vue === 'marche' ? grp('marcheId', 'marche') : f.vue === 'zone' ? grp('zoneId', 'zone') : R.map((r) => ({ ...r, mois: r.mois.map((x) => x.objectif), info: [r.role === 'Hôtesse' ? '' : r.role, r.equipe !== '—' ? r.equipe : '', r.marche !== 'Sans marché' ? r.marche : ''].filter(Boolean).join(' · ') }));
+  const totMois = Array.from({ length: 12 }, (_, i) => R.reduce((s, r) => s + r.mois[i].objectif, 0));
+  const totAn = totMois.reduce((s, x) => s + x, 0), objActuel = R.reduce((s, r) => s + num(r.obj), 0), avecO = R.filter((r) => r.obj !== null), propAvecO = avecO.reduce((s, r) => s + r.total, 0) / 12, caAn = R.reduce((s, r) => s + r.caEstime, 0);
+  const iMax = totMois.indexOf(Math.max(...totMois)), iMin = totMois.indexOf(Math.min(...totMois));
+  const coefs = R[0]?.mois.map((x) => x.coef) || Array.from({ length: 12 }, (_, i) => coefMois(`${an}-${String(i + 1).padStart(2, '0')}`, P.eff));
+  const moisVentes = P.debut ? listeMois(P.debut, P.dernier) : [];
+  const peutFixer = App.can('objectifs', 'modifier');
+  root.innerHTML = `<div class="filters">
+      <label class="ff"><span>Année</span><input type="number" id="pa-an" min="2026" max="2035" value="${an}" style="max-width:110px"></label>
+      <label class="ff"><span>Hausse visée sur l’année (%)</span><input type="number" id="pa-cr" min="-50" max="100" step="1" value="${num(f.croissance)}" style="max-width:110px"></label>
+      <div class="seg" role="group">${[['agent', 'Par hôtesse'], ['marche', 'Par marché'], ['zone', 'Par zone']].map(([k, l]) => `<button data-vue="${k}" class="${f.vue === k ? 'on' : ''}" type="button">${l}</button>`).join('')}</div></div>
+    <section class="tbc-grid">
+      ${carte('Objectif mensuel actuel', `${fmtN(objActuel, 0)} ctn`, 'marine', `${R.filter((r) => r.obj !== null).length} hôtesse(s) avec objectif`)}
+      ${carte(`Objectif proposé ${an}`, `${fmtN(totAn, 0)} ctn`, 'ambre', `soit ${fmtN(totAn / 12, 0)} ctn par mois en moyenne`)}
+      ${carte('Évolution / objectif actuel', objActuel ? `${propAvecO >= objActuel ? '+' : ''}${fmtN((propAvecO / objActuel - 1) * 100, 1)} %` : '—', 'vert', `hôtesses ayant déjà un objectif : ${fmtN(objActuel, 0)} → ${fmtN(propAvecO, 0)} ctn/mois en moyenne`)}
+      ${carte('Mois le plus fort', `${MOIS_LONG[iMax]}`, 'rouge', `${fmtN(totMois[iMax], 0)} ctn · ${[...new Set(evenementsDuMois(`${an}-${String(iMax + 1).padStart(2, '0')}`).map((e) => LIB_EVT[e.cle]))].join(', ') || 'saison'}`)}
+      ${carte('Mois le plus faible', `${MOIS_LONG[iMin]}`, 'bleu', `${fmtN(totMois[iMin], 0)} ctn · ${[...new Set(evenementsDuMois(`${an}-${String(iMin + 1).padStart(2, '0')}`).map((e) => LIB_EVT[e.cle]))].join(', ') || 'saison'}`)}
+      ${carte('Chiffre d’affaires correspondant', fmtF(caAn), 'violet', 'au prix moyen par carton constaté de chaque hôtesse')}
+    </section>
+    <div class="grid2"><article class="card"><header><h3>Objectifs proposés mois par mois — ${an}</h3><span class="muted small">en cartons, toutes hôtesses</span></header><div class="cv h300"><canvas id="pa-g1"></canvas></div></article>
+      <article class="card"><header><h3>Ventes réalisées par mois et par zone</h3><span class="muted small">cartons vendus (base de l’analyse)</span></header><div class="cv h300"><canvas id="pa-g2"></canvas></div></article></div>
+    <article class="card"><header><h3>Proposition d’objectifs mensuels ${an} ${f.vue === 'marche' ? 'par marché' : f.vue === 'zone' ? 'par zone' : 'par hôtesse'}</h3><span class="muted small">en cartons${f.vue === 'agent' ? ' · cliquez sur une hôtesse pour le détail' : ''}</span></header><div id="pa-t"></div>
+      ${peutFixer ? `<div class="form-act"><button class="btn primary" id="pa-ok">${icon('check')} Enregistrer ces objectifs pour ${an} (12 mois)</button></div>` : ''}</article>
+    <article class="card"><header><h3>Analyse des ventes réalisées ${f.vue === 'marche' ? 'par marché' : f.vue === 'zone' ? 'par zone' : 'par hôtesse'}</h3><span class="muted small">cartons vendus par mois</span></header><div id="pa-v"></div></article>
+    <details class="card methode" open><summary><b>Comment les objectifs ${an} sont proposés</b></summary><ol>
+      <li><b>Point de départ :</b> l’objectif mensuel actuel de chaque hôtesse. Si elle vend déjà plus que cet objectif, on part de son niveau de vente réel (on ne lui fixe pas moins que ce qu’elle fait). Sans objectif, on part de ses ventes.</li>
+      <li><b>Progression :</b> la hausse visée (${fmtN(num(f.croissance), 0)} % sur l’année) est appliquée petit à petit : janvier +${fmtN(num(f.croissance) / 12, 1)} %, juin +${fmtN(num(f.croissance) / 2, 1)} %, décembre +${fmtN(num(f.croissance), 0)} %.</li>
+      <li><b>Saisons :</b> chaque mois est ajusté selon les périodes de forte ou faible vente : Ramadan (+${P.eff.ramadan} %), Korité (+${P.eff.korite} %), Tabaski (+${P.eff.tabaski} %), Maouloud (+${P.eff.maouloud} %), rentrée (+${P.eff.rentree} %), fêtes de fin d’année (+${P.eff.fetes} %), hivernage (${P.eff.hivernage} %). Seuls les jours concernés comptent, d’où des coefficients comme ${fmtN(coefs[1], 2)} en février ou ${fmtN(coefs[6], 2)} en juillet.</li>
+      <li><b>Arrondi :</b> chaque objectif est arrondi aux 5 cartons supérieurs. Marchés et zones = somme des hôtesses qui y sont rattachées.</li>
+      <li>Les ventes disponibles couvrent ${moisVentes.length ? moisVentes.map((m) => libM(m)).join(', ') : 'aucun mois'} : plus l’historique s’allonge, plus la proposition s’affine. Les objectifs restent modifiables un par un dans « Agents et objectifs ».</li></ol></details>`;
+  $('#pa-an', root).addEventListener('change', (e) => { f.annee = String(e.target.value || ANNEE()); vueAnnee(root); });
+  $('#pa-cr', root).addEventListener('change', (e) => { f.croissance = num(e.target.value); vueAnnee(root); });
+  $$('[data-vue]', root).forEach((b) => b.addEventListener('click', () => { f.vue = b.dataset.vue; vueAnnee(root); }));
+
+  chart($('#pa-g1', root), { type: 'bar', money: false, data: { labels: MOIS_COURT, datasets: [
+    { label: `Objectif proposé ${an}`, data: totMois, backgroundColor: coefs.map((c) => (c > 1.03 ? '#C55A11' : c < 0.97 ? '#5B9BD5' : '#F4B183')), borderRadius: 3, order: 2 },
+    { type: 'line', label: 'Objectif mensuel actuel', data: totMois.map(() => objActuel || null), borderColor: COL.obj, backgroundColor: COL.obj, borderDash: [6, 4], pointRadius: 0, order: 1 }] },
+    tip: (c) => `${c.dataset.label} : ${fmtN(c.parsed.y, 0)} ctn${c.datasetIndex === 0 ? ` (coef. ${fmtN(coefs[c.dataIndex], 2)}${evenementsDuMois(`${an}-${String(c.dataIndex + 1).padStart(2, '0')}`).length ? ' · ' + [...new Set(evenementsDuMois(`${an}-${String(c.dataIndex + 1).padStart(2, '0')}`).map((e) => LIB_EVT[e.cle]))].join(', ') : ''})` : ''}` });
+  const faits = salesFacts(App.I, { preset: 'perso', du: '2000-01-01', au: today() });
+  const zones = [...new Set(faits.map((x) => x.zone_id || null))];
+  const palZ = ['#1F4E79', '#C55A11', '#548235', '#7030A0', '#BF8F00', '#2E75B6', '#C00000', '#7F7F7F'];
+  chart($('#pa-g2', root), { type: 'bar', stacked: true, money: false, data: { labels: moisVentes.map(moisLabel), datasets: zones.map((z, i) => ({ label: z ? nm.zone(z) : 'Sans zone', data: moisVentes.map((m) => faits.filter((x) => x.mois === m && (x.zone_id || null) === z).reduce((s, x) => s + num(x.cartons), 0)), backgroundColor: palZ[i % palZ.length], borderRadius: 2 })) },
+    tip: (c) => `${c.dataset.label} : ${fmtN(c.parsed.y, 0)} ctn` });
+
+  const sumCol = (k, i) => (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : `<b>${fmtN(rs.reduce((s, r) => s + num(i !== undefined ? r.mois[i] : r[k]), 0), 0)}</b>`);
+  const foot = (c, rs) => { if (c.k === 'nom') return '<b>Total</b>'; if (c.k.startsWith('m')) { const i = +c.k.slice(1); return `<b>${fmtN(rs.reduce((s, r) => s + num(r.mois[i]), 0), 0)}</b>`; } if (['obj', 'base', 'total', 'niveau'].includes(c.k)) return `<b>${fmtN(rs.reduce((s, r) => s + num(r[c.k]), 0), 0)}</b>`; if (c.k === 'caEstime') return `<b>${fmtF(rs.reduce((s, r) => s + num(r.caEstime), 0))}</b>`; return ''; };
+  void sumCol;
+  new Table({ rows: lignes, sort: { k: 'total', dir: -1 }, pageSize: 60, title: `Objectifs ${an} proposés ${f.vue === 'marche' ? 'par marché' : f.vue === 'zone' ? 'par zone' : 'par hôtesse'}`, foot,
+    onRow: f.vue === 'agent' ? (r) => detailAnnee(R.find((x) => x.id === r.id), an, P) : undefined,
+    cols: [{ k: 'nom', l: f.vue === 'marche' ? 'Marché' : f.vue === 'zone' ? 'Zone' : 'Hôtesse', f: (r) => `<b>${esc(r.nom)}</b>${r.info ? `<br><span class="muted small">${esc(r.info)}</span>` : ''}`, txt: (r) => r.nom },
+      { k: 'obj', l: 'Objectif mensuel actuel', num: 1, f: (r) => (r.obj === null || r.obj === undefined ? '—' : fmtN(r.obj, 0)) },
+      ...(f.vue === 'agent' ? [{ k: 'niveau', l: 'Ventes / mois (corrigées)', num: 1, f: (r) => (r.ventes ? fmtN(r.niveau, 0) : '—') }, { k: 'base', l: 'Base retenue', num: 1, f: (r) => `${fmtN(r.base, 0)}<br><span class="muted small">${esc(r.raison)}</span>`, txt: (r) => fmtN(r.base, 0) }] : [{ k: 'base', l: 'Base retenue', num: 1, f: (r) => fmtN(r.base, 0) }]),
+      ...MOIS_COURT.map((l, i) => ({ k: 'm' + i, l, num: 1, v: (r) => r.mois[i], f: (r) => fmtN(r.mois[i], 0) })),
+      { k: 'total', l: `Total ${an}`, num: 1, f: (r) => `<b>${fmtN(r.total, 0)}</b>` }, { k: 'caEstime', l: 'CA estimé (FCFA)', num: 1, f: (r) => fmtN(r.caEstime, 0) }],
+    empty: 'Aucune hôtesse avec un objectif ou des ventes enregistrées.' }).mount($('#pa-t', root));
+
+  // Analyse des ventes réalisées par mois
+  const cleV = f.vue === 'marche' ? (x) => x.marche_id || 'aucun' : f.vue === 'zone' ? (x) => x.zone_id || 'aucun' : (x) => x.agent_id;
+  const libV = (k) => (k === 'aucun' ? (f.vue === 'marche' ? 'Sans marché' : 'Sans zone') : f.vue === 'marche' ? nm.marche(k) : f.vue === 'zone' ? nm.zone(k) : nm.agent(k));
+  const SV = series(faits, cleV, 'cartons'), SCA = series(faits, cleV, 'montant'), totV = faits.reduce((s, x) => s + num(x.cartons), 0);
+  const rv = [...SV.entries()].map(([k, m]) => { const t = [...m.values()].reduce((s, v) => s + v, 0); return { id: k, nom: libV(k), ...Object.fromEntries(moisVentes.map((mm) => [mm, num(m.get(mm))])), t, ca: [...(SCA.get(k) || new Map()).values()].reduce((s, v) => s + v, 0), part: totV ? (t / totV) * 100 : 0, evo: moisVentes.length >= 2 && num(m.get(moisVentes.at(-2))) ? (num(m.get(moisVentes.at(-1))) / num(m.get(moisVentes.at(-2))) - 1) * 100 : null }; });
+  new Table({ rows: rv, sort: { k: 't', dir: -1 }, pageSize: 25, title: `Ventes réalisées ${f.vue === 'marche' ? 'par marché' : f.vue === 'zone' ? 'par zone' : 'par hôtesse'}`,
+    foot: (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : c.k === 'ca' ? `<b>${fmtF(rs.reduce((s, r) => s + r.ca, 0))}</b>` : c.k === 'part' || c.k === 'evo' ? '' : `<b>${fmtN(rs.reduce((s, r) => s + num(r[c.k]), 0), 0)}</b>`),
+    cols: [{ k: 'nom', l: f.vue === 'marche' ? 'Marché' : f.vue === 'zone' ? 'Zone' : 'Hôtesse', f: (r) => `<b>${esc(r.nom)}</b>` }, ...moisVentes.map((m) => ({ k: m, l: moisLabel(m), num: 1, f: (r) => fmtN(r[m], 0) })),
+      { k: 't', l: 'Total cartons', num: 1, f: (r) => `<b>${fmtN(r.t, 0)}</b>` }, { k: 'ca', l: 'CA (FCFA)', num: 1, f: (r) => fmtN(r.ca, 0) }, { k: 'part', l: 'Part', num: 1, f: (r) => `${fmtN(r.part, 1)} %` },
+      { k: 'evo', l: 'Évolution dernier mois', num: 1, f: (r) => (r.evo === null ? '—' : signe(r.evo, (x) => `${fmtN(x, 0)} %`)) }], empty: 'Aucune vente enregistrée.' }).mount($('#pa-v', root));
+
+  $('#pa-ok', root)?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const deja = (App.D.objectifs || []).some((o) => o.actif !== false && !o.produit_id && o.axe === 'agent' && o.mois.startsWith(`${an}-`));
+    const motif = await confirmBox({ title: `Objectifs ${an}`, message: `Les objectifs mensuels proposés de janvier à décembre ${an} seront enregistrés pour ${R.length} hôtesse(s) et dépôt(s), en cartons.${deja ? ` <b>Des objectifs ${an} existent déjà : ils seront remplacés pour ces hôtesses.</b>` : ''}`, motif: true, okLabel: 'Enregistrer les objectifs' });
+    if (!motif) return;
+    try {
+      await busy(btn, async () => {
+        for (let i = 0; i < 12; i++) {
+          const m = `${an}-${String(i + 1).padStart(2, '0')}`;
+          const lignes = R.map((r) => { const ex = (App.D.objectifs || []).find((o) => o.actif !== false && !o.produit_id && o.axe === 'agent' && o.cible_id === r.id && o.mois === m); return { cible_id: r.id, objectif_cartons: r.mois[i].objectif, objectif_ca: ex?.objectif_ca ?? null }; });
+          await App.api.call('objectif.bulk', { mois: m, axe: 'agent', produit_id: null, lignes, motif });
+        }
+        await App.refresh();
+      });
+      toast(`Objectifs ${an} enregistrés (12 mois).`); App.rerender();
+    } catch (x) { toast(x.message, 'err'); }
+  });
+}
+
+function detailAnnee(r, an, P) {
+  if (!r) return;
+  const moisV = P.debut ? listeMois(P.debut, P.dernier) : [];
+  modal({ title: `${r.nom} — objectifs ${an}`, wide: true, size: 'xl',
+    body: `<p class="lead">${esc(r.role)}${r.equipe !== '—' ? ' · ' + esc(r.equipe) : ''} · ${esc(r.marche)} · ${esc(r.zone)}</p>
+      <dl class="dl"><dt>Objectif mensuel actuel</dt><dd>${r.obj === null ? '—' : `${fmtN(r.obj, 0)} ctn (${libM(r.objMois)})`}</dd><dt>Ventes réalisées</dt><dd>${moisV.map((m) => `${libM(m)} : ${fmtN(num(r.sq.get(m)), 0)} ctn`).join(' · ') || '—'}</dd>
+        <dt>Niveau de vente corrigé des saisons</dt><dd>${fmtN(r.niveau, 0)} ctn / mois</dd><dt>Base retenue</dt><dd>${fmtN(r.base, 0)} ctn — ${esc(r.raison)}</dd><dt>Prix moyen constaté</dt><dd>${fmtF(r.prix)} le carton</dd></dl>
+      <div class="cv h300"><canvas id="pad-g"></canvas></div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Mois</th><th>Période</th><th class="n">Coef. saison</th><th class="n">Progression</th><th class="n">Objectif proposé</th><th class="n">CA estimé</th></tr></thead>
+      <tbody>${r.mois.map((x, i) => `<tr><td><b>${MOIS_LONG[i]} ${an}</b></td><td>${esc([...new Set(evenementsDuMois(x.mois).map((e) => LIB_EVT[e.cle]))].join(', ') || '—')}</td><td class="n">${fmtN(x.coef, 2)}</td><td class="n">+${fmtN((x.prog - 1) * 100, 1)} %</td><td class="n"><b>${fmtN(x.objectif, 0)} ctn</b></td><td class="n">${fmtN(x.objectif * r.prix, 0)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td><b>Total ${an}</b></td><td></td><td></td><td></td><td class="n"><b>${fmtN(r.total, 0)} ctn</b></td><td class="n"><b>${fmtN(r.caEstime, 0)}</b></td></tr></tfoot></table></div>`,
+    footer: '<button class="btn ghost" data-close>Fermer</button>',
+    onMount: (m) => chart($('#pad-g', m), { type: 'bar', money: false, data: { labels: MOIS_COURT, datasets: [
+      { label: 'Objectif proposé', data: r.mois.map((x) => x.objectif), backgroundColor: r.mois.map((x) => (x.coef > 1.03 ? '#C55A11' : x.coef < 0.97 ? '#5B9BD5' : '#F4B183')), borderRadius: 3, order: 2 },
+      { type: 'line', label: 'Objectif actuel', data: r.mois.map(() => r.obj), borderColor: COL.obj, borderDash: [6, 4], pointRadius: 0, order: 1 }] }, tip: (c) => `${c.dataset.label} : ${fmtN(c.parsed.y, 0)} ctn` }) });
 }

@@ -17,7 +17,7 @@ const RUBRIQUES = [
   ['Terrain', [
     ['objectifs', 'objectifs', '#saisie', ['objectifs', 'modifier'], 'Saisir les objectifs du mois'],
     ['suivi_agents', 'suivi-agents', '#saisie', ['suivi', 'modifier'], 'Saisir les fiches du mois'],
-    ['agents', 'agents', '#add', ['referentiels', 'modifier'], 'Nouvel agent', () => { App.filters.agentsOnglet = { o: 'agents' }; }],
+    ['agents', 'agents', '#add', ['referentiels', 'modifier'], 'Nouvelle hôtesse', () => { App.filters.agentsOnglet = { o: 'agents' }; }],
     ['clients', 'clients', '#add', ['referentiels', 'modifier'], 'Nouveau client'],
   ]],
   ['Dépenses et logistique', [
@@ -36,7 +36,7 @@ const RUBRIQUES = [
 ];
 const DESCR = {
   ventes_comptant: 'Une ligne par produit vendu.', ventes_credit: 'Plafond de créances contrôlé.', remboursements: 'Sur une vente à crédit (n° VR-…).', stock_remises: 'Lots confiés aux dépositaires.',
-  objectifs: 'Par agent, zone, équipe, marché ou produit.', suivi_agents: 'Présence, déstockage, note, prime.', agents: 'Nom, téléphone, équipe, marché.', clients: 'Type, marché, plafond, dépositaire.',
+  objectifs: 'Par hôtesse, zone, équipe, marché ou produit.', suivi_agents: 'Présence, déstockage, note, prime.', agents: 'Nom, téléphone, équipe, marché.', clients: 'Type, marché, plafond, dépositaire.',
   depenses: 'Carburant, entretien, salaires, gadgets…', budgets: 'Par équipe et par catégorie.', vehicules: 'Immatriculation, équipe, conducteur.',
   produits: 'Code, libellé, packs par carton, prix.', marches: 'Marchés et villages par zone.', equipes: 'Équipes et centres de coût.', zones: 'Régions de la force de vente.',
 };
@@ -57,8 +57,8 @@ function saisir(page, sel, prep) {
 
 export function renderSaisie(root) {
   const mois = today().slice(0, 7);
-  root.innerHTML = pageHead('Saisie et import des données', 'Pour chaque rubrique, deux possibilités : saisir directement à l’écran, ou remplir le modèle Excel puis l’importer. Les deux suivent les mêmes règles et le même journal d’audit. Les modèles des objectifs, fiches agents, budgets et référentiels contiennent déjà les données actuelles : il suffit de les corriger pour mettre la plateforme à jour.') +
-    (App.can('circuit', 'creer') ? `<article class="card maj-c"><div class="grow"><h3>Classeur du circuit de distribution</h3><p class="muted small">Grossistes, agents-dépôts, sous-agents, ventes et versements : importez chaque jour le classeur (même format que le modèle). Seules les nouvelles lignes sont ajoutées.</p></div><button class="btn primary" id="circ-imp">${icon('upload')} Importer le classeur du jour</button><button class="btn ghost" id="circ-mod">${icon('download')} Modèle</button></article>` : '') +
+  root.innerHTML = pageHead('Saisie et import des données', 'Pour chaque rubrique, deux possibilités : saisir directement à l’écran, ou remplir le modèle Excel puis l’importer. Les deux suivent les mêmes règles et le même journal d’audit. Les modèles des objectifs, fiches hôtesses, budgets et référentiels contiennent déjà les données actuelles : il suffit de les corriger pour mettre la plateforme à jour.') +
+    (App.can('circuit', 'creer') ? `<article class="card maj-c"><div class="grow"><h3>Classeur du circuit de distribution</h3><p class="muted small">Grossistes, agents-dépôts, hôtesses, ventes et versements : importez chaque jour le classeur (même format que le modèle). Seules les nouvelles lignes sont ajoutées.</p></div><button class="btn primary" id="circ-imp">${icon('upload')} Importer le classeur du jour</button><button class="btn ghost" id="circ-mod">${icon('download')} Modèle</button></article>` : '') +
     (peutMettreAJour() ? `<article class="card maj-c"><div class="grow"><h3>Mise à jour quotidienne des tableaux de bord</h3><p class="muted small">Importez chaque jour les mêmes fichiers « TB … ORIBA FOODS » (un ou plusieurs à la fois) : la plateforme n’ajoute que les nouvelles ventes, les nouveaux crédits et les remboursements à compléter. Aucune ligne n’est jamais enregistrée deux fois.</p></div><button class="btn primary" id="maj">${icon('refresh')} Lancer la mise à jour du jour</button></article>` : '') +
     RUBRIQUES.map(([titre, items]) => {
       const vis = items.filter(([type, , , perm]) => App.can(perm[0], perm[1]) || peutImporter(type));

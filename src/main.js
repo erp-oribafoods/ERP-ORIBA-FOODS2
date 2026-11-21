@@ -56,7 +56,7 @@ const NAV = [
     ['clients', 'Clients et grossistes', () => App.can('ventes') || App.can('creances') || App.can('dashboard') || App.can('circuit'), onglets('clients', [['cl', 'Clients', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderClients], ['gr', 'Grossistes', () => App.can('circuit'), renderGrossistes]])],
   ]],
   ['Planification et suivi', [
-    ['agents', 'Agents et objectifs', () => App.can('ventes') || App.can('dashboard') || App.can('objectifs'), renderAgentsObjectifs],
+    ['agents', 'Hôtesses et objectifs', () => App.can('ventes') || App.can('dashboard') || App.can('objectifs'), renderAgentsObjectifs],
     ['previsions', 'Prévisions', () => App.can('objectifs') || App.can('dashboard'), renderPrevisions],
     ['budgets', 'Budgets', () => App.can('budgets'), renderBudgets],
   ]],
@@ -81,13 +81,13 @@ const CACHEES = [
   ['tableau-de-bord', 'Tableau de bord détaillé', () => App.can('dashboard'), renderDashboard],
   ['analyses', 'Cumuls et analyses', () => App.can('ventes') || App.can('dashboard'), renderAnalyses],
   ['circuit', 'Tableau de bord du circuit', () => App.can('circuit'), renderCircuit],
-  ['circuit-depots', 'Dépôts et agents', () => App.can('circuit'), renderDepots],
+  ['circuit-depots', 'Dépôts et hôtesses', () => App.can('circuit'), renderDepots],
   ['ventes-comptant', 'Ventes au comptant', () => App.can('ventes'), (r) => renderVentes(r, 'comptant')],
   ['ventes-credit', 'Ventes à crédit', () => App.can('ventes') || App.can('creances'), (r) => renderVentes(r, 'credit')],
   ['creances', 'Créances et alertes', () => App.can('creances'), renderCreances],
-  ['objectifs', 'Objectifs des agents', () => App.can('objectifs'), renderObjectifs],
+  ['objectifs', 'Objectifs des hôtesses', () => App.can('objectifs'), renderObjectifs],
   ['terrain', 'Zones et équipes', () => App.can('ventes') || App.can('creances') || App.can('dashboard'), renderTerrain],
-  ['suivi-agents', 'Suivi des agents terrain', () => App.can('suivi'), renderSuivi],
+  ['suivi-agents', 'Suivi des hôtesses terrain', () => App.can('suivi'), renderSuivi],
   ['depenses', 'Saisie et validation', () => App.can('depenses'), renderDepenses],
   ['pilotage-depenses', 'Pilotage des dépenses', () => App.can('depenses'), renderPilotage],
   ['cloture', 'Clôture mensuelle', () => App.can('cloture'), renderCloture],
@@ -116,7 +116,7 @@ function onglets(cle, tabs) {
 function renderAgentsObjectifs(root) {
   const peutObj = App.can('objectifs'), peutAg = App.can('ventes') || App.can('dashboard');
   const f = (App.filters.agentsOnglet = App.filters.agentsOnglet || { o: peutObj ? 'objectifs' : 'agents' });
-  root.innerHTML = `<div class="seg onglets" role="tablist">${peutObj ? `<button data-o="objectifs" class="${f.o === 'objectifs' ? 'on' : ''}">Objectifs et réalisations</button>` : ''}${peutAg ? `<button data-o="agents" class="${f.o === 'agents' ? 'on' : ''}">Liste des agents</button>` : ''}</div><div id="a-host"></div>`;
+  root.innerHTML = `<div class="seg onglets" role="tablist">${peutObj ? `<button data-o="objectifs" class="${f.o === 'objectifs' ? 'on' : ''}">Objectifs et réalisations</button>` : ''}${peutAg ? `<button data-o="agents" class="${f.o === 'agents' ? 'on' : ''}">Liste des hôtesses</button>` : ''}</div><div id="a-host"></div>`;
   $$('[data-o]', root).forEach((b) => b.addEventListener('click', () => { f.o = b.dataset.o; renderAgentsObjectifs(root); }));
   (f.o === 'objectifs' && peutObj ? renderObjectifs : renderAgents)($('#a-host', root));
 }
@@ -253,7 +253,7 @@ async function loginScreen() {
     ${field({ k: 'password', l: 'Mot de passe', t: 'password', auto: 'current-password' }, '')}
     <p class="err" hidden></p><button class="btn primary block" type="submit">Se connecter</button>
     <p class="muted small">Mot de passe oublié : demandez à l’administrateur ERP de le réinitialiser.</p></form>
-    ${!DEMO ? `<div class="demo-acc"><b>Découvrir la plateforme avec des chiffres</b><p class="muted small">Ouvrez l’illustration : toutes les zones, agents, clients, ventes, créances, dépenses et véhicules avec des données d’exemple, sans toucher à vos vraies données.</p><a class="btn sm" href="?demo=1">Ouvrir l’illustration chiffrée</a></div>` : ''}
+    ${!DEMO ? `<div class="demo-acc"><b>Découvrir la plateforme avec des chiffres</b><p class="muted small">Ouvrez l’illustration : toutes les zones, hôtesses, clients, ventes, créances, dépenses et véhicules avec des données d’exemple, sans toucher à vos vraies données.</p><a class="btn sm" href="?demo=1">Ouvrir l’illustration chiffrée</a></div>` : ''}
     ${DEMO ? `<div class="demo-acc"><b>Comptes de démonstration</b> (mot de passe <code>${DEMO_PASSWORD}</code>)<div class="chips">${DEMO_USERS.map(([u, , l]) => `<button class="btn sm ghost" data-u="${u}">${esc(l)}</button>`).join('')}</div></div>` : ''}`);
   const form = $('#lf');
   form.addEventListener('submit', (e) => {

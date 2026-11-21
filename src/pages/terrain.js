@@ -66,7 +66,7 @@ export function renderTerrain(root) {
 
 function drawOverview(root) {
   const T = App.filters.terrain;
-  $('#th', root).innerHTML = pageHead('Zones et équipes', 'Cliquez sur une zone ou une équipe pour voir ses agents, clients et grossistes, ventes, créances, dépenses et stock confié.',
+  $('#th', root).innerHTML = pageHead('Zones et équipes', 'Cliquez sur une zone ou une équipe pour voir ses hôtesses, clients et grossistes, ventes, créances, dépenses et stock confié.',
     `<div class="seg" role="group"><button data-axe="zone" class="${T.axe === 'zone' ? 'on' : ''}">Par zone</button><button data-axe="equipe" class="${T.axe === 'equipe' ? 'on' : ''}">Par équipe</button></div>`);
   $$('[data-axe]', root).forEach((b) => b.addEventListener('click', () => { T.axe = b.dataset.axe; T.id = null; drawOverview(root); }));
   const rows = unites(T.axe).map((u) => ({ ...u, r: resume(perimetre(T.axe, u.id)) })).filter((u) => u.id !== NONE || u.r.ca || u.r.agents || u.r.dep);
@@ -75,7 +75,7 @@ function drawOverview(root) {
       <span class="zc-h"><b>${esc(u.nom)}</b>${u.r.nbLate ? pill(`${u.r.nbLate} en retard`, 'crit') : u.r.nbOpen ? pill(`${u.r.nbOpen} crédits ouverts`, 'info') : ''}</span>
       <span class="zc-ca">${fmtF(u.r.ca)}</span><span class="bar"><i style="width:${(u.r.ca / maxCA) * 100}%"></i></span>
       <span class="zc-grid">
-        <span><small>Agents</small><b>${fmtN(u.r.agents)}</b></span><span><small>Clients</small><b>${fmtN(u.r.clients)}</b></span>
+        <span><small>Hôtesses</small><b>${fmtN(u.r.agents)}</b></span><span><small>Clients</small><b>${fmtN(u.r.clients)}</b></span>
         <span><small>dont grossistes</small><b>${fmtN(u.r.grossistes)}</b></span><span><small>Ventes</small><b>${fmtN(u.r.nbv)}</b></span>
         <span><small>Créances</small><b>${fmtN(u.r.creances)}</b></span><span><small>En retard</small><b class="${u.r.retard ? 't-crit' : ''}">${fmtN(u.r.retard)}</b></span>
         <span><small>Dépenses validées</small><b>${fmtN(u.r.dep)}</b></span><span><small>Stock confié (ctn)</small><b>${fmtQ(u.r.stock)}</b></span>
@@ -86,7 +86,7 @@ function drawOverview(root) {
     onRow: (r) => { T.id = r.id; drawDetail(root); }, meta: () => `Filtres : ${describeFilters('ventes')}`,
     foot: (c, rs) => (c.k === 'nom' ? '<b>Total</b>' : ['ca', 'nbv', 'agents', 'clients', 'grossistes', 'creances', 'retard', 'dep'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + r[c.k], 0))}</b>` : ''),
     cols: [{ k: 'nom', l: T.axe === 'zone' ? 'Zone' : 'Équipe' }, { k: 'ca', l: 'CA FCFA', num: 1, f: (r) => `<b>${fmtN(r.ca)}</b>` }, { k: 'ctn', l: 'Cartons', num: 1, f: (r) => fmtQ(r.ctn) }, { k: 'nbv', l: 'Ventes', num: 1 },
-      { k: 'agents', l: 'Agents', num: 1 }, { k: 'clients', l: 'Clients', num: 1 }, { k: 'grossistes', l: 'Grossistes', num: 1 },
+      { k: 'agents', l: 'Hôtesses', num: 1 }, { k: 'clients', l: 'Clients', num: 1 }, { k: 'grossistes', l: 'Grossistes', num: 1 },
       { k: 'creances', l: 'Créances ouvertes', num: 1, f: (r) => fmtN(r.creances) }, { k: 'retard', l: 'Dont en retard', num: 1, f: (r) => (r.retard ? `<span class="t-crit">${fmtN(r.retard)}</span>` : '0') },
       { k: 'dep', l: 'Dépenses validées', num: 1, f: (r) => fmtN(r.dep) }] }).mount($('#cmp', root));
 }
@@ -99,14 +99,14 @@ function drawDetail(root) {
   const R = resume(P);
   const zoneOf = u.zone ? ` · zone ${nm.zone(u.zone)}` : '';
   $('#th', root).innerHTML = `<button class="btn sm ghost back" id="back">← ${T.axe === 'zone' ? 'Toutes les zones' : 'Toutes les équipes'}</button>` +
-    pageHead(u.nom, `${T.axe === 'zone' ? 'Zone' : 'Équipe'}${zoneOf} · ${fmtN(R.agents)} agents, ${fmtN(R.clients)} clients dont ${fmtN(R.grossistes)} grossistes, ${fmtN(P.marches.length)} marchés`);
+    pageHead(u.nom, `${T.axe === 'zone' ? 'Zone' : 'Équipe'}${zoneOf} · ${fmtN(R.agents)} hôtesses, ${fmtN(R.clients)} clients dont ${fmtN(R.grossistes)} grossistes, ${fmtN(P.marches.length)} marchés`);
   $('#back', root).addEventListener('click', () => { T.id = null; drawOverview(root); });
   const canDep = App.can('depenses');
-  const tabs = [['agents', 'Agents commerciaux'], ['clients', 'Clients et grossistes'], ['ventes', 'Ventes'], ['creances', 'Créances'], ['marches', 'Marchés'], ...(canDep ? [['depenses', 'Dépenses et logistique']] : []), ['stock', 'Stock confié']];
+  const tabs = [['agents', 'Hôtesses'], ['clients', 'Clients et grossistes'], ['ventes', 'Ventes'], ['creances', 'Créances'], ['marches', 'Marchés'], ...(canDep ? [['depenses', 'Dépenses et logistique']] : []), ['stock', 'Stock confié']];
   T.tab = tabs.some((t) => t[0] === T.tab) ? T.tab : 'agents';
   $('#tbody', root).innerHTML = `<section class="kpis">
       ${[['Chiffre d’affaires', fmtF(R.ca), `${fmtQ(R.ctn)} ctn · ${fmtN(R.nbv)} ventes`, ''], ['Créances ouvertes', fmtF(R.creances), `${fmtN(R.nbOpen)} crédits`, ''], ['Créances en retard', fmtF(R.retard), `${fmtN(R.nbLate)} crédits`, R.nbLate ? 'crit' : ''],
-        ['Agents actifs', fmtN(R.agents), '', ''], ['Clients / grossistes', `${fmtN(R.clients)} / ${fmtN(R.grossistes)}`, '', ''], ...(canDep ? [['Dépenses validées', fmtF(R.dep), 'sur la période', '']] : []), ['Stock confié restant', `${fmtQ(R.stock)} ctn`, `${P.lots.length} lot(s)`, '']]
+        ['Hôtesses actives', fmtN(R.agents), '', ''], ['Clients / grossistes', `${fmtN(R.clients)} / ${fmtN(R.grossistes)}`, '', ''], ...(canDep ? [['Dépenses validées', fmtF(R.dep), 'sur la période', '']] : []), ['Stock confié restant', `${fmtQ(R.stock)} ctn`, `${P.lots.length} lot(s)`, '']]
         .map(([l, v, s, c]) => `<div class="kpi static ${c}"><span class="kpi-l">${l}</span><span class="kpi-v">${v}</span>${s ? `<span class="kpi-s">${s}</span>` : ''}</div>`).join('')}</section>
     <section class="grid g2"><article class="card"><header><h3>Ventes par mois</h3></header><div class="cv h240"><canvas id="z-mois"></canvas></div></article>
       <article class="card"><header><h3>Ventes par marché</h3></header><div class="cv h240"><canvas id="z-marche"></canvas></div></article></section>
@@ -130,17 +130,17 @@ function drawDetail(root) {
       const g = new Map(); for (const x of P.facts) { const o = g.get(x.v.id) || { id: x.v.id, v: x.v, montant: 0, ctn: 0 }; o.montant += x.montant; o.ctn += x.cartons; g.set(x.v.id, o); }
       new Table({ title, meta, rows: [...g.values()], sort: { k: 'date', dir: -1 }, onRow: (r) => openVente(r.id), foot: (c, rs) => (c.k === 'montant' ? `<b>${fmtN(rs.reduce((s, r) => s + r.montant, 0))}</b>` : ''),
         cols: [{ k: 'numero', l: 'N°', v: (r) => r.v.numero }, { k: 'date', l: 'Date', v: (r) => r.v.date, f: (r) => fmtD(r.v.date) }, { k: 'mode', l: 'Mode', v: (r) => (r.v.mode === 'credit' ? 'Crédit' : 'Comptant') },
-          { k: 'agent', l: 'Agent', v: (r) => nm.agent(r.v.agent_id) }, { k: 'marche', l: 'Marché', v: (r) => nm.marche(r.v.marche_id) }, { k: 'client', l: 'Client', v: (r) => (r.v.client_id ? nm.client(r.v.client_id) : '—') },
+          { k: 'agent', l: 'Hôtesse', v: (r) => nm.agent(r.v.agent_id) }, { k: 'marche', l: 'Marché', v: (r) => nm.marche(r.v.marche_id) }, { k: 'client', l: 'Client', v: (r) => (r.v.client_id ? nm.client(r.v.client_id) : '—') },
           { k: 'ctn', l: 'Cartons', num: 1, f: (r) => fmtQ(r.ctn) }, { k: 'montant', l: 'Montant FCFA', num: 1, f: (r) => fmtN(r.montant) }] }).mount(host);
     }
     if (t === 'creances') new Table({ title, meta, rows: P.credits.filter((x) => x.ci.solde > 0).map((x) => ({ ...x, id: x.v.id })), sort: { k: 'retard', dir: -1 }, onRow: (r) => openVente(r.id),
       foot: (c, rs) => (c.k === 'solde' ? `<b>${fmtN(rs.reduce((s, r) => s + r.ci.solde, 0))}</b>` : ''),
-      cols: [{ k: 'numero', l: 'N°', v: (r) => r.v.numero }, { k: 'date', l: 'Date', v: (r) => r.v.date, f: (r) => fmtD(r.v.date) }, { k: 'client', l: 'Client', v: (r) => nm.client(r.v.client_id) }, { k: 'agent', l: 'Agent', v: (r) => nm.agent(r.v.agent_id) },
+      cols: [{ k: 'numero', l: 'N°', v: (r) => r.v.numero }, { k: 'date', l: 'Date', v: (r) => r.v.date, f: (r) => fmtD(r.v.date) }, { k: 'client', l: 'Client', v: (r) => nm.client(r.v.client_id) }, { k: 'agent', l: 'Hôtesse', v: (r) => nm.agent(r.v.agent_id) },
         { k: 'montant', l: 'Montant', num: 1, v: (r) => r.ci.montant, f: (r) => fmtN(r.ci.montant) }, { k: 'solde', l: 'Solde', num: 1, v: (r) => r.ci.solde, f: (r) => `<b>${fmtN(r.ci.solde)}</b>` },
         { k: 'echeance', l: 'Échéance', v: (r) => r.v.echeance, f: (r) => fmtD(r.v.echeance) }, { k: 'retard', l: 'Retard (j)', num: 1, v: (r) => r.ci.joursRetard }, { k: 'statut', l: 'Statut', v: (r) => r.ci.statut, f: (r) => statutCreditPill(r.ci.statut) }] }).mount(host);
     if (t === 'marches') {
       const rows = P.marches.map((m) => { const fx = P.facts.filter((x) => x.marche_id === m.id); return { id: m.id, nom: m.nom, commune: m.commune, equipe: nm.equipe(m.equipe_id), clients: App.D.clients.filter((c) => c.marche_id === m.id).length, agents: new Set(fx.map((x) => x.agent_id)).size, ca: fx.reduce((s, x) => s + x.montant, 0), ctn: fx.reduce((s, x) => s + x.cartons, 0) }; });
-      new Table({ title, meta, rows, sort: { k: 'ca', dir: -1 }, cols: [{ k: 'nom', l: 'Marché / village' }, { k: 'commune', l: 'Commune' }, { k: 'equipe', l: 'Équipe' }, { k: 'agents', l: 'Agents actifs', num: 1 }, { k: 'clients', l: 'Clients', num: 1 }, { k: 'ctn', l: 'Cartons', num: 1, f: (r) => fmtQ(r.ctn) }, { k: 'ca', l: 'CA FCFA', num: 1, f: (r) => fmtN(r.ca) }] }).mount(host);
+      new Table({ title, meta, rows, sort: { k: 'ca', dir: -1 }, cols: [{ k: 'nom', l: 'Marché / village' }, { k: 'commune', l: 'Commune' }, { k: 'equipe', l: 'Équipe' }, { k: 'agents', l: 'Hôtesses actives', num: 1 }, { k: 'clients', l: 'Clients', num: 1 }, { k: 'ctn', l: 'Cartons', num: 1, f: (r) => fmtQ(r.ctn) }, { k: 'ca', l: 'CA FCFA', num: 1, f: (r) => fmtN(r.ca) }] }).mount(host);
     }
     if (t === 'depenses') {
       host.innerHTML = '<h4 class="sec">Véhicules</h4><div id="zv"></div><h4 class="sec">Dépenses par catégorie (validées)</h4><div id="zc"></div><h4 class="sec">Détail des dépenses</h4><div id="zd"></div>';
@@ -178,7 +178,7 @@ function agentStats(agents, facts) {
   });
 }
 const AGENT_COLS = [
-  { k: 'nom', l: 'Agent' }, { k: 'fonction', l: 'Fonction' }, { k: 'equipe', l: 'Équipe' }, { k: 'zone', l: 'Zone' }, { k: 'marches', l: 'Marchés couverts', cls: 'wrap' },
+  { k: 'nom', l: 'Hôtesse' }, { k: 'fonction', l: 'Fonction' }, { k: 'equipe', l: 'Équipe' }, { k: 'zone', l: 'Zone' }, { k: 'marches', l: 'Marchés couverts', cls: 'wrap' },
   { k: 'nb', l: 'Ventes', num: 1 }, { k: 'ctn', l: 'Cartons', num: 1, f: (r) => fmtQ(r.ctn) }, { k: 'ca', l: 'CA FCFA', num: 1, f: (r) => `<b>${fmtN(r.ca)}</b>` },
   { k: 'clients', l: 'Clients servis', num: 1 }, { k: 'creances', l: 'Créances ouvertes', num: 1, f: (r) => fmtN(r.creances) },
   { k: 'retards', l: 'Retards', num: 1, f: (r) => (r.retards ? `<span class="t-crit">${r.retards}</span>` : '0') },
@@ -190,7 +190,7 @@ export function openAgent(id) {
   const facts = salesFacts(App.I, { ...App.filters.ventes, agent_id: id });
   const st = agentStats([a], facts)[0];
   const ventes = [...new Map(facts.map((x) => [x.v.id, x.v])).values()];
-  modal({ title: `Agent — ${a.nom}`, wide: true,
+  modal({ title: `Hôtesse — ${a.nom}`, wide: true,
     body: `<dl class="dl"><dt>Code</dt><dd>${esc(a.code || '—')}</dd><dt>Équipe</dt><dd>${esc(st.equipe)}</dd><dt>Zone</dt><dd>${esc(st.zone)}</dd><dt>Téléphone</dt><dd>${esc(a.telephone || '—')}</dd><dt>Affecté le</dt><dd>${fmtD(a.date_affectation)}</dd><dt>Marchés couverts</dt><dd>${esc(st.marches || '—')}</dd></dl>
       <section class="kpis sm"><div class="kpi static"><span class="kpi-l">CA (période)</span><span class="kpi-v">${fmtF(st.ca)}</span><span class="kpi-s">${fmtQ(st.ctn)} ctn · ${st.nb} ventes</span></div>
       <div class="kpi static ${st.retards ? 'crit' : ''}"><span class="kpi-l">Créances ouvertes</span><span class="kpi-v">${fmtF(st.creances)}</span><span class="kpi-s">${st.retards} en retard</span></div>
@@ -200,13 +200,13 @@ export function openAgent(id) {
 }
 
 export function renderAgents(root) {
-  root.innerHTML = pageHead('Agents commerciaux', 'Performance de chaque agent sur la période : ventes, clients servis, créances générées.',
-    `${boutonImport('agents')}${App.can('referentiels', 'modifier') ? `<button class="btn primary" id="add">${icon('plus')} Nouvel agent</button>` : ''}`) + '<div id="flt"></div><div class="card" id="tb"></div>';
+  root.innerHTML = pageHead('Hôtesses', 'Performance de chaque hôtesse sur la période : ventes, clients servis, créances générées.',
+    `${boutonImport('agents')}${App.can('referentiels', 'modifier') ? `<button class="btn primary" id="add">${icon('plus')} Nouvelle hôtesse</button>` : ''}`) + '<div id="flt"></div><div class="card" id="tb"></div>';
   lierImport(root); $('#add', root)?.addEventListener('click', () => refFormPublic('agents'));
   const draw = () => {
     const f = App.filters.ventes;
     const ag = App.D.agents.filter((a) => (!f.equipe_id || a.equipe_id === f.equipe_id) && (!f.zone_id || agentZone(a) === f.zone_id));
-    new Table({ title: 'Agents commerciaux', rows: agentStats(ag, salesFacts(App.I, f)), sort: { k: 'ca', dir: -1 }, onRow: (r) => openAgent(r.id), meta: () => `Filtres : ${describeFilters('ventes')}`, cols: AGENT_COLS,
+    new Table({ title: 'Hôtesses', rows: agentStats(ag, salesFacts(App.I, f)), sort: { k: 'ca', dir: -1 }, onRow: (r) => openAgent(r.id), meta: () => `Filtres : ${describeFilters('ventes')}`, cols: AGENT_COLS,
       foot: (c, rs) => (['ca', 'nb', 'creances'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + r[c.k], 0))}</b>` : c.k === 'nom' ? '<b>Total</b>' : '') }).mount($('#tb', root));
   };
   filterBar($('#flt', root), 'ventes', ['periode', 'zone_id', 'equipe_id', 'produit_id', 'mode'], draw);

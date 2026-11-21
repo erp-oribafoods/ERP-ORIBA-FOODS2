@@ -357,7 +357,7 @@ const cleListe = (x) => String(x ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '')
 const clesOption = (o) => { const l = o.textContent || ''; return [l, l.split(' — ')[0], l.split(' (')[0], o.value].map(cleListe).filter(Boolean); };
 let creerElement = null;   // (table, nom) => Promise<{ v, l }> — fourni par l'application
 export const setComboCreator = (fn) => { creerElement = fn; };
-const CREABLES = { clients: 'client', agents: 'agent', grossistes: 'grossiste', marches: 'marché' };
+const CREABLES = { clients: 'client', agents: 'hôtesse', grossistes: 'grossiste', marches: 'marché' };
 function syncTexte(sel) {
   if (sel.classList.contains('combo-pick')) return;
   const inp = sel.parentElement?.querySelector('.combo-in'); if (!inp) return;
@@ -378,7 +378,7 @@ function resoudre(inp) {
   if (avant !== apres) { sel.value = apres; sel.__depuisTexte = true; sel.dispatchEvent(new Event('change', { bubbles: true })); sel.__depuisTexte = false; }
   if (!k || o) return hint(sel, '');
   const t = sel.dataset.table, txt = inp.value.trim().replace(/\s+/g, ' ');
-  hint(sel, CREABLES[t] && creerElement ? `« ${esc(txt)} » n’est pas dans la liste. <button type="button" class="lnk combo-add">Ajouter ce ${CREABLES[t]}</button>` : `« ${esc(txt)} » n’est pas dans la liste : choisissez une valeur proposée.`);
+  hint(sel, CREABLES[t] && creerElement ? `« ${esc(txt)} » n’est pas dans la liste. <button type="button" class="lnk combo-add">Ajouter ${CREABLES[t] === 'hôtesse' ? 'cette' : 'ce'} ${CREABLES[t]}</button>` : `« ${esc(txt)} » n’est pas dans la liste : choisissez une valeur proposée.`);
 }
 export function initCombos() {
   if (initCombos.fait) return; initCombos.fait = true;

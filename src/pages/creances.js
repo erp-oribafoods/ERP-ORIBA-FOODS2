@@ -43,7 +43,7 @@ export function renderCreances(root) {
       foot: (c, rs) => (['montant', 'rembourse', 'solde'].includes(c.k) ? `<b>${fmtN(rs.reduce((s, r) => s + r.ci[c.k], 0))}</b>` : c.k === 'numero' ? '<b>Total</b>' : ''),
       cols: [
         { k: 'numero', l: 'N°', v: (r) => r.v.numero }, { k: 'date', l: 'Date vente', v: (r) => r.v.date, f: (r) => fmtD(r.v.date) },
-        { k: 'agent', l: 'Agent', v: (r) => nm.agent(r.v.agent_id) }, { k: 'client', l: 'Client', v: (r) => nm.client(r.v.client_id) },
+        { k: 'agent', l: 'Hôtesse', v: (r) => nm.agent(r.v.agent_id) }, { k: 'client', l: 'Client', v: (r) => nm.client(r.v.client_id) },
         { k: 'produits', l: 'Produits', v: (r) => [...new Set(r.ci.lignes.map((l) => nm.produit(l.produit_id)))].join(', '), cls: 'wrap' },
         { k: 'qte', l: 'Qté (ctn)', num: 1, v: (r) => r.ci.cartons, f: (r) => fmtQ(r.ci.cartons) },
         { k: 'montant', l: 'Montant initial', num: 1, v: (r) => r.ci.montant, f: (r) => fmtN(r.ci.montant) },

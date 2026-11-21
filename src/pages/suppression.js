@@ -5,11 +5,11 @@ import { esc, $, $$, fmtN, fmtD, toast, busy, icon, modal, field, showErr } from
 const CIBLES = [
   ['ventes_comptant', 'Ventes au comptant', true, true], ['ventes_credit', 'Ventes à crédit (avec leurs remboursements et relances)', true, true], ['remboursements', 'Remboursements', true, true],
   ['stock', 'Stock confié (lots et mouvements)', true, false], ['mouvements', 'Mouvements de cartons (approvisionnements, remises, transferts)', true, false], ['versements', 'Versements', true, false], ['circuit', 'Mouvements de cartons et versements', true, false], ['depenses', 'Dépenses (avec validations et répartitions)', true, true], ['demandes', 'Demandes de carburant et de vidange', true, true],
-  ['objectifs', 'Objectifs commerciaux', true, false], ['suivi_agents', 'Fiches des agents terrain', true, true], ['budgets', 'Budgets', true, true],
-  ['import', 'Défaire un import Excel (tout ce qu’il a créé)', false, false], ['operations', 'Toutes les OPÉRATIONS (ventes, crédits, remboursements, mouvements, versements, objectifs, dépenses) — on garde dépôts, agents, clients, grossistes, produits', false, false], ['tout', 'TOUTES les données (opérations, agents, clients, marchés, véhicules, grossistes)', false, false],
+  ['objectifs', 'Objectifs commerciaux', true, false], ['suivi_agents', 'Fiches des hôtesses terrain', true, true], ['budgets', 'Budgets', true, true],
+  ['import', 'Défaire un import Excel (tout ce qu’il a créé)', false, false], ['operations', 'Toutes les OPÉRATIONS (ventes, crédits, remboursements, mouvements, versements, objectifs, dépenses) — on garde dépôts, hôtesses, clients, grossistes, produits', false, false], ['tout', 'TOUTES les données (opérations, hôtesses, clients, marchés, véhicules, grossistes)', false, false],
 ];
-const LIB = { ventes: 'Ventes', vente_lignes: 'Lignes de vente', remboursements: 'Remboursements', relances: 'Relances', stock_mouvements: 'Mouvements de stock', depenses: 'Dépenses', depense_validations: 'Validations de dépenses', depense_repartitions: 'Répartitions de dépenses', demandes: 'Demandes carburant / vidange', objectifs: 'Objectifs', suivi_agents: 'Fiches agents', budgets: 'Budgets', clotures: 'Clôtures', anomalies: 'Anomalies', imports: 'Imports', agents: 'Agents', clients: 'Clients', marches: 'Marchés', vehicules: 'Véhicules', circuit_mvts: 'Mouvements du circuit', versements: 'Versements', grossistes: 'Grossistes' };
-const TYPES_IMP = { ventes_comptant: 'Ventes au comptant', ventes_credit: 'Ventes à crédit', remboursements: 'Remboursements', stock_remises: 'Remises de stock', depenses: 'Dépenses', depenses_agregees: 'Dépenses mensuelles', objectifs: 'Objectifs', suivi_agents: 'Fiches agents', budgets: 'Budgets' };
+const LIB = { ventes: 'Ventes', vente_lignes: 'Lignes de vente', remboursements: 'Remboursements', relances: 'Relances', stock_mouvements: 'Mouvements de stock', depenses: 'Dépenses', depense_validations: 'Validations de dépenses', depense_repartitions: 'Répartitions de dépenses', demandes: 'Demandes carburant / vidange', objectifs: 'Objectifs', suivi_agents: 'Fiches hôtesses', budgets: 'Budgets', clotures: 'Clôtures', anomalies: 'Anomalies', imports: 'Imports', agents: 'Hôtesses', clients: 'Clients', marches: 'Marchés', vehicules: 'Véhicules', circuit_mvts: 'Mouvements du circuit', versements: 'Versements', grossistes: 'Grossistes' };
+const TYPES_IMP = { ventes_comptant: 'Ventes au comptant', ventes_credit: 'Ventes à crédit', remboursements: 'Remboursements', stock_remises: 'Remises de stock', depenses: 'Dépenses', depenses_agregees: 'Dépenses mensuelles', objectifs: 'Objectifs', suivi_agents: 'Fiches hôtesses', budgets: 'Budgets' };
 
 export function renderSuppression(root) {
   const F = App.filters.purge = App.filters.purge || { cible: 'ventes_comptant', du: '', au: '', equipe_id: '', import_id: '' };
@@ -28,7 +28,7 @@ export function renderSuppression(root) {
   const maj = () => {
     const c = CIBLES.find((x) => x[0] === F.cible);
     $$('[data-per]', root).forEach((e) => { e.hidden = !c[2]; }); $('[data-eq]', root).hidden = !c[3]; $('[data-imp]', root).hidden = F.cible !== 'import';
-    $('#pg-aide', root).textContent = F.cible === 'tout' ? 'Supprime toutes les opérations et les référentiels agents, clients, marchés et véhicules. Sont conservés : comptes, rôles, paramètres, zones, équipes, produits, catégories de dépenses et journal d’audit.'
+    $('#pg-aide', root).textContent = F.cible === 'tout' ? 'Supprime toutes les opérations et les référentiels hôtesses, clients, marchés et véhicules. Sont conservés : comptes, rôles, paramètres, zones, équipes, produits, catégories de dépenses et journal d’audit.'
       : F.cible === 'import' ? 'Retire tout ce qu’un import Excel a créé (ventes, remboursements, stock, dépenses), par exemple après l’import d’un mauvais fichier.'
       : c[2] ? 'Laissez les dates vides pour toute la période.' : '';
     $('#pg-res', root).innerHTML = '';

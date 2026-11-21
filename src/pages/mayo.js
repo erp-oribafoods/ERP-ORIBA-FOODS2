@@ -2,7 +2,7 @@
 // Fiches journalières (stock initial, packs vendus comptant / crédit, stock final, montants), visites des vendeurs
 // (prise de commande, marques présentes = présence des concurrents), objectifs mensuels, import du classeur de suivi.
 import { App } from '../app.js';
-import { esc, $, $$, fmtN, fmtF, fmtD, Table, chart, modal, confirmBox, toast, showErr, busy, icon } from '../lib/ui.js';
+import { esc, $, $$, fmtN, fmtF, fmtD, Table, chart, modal, confirmBox, toast, busy, icon } from '../lib/ui.js';
 import { today, num, estVerrouille } from '../../shared/logic.js';
 import { MAYO_PRODUITS, MAYO_MARQUES, MAYO_AXES } from '../../shared/schema.js';
 
@@ -182,7 +182,7 @@ function tableauDeBord(root) {
     const obs = [...fp.filter((x) => x.observation || x.reaction).map((x) => ({ id: x.id, date: x.date, source: 'Fiche journalière', qui: x.vendeur, axe: x.axe || '', obs: x.observation || '', rea: x.reaction || '' })),
       ...vp.filter((v) => v.observation || v.motif).map((v) => ({ id: v.id, date: v.date, source: `Visite · ${v.client}`, qui: v.agent || '', axe: v.axe || '', obs: v.observation || '', rea: v.prise ? 'A pris la commande' : v.motif || '' }))];
     new Table({ rows: obs, sort: { k: 'date', dir: -1 }, pageSize: 15, title: 'Observations et réactions du terrain',
-      cols: [{ k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'source', l: 'Source' }, { k: 'qui', l: 'Agent' }, { k: 'axe', l: 'Axe' }, { k: 'obs', l: 'Observation' }, { k: 'rea', l: 'Réaction' }], empty: 'Aucune observation sur la période.' }).mount($('#m-obs', root));
+      cols: [{ k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'source', l: 'Source' }, { k: 'qui', l: 'Hôtesse' }, { k: 'axe', l: 'Axe' }, { k: 'obs', l: 'Observation' }, { k: 'rea', l: 'Réaction' }], empty: 'Aucune observation sur la période.' }).mount($('#m-obs', root));
   };
   $('#m-du', root).addEventListener('change', (e) => { f.du = e.target.value; draw(); });
   $('#m-au', root).addEventListener('change', (e) => { f.au = e.target.value || today(); draw(); });
@@ -266,7 +266,7 @@ function detailFiche(x) {
       $('#fd-an', m.parentElement)?.addEventListener('click', async () => {
         const motif = await confirmBox({ title: 'Annuler la fiche', message: `La fiche ${x.numero} de ${esc(x.vendeur)} sera annulée (elle reste visible dans l’historique).`, danger: true, motif: true, okLabel: 'Annuler la fiche' });
         if (!motif) return;
-        try { await App.act('mayo.fiche.annuler', { id: x.id, motif }, 'Fiche annulée.'); close(); } catch (e) { showErr(e); }
+        try { await App.act('mayo.fiche.annuler', { id: x.id, motif }, 'Fiche annulée.'); close(); } catch (e) { toast(e.message, 'err'); }
       });
     } });
 }
@@ -277,7 +277,7 @@ function ongletVisites(root) {
   root.innerHTML = `<div class="page-h"><div><h1>Vendeurs visités</h1><p class="sub">Chaque visite indique si le vendeur a pris la commande, les marques de mayonnaise présentes chez lui (nos marques et les concurrents) et la raison d’un refus.</p></div>
     <div class="page-act">${peutSaisir() ? `<button class="btn primary" id="mv-new">${icon('plus')} Nouvelle visite</button>` : ''}</div></div><div id="mv-t"></div>`;
   new Table({ rows: VI.map((v) => ({ ...v, marq: v.marques.map(libMarque).join(', '), _cls: v.statut === 'annulee' ? 'annule' : '' })), sort: { k: 'date', dir: -1 }, pageSize: 25, title: 'Visites des vendeurs de mayonnaise', onRow: (r) => detailVisite(VI.find((v) => v.id === r.id)),
-    cols: [{ k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'agent', l: 'Agent' }, { k: 'axe', l: 'Axe' }, { k: 'client', l: 'Vendeur visité', f: (r) => `<b>${esc(r.client)}</b>` }, { k: 'telephone', l: 'Téléphone' }, { k: 'lieu', l: 'Lieu' },
+    cols: [{ k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'agent', l: 'Hôtesse' }, { k: 'axe', l: 'Axe' }, { k: 'client', l: 'Vendeur visité', f: (r) => `<b>${esc(r.client)}</b>` }, { k: 'telephone', l: 'Téléphone' }, { k: 'lieu', l: 'Lieu' },
       { k: 'prise', l: 'Prise', f: (r) => (r.prise ? '<span class="pill ok">Oui</span>' : '<span class="pill warn">Non</span>'), txt: (r) => (r.prise ? 'Oui' : 'Non') },
       { k: 'marq', l: 'Marques présentes', f: (r) => r.marques.map((m) => `<span class="pill ${NOUS.has(m) ? 'ok' : LEADERS.has(m) ? 'crit' : 'mute'}">${esc(libMarque(m))}</span>`).join(' '), txt: (r) => r.marq },
       { k: 'motif', l: 'Si non, pourquoi' }, { k: 'date_relance', l: 'Relance', f: (r) => (r.date_relance ? fmtD(r.date_relance) : '') }, { k: 'statut', l: 'Statut', f: (r) => (r.statut === 'annulee' ? '<span class="pill mute">Annulée</span>' : '') }],
@@ -290,7 +290,7 @@ function formVisite(v) {
   const autres = [...sel].filter((m) => !MAYO_MARQUES.some((b) => b.k === m));
   const body = `<div class="grid3">
       <label class="fld"><span>Date *</span><input type="date" id="fv-date" value="${v?.date || today()}" max="${today()}"></label>
-      <label class="fld"><span>Agent</span><input type="text" id="fv-agent" list="fv-al" value="${esc(v?.agent || '')}"><datalist id="fv-al">${vend.map((a) => `<option value="${esc(a)}">`).join('')}</datalist></label>
+      <label class="fld"><span>Hôtesse</span><input type="text" id="fv-agent" list="fv-al" value="${esc(v?.agent || '')}"><datalist id="fv-al">${vend.map((a) => `<option value="${esc(a)}">`).join('')}</datalist></label>
       <label class="fld"><span>Axe</span><select id="fv-axe"><option value="">—</option>${MAYO_AXES.map((a) => `<option ${v?.axe === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></label>
       <label class="fld"><span>Vendeur visité *</span><input type="text" id="fv-client" value="${esc(v?.client || '')}"></label>
       <label class="fld"><span>Téléphone</span><input type="text" id="fv-tel" value="${esc(v?.telephone || '')}"></label>
@@ -322,7 +322,7 @@ function detailVisite(v) {
   if (!v) return;
   const modifiable = v.statut !== 'annulee' && !estVerrouille(v) && peutSaisir();
   modal({ title: `Visite — ${v.client}`, wide: true,
-    body: `<dl class="dl">${[['Date', fmtD(v.date)], ['Agent', v.agent || '—'], ['Axe', v.axe || '—'], ['Téléphone', v.telephone || '—'], ['Lieu', v.lieu || '—'], ['A pris la commande', v.prise ? 'Oui' : 'Non'],
+    body: `<dl class="dl">${[['Date', fmtD(v.date)], ['Hôtesse', v.agent || '—'], ['Axe', v.axe || '—'], ['Téléphone', v.telephone || '—'], ['Lieu', v.lieu || '—'], ['A pris la commande', v.prise ? 'Oui' : 'Non'],
       ['Marques présentes', v.marques.map(libMarque).join(', ') || '—'], ['Si non, pourquoi', v.motif || '—'], ['Observation', v.observation || '—'], ['Date de relance', v.date_relance ? fmtD(v.date_relance) : '—'],
       ['Origine', v.ref_externe ? 'Import du classeur de suivi' : 'Saisie'], ['Statut', v.statut === 'annulee' ? `Annulée — ${v.motif_annulation || ''}` : 'Valide']].map(([k, x]) => `<dt>${k}</dt><dd>${esc(x)}</dd>`).join('')}</dl>
       ${v.statut !== 'annulee' && estVerrouille(v) ? '<p class="note">🔒 Visite définitive : sa journée de saisie est terminée.</p>' : ''}`,
@@ -332,7 +332,7 @@ function detailVisite(v) {
       $('#vd-an', m.parentElement)?.addEventListener('click', async () => {
         const motif = await confirmBox({ title: 'Annuler la visite', message: `La visite de ${esc(v.client)} sera annulée.`, danger: true, motif: true, okLabel: 'Annuler la visite' });
         if (!motif) return;
-        try { await App.act('mayo.visite.annuler', { id: v.id, motif }, 'Visite annulée.'); close(); } catch (e) { showErr(e); }
+        try { await App.act('mayo.visite.annuler', { id: v.id, motif }, 'Visite annulée.'); close(); } catch (e) { toast(e.message, 'err'); }
       });
     } });
 }
@@ -360,7 +360,7 @@ function ongletObjectifs(root) {
     $('#mo-m', root).addEventListener('change', (e) => { f.mois = e.target.value || today().slice(0, 7); draw(); });
     $('#mo-ok', root)?.addEventListener('click', async (e) => {
       const objectifs = $$('[data-k]', root).map((i) => ({ produit: i.dataset.k, objectif: i.value === '' ? 0 : Number(i.value) }));
-      try { await busy(e.currentTarget, () => App.act('mayo.objectif.save', { mois: f.mois, objectifs }, 'Objectifs enregistrés.')); } catch (x) { showErr(x); }
+      try { await busy(e.currentTarget, () => App.act('mayo.objectif.save', { mois: f.mois, objectifs }, 'Objectifs enregistrés.')); } catch (x) { toast(x.message, 'err'); }
     });
   };
   draw();
@@ -397,19 +397,19 @@ function ongletImport(root) {
     const file = e.target.files[0]; if (!file) return;
     if (!window.XLSX) return toast('Module Excel non chargé : vérifiez la connexion internet.', 'err');
     let lignes;
-    try { lignes = lireClasseurMayo(window.XLSX.read(await file.arrayBuffer(), { type: 'array' })); } catch (x) { return showErr(x); }
+    try { lignes = lireClasseurMayo(window.XLSX.read(await file.arrayBuffer(), { type: 'array' })); } catch (x) { return toast(x.message, 'err'); }
     const host = $('#mi-r', root);
     if (!lignes.length) { host.innerHTML = '<p class="err">Aucune visite trouvée : le fichier doit contenir les onglets Axe1_Enam, Axe2_Yantala ou Axe3_Francophonie avec la colonne « Date de visite ».</p>'; return; }
     const parAxe = MAYO_AXES.map((a) => [a, lignes.filter((l) => l.axe === a).length]);
     host.innerHTML = `<p class="lead"><b>${lignes.length}</b> visite(s) lue(s) : ${parAxe.map(([a, n]) => `${esc(a)} : ${n}`).join(' · ')}.</p><div id="mi-t"></div><div class="form-act"><button class="btn primary" id="mi-ok">${icon('upload')} Importer ces visites</button></div>`;
-    new Table({ rows: lignes.map((l, i) => ({ ...l, id: i })), pageSize: 10, exportable: false, cols: [{ k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'agent', l: 'Agent' }, { k: 'client', l: 'Vendeur' }, { k: 'lieu', l: 'Lieu' }, { k: 'prise', l: 'Prise', f: (r) => (r.prise ? 'Oui' : 'Non') }, { k: 'marques', l: 'Marques' }, { k: 'motif', l: 'Pourquoi' }] }).mount($('#mi-t', host));
+    new Table({ rows: lignes.map((l, i) => ({ ...l, id: i })), pageSize: 10, exportable: false, cols: [{ k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'agent', l: 'Hôtesse' }, { k: 'client', l: 'Vendeur' }, { k: 'lieu', l: 'Lieu' }, { k: 'prise', l: 'Prise', f: (r) => (r.prise ? 'Oui' : 'Non') }, { k: 'marques', l: 'Marques' }, { k: 'motif', l: 'Pourquoi' }] }).mount($('#mi-t', host));
     $('#mi-ok', host).addEventListener('click', async (ev) => {
       try {
         const r = await busy(ev.currentTarget, () => App.api.call('mayo.visites.import', { visites: lignes, fichier: file.name }));
         await App.refresh();
         toast(`${r.ajoutees} visite(s) importée(s)${r.deja ? `, ${r.deja} déjà présente(s)` : ''}${r.erreurs?.length ? `, ${r.erreurs.length} en erreur` : ''}.`);
         F().o = 'visites'; App.rerender();
-      } catch (x) { showErr(x); }
+      } catch (x) { toast(x.message, 'err'); }
     });
   });
 }

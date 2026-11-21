@@ -109,8 +109,8 @@ async function creditIndexForVente(t, v) {
 async function validateVente(t, h, lignes, { historique = false } = {}) {
   if (!isDate(h.date)) fail('Date de vente invalide.');
   if (!['comptant', 'credit'].includes(h.mode)) fail('Mode de vente invalide.');
-  if (!h.agent_id && !historique) fail('Choisissez l’agent.');
-  const ag = h.agent_id ? await one(t, 'agents', h.agent_id, 'Agent') : null;
+  if (!h.agent_id && !historique) fail('Choisissez l’hôtesse.');
+  const ag = h.agent_id ? await one(t, 'agents', h.agent_id, 'Hôtesse') : null;
   // Circuit de distribution : un agent-dépôt ou un sous-agent peut vendre sans marché précisé
   if (!h.marche_id && !historique && !ag?.role_circuit) fail('Choisissez le marché / village.');
   if (h.marche_id) await one(t, 'marches', h.marche_id, 'Marché');
@@ -317,7 +317,7 @@ A['ref.save'] = async ({ t, user, perms, payload, ip }) => {
     row.role_circuit = role;
     const dep = 'depot_id' in row ? row.depot_id || null : avantA?.depot_id || null;
     if (role === 'sous_agent') {
-      if (!dep) fail('Indiquez l’agent-dépôt de ce sous-agent.');
+      if (!dep) fail('Indiquez l’agent-dépôt de cette hôtesse.');
       const d = existing.find((r) => r.id === dep);
       if (!d || d.role_circuit !== 'depot' || d.id === id) fail('L’agent-dépôt choisi n’est pas déclaré comme agent-dépôt.');
       row.depot_id = dep;
@@ -457,7 +457,7 @@ async function createRemb(t, user, perms, payload, opts = {}) {
     mode: clean(payload.mode), reference: clean(payload.reference), commentaire: clean(payload.commentaire), statut: 'valide',
     ...(payload.lieu ? { lieu: payload.lieu === 'grossiste' ? 'grossiste' : 'caisse' } : {}),
     ...(payload.lieu_grossiste_id ? { lieu_grossiste_id: (await one(t, 'grossistes', payload.lieu_grossiste_id, 'Grossiste')).id } : {}),
-    ...(payload.verse_par ? { verse_par: (await one(t, 'agents', payload.verse_par, 'Agent')).id } : {}),
+    ...(payload.verse_par ? { verse_par: (await one(t, 'agents', payload.verse_par, 'Hôtesse')).id } : {}),
     historique: !!opts.historique, import_id: opts.import_id || null, created_by: user.id, created_at: nowISO(),
   });
   await audit(t, user, 'CREATION', 'remboursements', r.id, null, r, null, opts.ip);
@@ -1106,13 +1106,13 @@ A['demande.cancel'] = async ({ t, user, perms, payload, ip }) => {
 
 // Suivi mensuel des agents terrain : présence, activité, évaluation (saisie groupée d'un mois)
 A['suivi.bulk'] = async ({ t, user, perms, payload, ip }) => {
-  if (!can(perms, 'suivi', 'modifier')) fail('Droit insuffisant pour le suivi des agents terrain.', 403);
+  if (!can(perms, 'suivi', 'modifier')) fail('Droit insuffisant pour le suivi des hôtesses terrain.', 403);
   const { mois } = payload;
   if (!/^\d{4}-\d{2}$/.test(mois || '')) fail('Mois invalide (AAAA-MM).');
   const existants = await t.select('suivi_agents', { mois });
   const changes = [];
   for (const l of payload.lignes || []) {
-    const ag = await one(t, 'agents', l.agent_id, 'Agent');
+    const ag = await one(t, 'agents', l.agent_id, 'Hôtesse');
     if (!inScope(user, ag.equipe_id, ag.zone_id)) fail(`${ag.nom} est hors de votre périmètre.`, 403);
     const row = {};
     for (const [k, lib, ty] of SUIVI_CHAMPS) {
@@ -1402,21 +1402,21 @@ async function saveCircuit(t, user, perms, d, opts = {}) {
   if (type === 'prise' || type === 'dispatch' || type === 'transfert') {
     if (!d.agent_id) fail(type === 'transfert' ? 'Choisissez le dépôt qui envoie.' : 'Choisissez le dépôt.');
     const ag = await one(t, 'agents', d.agent_id, 'Dépôt');
-    if (ag.role_circuit !== 'depot') fail(`${ag.nom} n’est pas déclaré comme dépôt (Référentiels > Agents).`);
+    if (ag.role_circuit !== 'depot') fail(`${ag.nom} n’est pas déclaré comme dépôt (Référentiels > Hôtesses).`);
     row.agent_id = ag.id;
   }
   if (type === 'prise') row.mode = MODE_C(d.mode) || 'comptant';
   if (type === 'dispatch') {
-    if (!d.sous_agent_id) fail('Choisissez l’agent.');
-    const sa = await one(t, 'agents', d.sous_agent_id, 'Agent');
-    if (sa.role_circuit !== 'sous_agent' || sa.depot_id !== row.agent_id) fail(`${sa.nom} n’est pas un agent de ce dépôt.`);
+    if (!d.sous_agent_id) fail('Choisissez l’hôtesse.');
+    const sa = await one(t, 'agents', d.sous_agent_id, 'Hôtesse');
+    if (sa.role_circuit !== 'sous_agent' || sa.depot_id !== row.agent_id) fail(`${sa.nom} n’est pas une hôtesse de ce dépôt.`);
     row.sous_agent_id = sa.id;
   }
   if (type === 'transfert') {
     // Transfert de cartons d'un dépôt à un autre dépôt
     if (!d.depot_dest_id) fail('Choisissez le dépôt qui reçoit.');
     const dest = await one(t, 'agents', d.depot_dest_id, 'Dépôt');
-    if (dest.role_circuit !== 'depot') fail(`${dest.nom} n’est pas déclaré comme dépôt (Référentiels > Agents).`);
+    if (dest.role_circuit !== 'depot') fail(`${dest.nom} n’est pas déclaré comme dépôt (Référentiels > Hôtesses).`);
     if (dest.id === row.agent_id) fail('Le dépôt qui envoie et le dépôt qui reçoit doivent être différents.');
     row.depot_dest_id = dest.id;
   }
@@ -1463,9 +1463,9 @@ async function saveVersement(t, user, perms, d, opts = {}) {
     row.lieu = 'caisse';
     if (clean(d.beneficiaire) || g.fournisseur) row.beneficiaire = FOURN(clean(d.beneficiaire) || g.fournisseur);
   } else {
-    if (!d.agent_id) fail('Choisissez l’agent qui verse.');
-    const ag = await one(t, 'agents', d.agent_id, 'Agent');
-    if (!ag.role_circuit) fail(`${ag.nom} n’est ni un dépôt ni un agent de dépôt (Référentiels > Agents).`);
+    if (!d.agent_id) fail('Choisissez l’hôtesse qui verse.');
+    const ag = await one(t, 'agents', d.agent_id, 'Hôtesse');
+    if (!ag.role_circuit) fail(`${ag.nom} n’est ni un dépôt ni une hôtesse de dépôt (Référentiels > Hôtesses).`);
     row.agent_id = ag.id;
     // Argent destiné à Oriba Food ou à Oriba Rice (vide = réparti selon la provenance des cartons du dépôt)
     if (clean(d.beneficiaire)) row.beneficiaire = FOURN(d.beneficiaire);
@@ -1495,10 +1495,10 @@ A['versement.cancel'] = async ({ t, user, perms, payload, ip }) => {
 export const CIBLES_SUPPRESSION = {
   ventes_comptant: 'Ventes au comptant (et lignes)', ventes_credit: 'Ventes à crédit (avec remboursements et relances)', remboursements: 'Remboursements',
   stock: 'Stock confié (lots et mouvements)', circuit: 'Circuit de distribution (approvisionnements, prises, dispatch, versements)', depenses: 'Dépenses (avec validations et répartitions)', demandes: 'Demandes carburant et vidange',
-  objectifs: 'Objectifs', suivi_agents: 'Fiches des agents terrain', budgets: 'Budgets', import: 'Tout ce qu’un import a créé',
+  objectifs: 'Objectifs', suivi_agents: 'Fiches des hôtesses terrain', budgets: 'Budgets', import: 'Tout ce qu’un import a créé',
   mouvements: 'Mouvements de cartons (approvisionnements, remises, transferts)', versements: 'Versements',
-  operations: 'Toutes les opérations (ventes, crédits, remboursements, mouvements, versements, objectifs, dépenses) — on garde dépôts, agents, clients, grossistes, produits',
-  tout: 'Toutes les données (opérations et référentiels agents, clients, marchés, véhicules)',
+  operations: 'Toutes les opérations (ventes, crédits, remboursements, mouvements, versements, objectifs, dépenses) — on garde dépôts, hôtesses, clients, grossistes, produits',
+  tout: 'Toutes les données (opérations et référentiels hôtesses, clients, marchés, véhicules)',
 };
 async function planSuppression(t, user, p) {
   const { cible } = p;

@@ -72,7 +72,7 @@ function mouvementForm(lotId, type) {
     F.push({ k: 'date', l: 'Date', t: 'date', req: 1, def: today() },
       { k: 'quantite', l: type === 'inventaire' ? 'Quantité physique comptée (cartons)' : 'Quantité (cartons)', t: 'number', req: 1, help: type === 'inventaire' ? `Stock théorique actuel : ${fmtQ(l.restant)} ctn` : `Restant du lot : ${fmtQ(l.restant)} ctn` });
     if (type === 'vente') F.push({ k: 'mode', l: 'Facturation', t: 'options', empty: false, options: [{ v: 'comptant', l: 'Vente au comptant' }, { v: 'credit', l: 'Vente à crédit' }] },
-      { k: 'prix_unitaire', l: 'Prix facturé par carton (FCFA)', t: 'number', req: 1 }, { k: 'agent_id', l: 'Agent', t: 'options', req: 1, options: opts('agents') },
+      { k: 'prix_unitaire', l: 'Prix facturé par carton (FCFA)', t: 'number', req: 1 }, { k: 'agent_id', l: 'Hôtesse', t: 'options', req: 1, options: opts('agents') },
       { k: 'marche_id', l: 'Marché', t: 'options', req: 1, options: opts('marches') }, { k: 'echeance', l: 'Échéance (si crédit)', t: 'date' });
     F.push({ k: 'document', l: 'Document / relevé', t: 'text' }, { k: 'motif', l: ['perte', 'retour', 'ajustement_plus', 'ajustement_moins'].includes(type) ? 'Motif' : 'Observation', t: 'text', req: ['perte', 'retour', 'ajustement_plus', 'ajustement_moins'].includes(type) ? 1 : 0 });
   }

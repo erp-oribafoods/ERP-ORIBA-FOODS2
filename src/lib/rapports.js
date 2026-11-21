@@ -54,7 +54,7 @@ function collecte(du, au, mois = null) {
   R.equipes = [...EQ.values()].map((o) => ({ ...o, ca: o.comptant + o.credit, cout: o.cartons ? o.dep / o.cartons : null })).sort((a, b) => b.ca - a.ca || b.dep - a.dep);
   // Agents, produits, marchés, clients
   const grp = (key, lib) => { const m = new Map(); for (const x of sf) { const k = x[key]; if (!m.has(k)) m.set(k, { id: k, nom: lib(k), ca: 0, cartons: 0, ventes: new Set(), equipe: '' }); const o = m.get(k); o.ca += x.montant; o.cartons += x.cartons; o.ventes.add(x.v.id); if (key === 'agent_id') o.equipe = nm.equipe(x.equipe_id); } return [...m.values()].map((o) => ({ ...o, nb: o.ventes.size })).sort((a, b) => b.ca - a.ca); };
-  R.agents = grp('agent_id', (k) => (k ? nm.agent(k) : 'Agent non renseigné'));
+  R.agents = grp('agent_id', (k) => (k ? nm.agent(k) : 'Hôtesse non renseigné'));
   if (mois) {
     const objs = (App.D.objectifs || []).filter((o) => o.mois === mois && o.axe === 'agent' && !o.produit_id);
     for (const a of R.agents) { const o = objs.find((x) => x.cible_id === a.id); a.objQ = o ? nv(o.objectif_cartons) : null; a.objCA = o ? nv(o.objectif_ca) : null; a.taux = a.objCA ? pct(a.ca, a.objCA) : a.objQ ? pct(a.cartons, a.objQ) : null; }
@@ -161,7 +161,7 @@ async function pdfHebdo(R, lim = 1) {
   a = tableau(doc, { x: M, y: a, w: c3, head: ['Équipe', 'Comptant', 'Crédit', 'Cartons', 'Encours'], body: R.equipes.filter((o) => o.ca || o.encours).map((o) => [o.equipe, N(o.comptant), N(o.credit), N(o.cartons, 1), N(o.encours)]), max: L(12),
     foot: ['Total', N(R.k.comptant), N(R.k.credit), N(R.k.cartons, 1), N(R.k.encours)] });
   let b = titreBloc(doc, 'MEILLEURS AGENTS DE LA SEMAINE', M + c3 + 8, y0, c3);
-  b = tableau(doc, { x: M + c3 + 8, y: b, w: c3, head: ['Agent', 'Équipe', 'Cartons', 'CA'], body: R.agents.map((o) => [o.nom, o.equipe, N(o.cartons, 1), N(o.ca)]), max: L(12) });
+  b = tableau(doc, { x: M + c3 + 8, y: b, w: c3, head: ['Hôtesse', 'Équipe', 'Cartons', 'CA'], body: R.agents.map((o) => [o.nom, o.equipe, N(o.cartons, 1), N(o.ca)]), max: L(12) });
   let c = titreBloc(doc, 'CRÉANCES EN RETARD (LES PLUS ÉLEVÉES)', M + 2 * (c3 + 8), y0, c3, [200, 40, 60]);
   c = tableau(doc, { x: M + 2 * (c3 + 8), y: c, w: c3, head: ['Client', 'Équipe', 'Solde', 'Jours'], body: R.retards.map((o) => [o.client, o.equipe, N(o.solde), N(o.jours)]), max: L(12) });
   y = Math.max(a, b, c) + 10;
@@ -192,7 +192,7 @@ async function pdfMensuel(R, EV, lim = 1) {
   // 1. Synthèse
   let y = await nouvelle('SYNTHÈSE');
   y = kpis(doc, M, y, CW, [['Chiffre d’affaires', N(R.k.ca), `${N(R.k.nbVentes)} ventes`], ['Cartons vendus', N(R.k.cartons, 1), ''], ['Encaissements', N(R.k.encaisse), '', VERT], ['Encours fin de mois', N(R.k.encours), `${N(R.k.nbRetard)} en retard`, ORANGE]]) + 6;
-  y = kpis(doc, M, y, CW, [['Dépenses engagées', N(R.k.depEng), `${N(R.k.depVal)} validées`, ORANGE], ['Coût par carton', R.k.coutCarton ? N(R.k.coutCarton) : '—', 'dépenses ÷ cartons vendus'], ['Agents suivis', N(R.terrain.length), R.terrain.length ? `note moyenne ${N(R.terrain.filter((t) => t.note !== null).reduce((s, t) => s + t.note, 0) / (R.terrain.filter((t) => t.note !== null).length || 1), 1)}/10` : ''], ['Alertes ouvertes', N(R.alertes.length), `${R.alertes.filter((a) => a.sev === 'crit').length} critiques`, [200, 40, 60]]]) + 12;
+  y = kpis(doc, M, y, CW, [['Dépenses engagées', N(R.k.depEng), `${N(R.k.depVal)} validées`, ORANGE], ['Coût par carton', R.k.coutCarton ? N(R.k.coutCarton) : '—', 'dépenses ÷ cartons vendus'], ['Hôtesses suivies', N(R.terrain.length), R.terrain.length ? `note moyenne ${N(R.terrain.filter((t) => t.note !== null).reduce((s, t) => s + t.note, 0) / (R.terrain.filter((t) => t.note !== null).length || 1), 1)}/10` : ''], ['Alertes ouvertes', N(R.alertes.length), `${R.alertes.filter((a) => a.sev === 'crit').length} critiques`, [200, 40, 60]]]) + 12;
   y = titreBloc(doc, 'COMPARAISON AVEC LE MOIS PRÉCÉDENT', M, y, CW);
   const lig = (l, a, b, d = 0) => [l, N(a, d), N(b, d), a !== null && b !== null ? `${a - b >= 0 ? '+' : ''}${N(a - b, d)}` : '—', b ? P(((a - b) / Math.abs(b)) * 100) : '—'];
   y = tableau(doc, { x: M, y, w: CW, head: ['Indicateur', moisLabel(R.mois), moisLabel(P0.mois), 'Écart', 'Variation'], body: [
@@ -221,11 +221,11 @@ async function pdfMensuel(R, EV, lim = 1) {
     y = await nouvelle('FORCE DE VENTE');
     if (R.ventes) {
     y = titreBloc(doc, 'AGENTS : RÉALISATIONS ET OBJECTIFS DU MOIS', M, y, CW);
-    y = tableau(doc, { x: M, y, w: CW, head: ['Agent', 'Équipe', 'Ventes', 'Cartons', 'CA', 'Objectif ctn', 'Objectif FCFA', 'Atteinte'], body: R.agents.map((o) => [o.nom, o.equipe, N(o.nb), N(o.cartons, 1), N(o.ca), o.objQ !== null && o.objQ !== undefined ? N(o.objQ) : '—', o.objCA ? N(o.objCA) : '—', P(o.taux)]), max: L(R.terrain.length ? 22 : 40), align: ['left', 'left', 'right', 'right', 'right', 'right', 'right', 'right'] }) + 10;
+    y = tableau(doc, { x: M, y, w: CW, head: ['Hôtesse', 'Équipe', 'Ventes', 'Cartons', 'CA', 'Objectif ctn', 'Objectif FCFA', 'Atteinte'], body: R.agents.map((o) => [o.nom, o.equipe, N(o.nb), N(o.cartons, 1), N(o.ca), o.objQ !== null && o.objQ !== undefined ? N(o.objQ) : '—', o.objCA ? N(o.objCA) : '—', P(o.taux)]), max: L(R.terrain.length ? 22 : 40), align: ['left', 'left', 'right', 'right', 'right', 'right', 'right', 'right'] }) + 10;
     }
     if (R.terrain.length) {
       y = titreBloc(doc, 'SUIVI DES AGENTS TERRAIN (PRÉSENCE, DÉSTOCKAGE, ÉVALUATION)', M, y, CW, VERT);
-      tableau(doc, { x: M, y, w: CW, head: ['Agent', 'Équipe', 'Présence', 'Retards', 'Abs. NJ', 'Déstock.', 'Obj. déstock.', 'Nouv. clients', 'Note', 'Prime'], body: R.terrain.sort((p, q) => (q.note ?? -1) - (p.note ?? -1)).map((t) => [t.nom, t.equipe, P(t.presence), N(t.retards), N(t.abs_nj), N(t.destock, 1), N(t.objD, 1), N(t.nc), t.note === null ? '—' : N(t.note, 1), t.prime ? N(t.prime) : '—']), max: L(18), align: ['left', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right'] });
+      tableau(doc, { x: M, y, w: CW, head: ['Hôtesse', 'Équipe', 'Présence', 'Retards', 'Abs. NJ', 'Déstock.', 'Obj. déstock.', 'Nouv. clients', 'Note', 'Prime'], body: R.terrain.sort((p, q) => (q.note ?? -1) - (p.note ?? -1)).map((t) => [t.nom, t.equipe, P(t.presence), N(t.retards), N(t.abs_nj), N(t.destock, 1), N(t.objD, 1), N(t.nc), t.note === null ? '—' : N(t.note, 1), t.prime ? N(t.prime) : '—']), max: L(18), align: ['left', 'left', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right'] });
     }
   }
   // 4. Créances
@@ -275,7 +275,7 @@ function excel(R, type, EV) {
   if (EV) add('Évolution 6 mois', [['Mois', 'CA', 'Cartons', 'Encaissements', 'Dépenses', 'Coût par carton', 'Encours'], ...EV.map((e) => [e.mois, e.ca, e.cartons, e.encaisse, e.dep, e.cout ?? '', e.encours])]);
   if (R.ventes) {
     add('Ventes par équipe', [['Équipe', 'Zone', 'Comptant', 'Crédit', 'Total', 'Cartons', 'Encaissé', 'Encours', 'Crédits en retard', 'Dépenses', 'Coût par carton'], ...R.equipes.map((o) => [o.equipe, o.zone, o.comptant, o.credit, o.ca, o.cartons, o.encaisse, o.encours, o.retard, o.dep, o.cout ?? ''])]);
-    add('Agents', [['Agent', 'Équipe', 'Ventes', 'Cartons', 'CA', ...(R.mois ? ['Objectif cartons', 'Objectif FCFA', 'Atteinte %'] : [])], ...R.agents.map((o) => [o.nom, o.equipe, o.nb, o.cartons, o.ca, ...(R.mois ? [o.objQ ?? '', o.objCA ?? '', o.taux === null || o.taux === undefined ? '' : Math.round(o.taux)] : [])])]);
+    add('Hôtesses', [['Hôtesse', 'Équipe', 'Ventes', 'Cartons', 'CA', ...(R.mois ? ['Objectif cartons', 'Objectif FCFA', 'Atteinte %'] : [])], ...R.agents.map((o) => [o.nom, o.equipe, o.nb, o.cartons, o.ca, ...(R.mois ? [o.objQ ?? '', o.objCA ?? '', o.taux === null || o.taux === undefined ? '' : Math.round(o.taux)] : [])])]);
     add('Produits', [['Produit', 'Ventes', 'Cartons', 'CA'], ...R.produits.map((o) => [o.nom, o.nb, o.cartons, o.ca])]);
     add('Marchés', [['Marché', 'Ventes', 'Cartons', 'CA'], ...R.marches.map((o) => [o.nom, o.nb, o.cartons, o.ca])]);
     add('Clients', [['Client', 'Ventes', 'Cartons', 'CA'], ...R.clients.map((o) => [o.nom, o.nb, o.cartons, o.ca])]);
@@ -287,7 +287,7 @@ function excel(R, type, EV) {
     if (R.budgets.length) add('Budgets', [['Périmètre', 'Budget', 'Réalisé', 'Taux %'], ...R.budgets.map((b) => [b.perimetre, b.montant, b.real, Math.round(b.pct || 0)])]);
     add('Demandes carb. vidange', [['N°', 'Type', 'Date', 'Équipe', 'Véhicule', 'Km', 'Demandé', 'Accordé / coût', 'Statut', 'Demandeur'], ...R.demandes.liste.map((d) => [d.numero, d.type, fmtD(d.date), nm.equipe(d.equipe_id), nm.vehicule(d.vehicule_id), num(d.km_actuel), d.montant_demande ?? '', d.type === 'carburant' ? d.montant_accorde ?? '' : d.cout_pris_en_charge ?? '', d.statut, d.demandeur_nom || ''])]);
   }
-  if (R.terrain.length) add('Agents terrain', [['Agent', 'Équipe', 'Jours présents', 'Retards', 'Abs. justifiées', 'Abs. non justifiées', 'Présence %', 'Déstockage', 'Objectif déstockage', 'Visites', 'Nouveaux clients', 'PLV', 'Note /10', 'Prime'], ...R.terrain.map((t) => [t.nom, t.equipe, t.jp ?? '', t.retards ?? '', t.abs_j ?? '', t.abs_nj ?? '', t.presence === null ? '' : Math.round(t.presence), t.destock ?? '', t.objD ?? '', t.visites ?? '', t.nc ?? '', t.plv ?? '', t.note ?? '', t.prime || ''])]);
+  if (R.terrain.length) add('Hôtesses terrain', [['Hôtesse', 'Équipe', 'Jours présents', 'Retards', 'Abs. justifiées', 'Abs. non justifiées', 'Présence %', 'Déstockage', 'Objectif déstockage', 'Visites', 'Nouveaux clients', 'PLV', 'Note /10', 'Prime'], ...R.terrain.map((t) => [t.nom, t.equipe, t.jp ?? '', t.retards ?? '', t.abs_j ?? '', t.abs_nj ?? '', t.presence === null ? '' : Math.round(t.presence), t.destock ?? '', t.objD ?? '', t.visites ?? '', t.nc ?? '', t.plv ?? '', t.note ?? '', t.prime || ''])]);
   add('Alertes', [['Gravité', 'Type', 'Détail'], ...R.alertes.map((a) => [{ crit: 'Critique', warn: 'Attention', info: 'Information' }[a.sev] || a.sev, a.type, a.msg])], [12, 26, 90]);
   return new Blob([X.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
@@ -338,8 +338,8 @@ export function ouvrirRapports(type0 = 'hebdo') {
         if (type === 'hebdo') { const du = lundi($('#rp-date', m).value || t); $('#rp-desc', m).textContent = `Semaine du ${fmtD(du)} au ${fmtD(addDays(du, 6))}, regroupée sur une seule page A4 (paysage).`; }
         else $('#rp-desc', m).textContent = `${moisLong($('#rp-mois', m).value || t.slice(0, 7))} : une rubrique par page, 6 pages au maximum, avec comparaison au mois précédent et évolution sur 6 mois.`;
         const items = type === 'hebdo'
-          ? ['Chiffre d’affaires, comptant, crédit, cartons, encaissements, encours, retards, dépenses', 'Ventes par équipe', 'Meilleurs agents', 'Créances en retard', 'Dépenses par nature', 'Demandes de carburant et de vidange', 'Points d’attention (alertes)']
-          : ['Page 1 — Synthèse : indicateurs, comparaison au mois précédent, évolution sur 6 mois', 'Page 2 — Ventes : par équipe, produit, marché, principaux clients', 'Page 3 — Force de vente : agents et objectifs, suivi des agents terrain', 'Page 4 — Créances et recouvrement : retards, plafonds', 'Page 5 — Dépenses et logistique : charges par nature, coût par carton par équipe, budgets, demandes carburant et vidange', 'Page 6 — Points d’attention : alertes, stock confié'];
+          ? ['Chiffre d’affaires, comptant, crédit, cartons, encaissements, encours, retards, dépenses', 'Ventes par équipe', 'Meilleurs hôtesses', 'Créances en retard', 'Dépenses par nature', 'Demandes de carburant et de vidange', 'Points d’attention (alertes)']
+          : ['Page 1 — Synthèse : indicateurs, comparaison au mois précédent, évolution sur 6 mois', 'Page 2 — Ventes : par équipe, produit, marché, principaux clients', 'Page 3 — Force de vente : hôtesses et objectifs, suivi des hôtesses terrain', 'Page 4 — Créances et recouvrement : retards, plafonds', 'Page 5 — Dépenses et logistique : charges par nature, coût par carton par équipe, budgets, demandes carburant et vidange', 'Page 6 — Points d’attention : alertes, stock confié'];
         $('#rp-cont', m).innerHTML = items.map((x) => `<li>${esc(x)}</li>`).join('') + '<li class="muted">L’Excel reprend les mêmes rubriques avec toutes les lignes, une feuille par rubrique.</li>';
       };
       $$('[data-t]', m).forEach((b) => b.addEventListener('click', () => { type = b.dataset.t; maj(); }));

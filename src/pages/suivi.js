@@ -52,13 +52,13 @@ export function renderSuivi(root) {
   App.filters.suivi = App.filters.suivi || { mois: today().slice(0, 7), equipe_id: '' };
   const F = App.filters.suivi;
   const canEdit = App.can('suivi', 'modifier');
-  root.innerHTML = pageHead('Suivi des agents terrain', 'Fiche mensuelle de chaque agent : présence (08h00–16h00), ventes, déstockage des grossistes, prospection, PLV, note sur 10 et prime. Les ventes saisies dans l’ERP sont reprises automatiquement ; à défaut, les ventes déclarées sont retenues.',
+  root.innerHTML = pageHead('Suivi des hôtesses terrain', 'Fiche mensuelle de chaque hôtesse : présence (08h00–16h00), ventes, déstockage des grossistes, prospection, PLV, note sur 10 et prime. Les ventes saisies dans l’ERP sont reprises automatiquement ; à défaut, les ventes déclarées sont retenues.',
     `${boutonImport('suivi_agents')}${canEdit ? `<button class="btn primary" id="saisie">${icon('edit')} Saisir le mois</button>` : ''}`) +
     `<div class="filters">
       <label class="ff"><span>Mois</span><input type="month" id="f-mois" value="${F.mois}"></label>
       <label class="ff"><span>Équipe</span><select id="f-eq"><option value="">Toutes les équipes</option>${opts('equipes').map((o) => `<option value="${o.v}" ${F.equipe_id === o.v ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select></label>
     </div><section class="kpis" id="sk"></section>
-    <div class="grid2"><article class="card"><header><h3>Ventes et déstockage par agent</h3></header><div class="cv h260"><canvas id="s-ch"></canvas></div></article>
+    <div class="grid2"><article class="card"><header><h3>Ventes et déstockage par hôtesse</h3></header><div class="cv h260"><canvas id="s-ch"></canvas></div></article>
     <article class="card"><header><h3>Évolution sur 6 mois</h3></header><div class="cv h260"><canvas id="s-ev"></canvas></div></article></div>
     <article class="card" id="st"></article>`;
   const draw = () => {
@@ -70,13 +70,13 @@ export function renderSuivi(root) {
     const notes = rows.filter((r) => r.note !== null);
     const primes = rows.filter((r) => r.prime > 0);
     $('#sk', root).innerHTML = [
-      ['Agents suivis', `${fmtN(s.length)} / ${fmtN(rows.length)}`, 'fiches saisies ce mois', ''],
+      ['Hôtesses suivies', `${fmtN(s.length)} / ${fmtN(rows.length)}`, 'fiches saisies ce mois', ''],
       ['Taux de présence', jp + absT ? `${fmtN(pct(jp, jp + absT), 0)} %` : '—', `${fmtN(jp)} jours présents`, ''],
       ['Retards et absences', `${fmtN(sum('retards'))} / ${fmtN(sum('abs_nj'))}`, 'retards / absences non justifiées', sum('abs_nj') ? 'warn' : ''],
       ['Ventes réalisées', `${fmtQ(sum('ventes'))} ctn`, objV ? `${fmtN(pct(vent, objV), 0)} % de l’objectif` : 'sans objectif', ''],
       ['Déstockage grossistes', `${fmtQ(dest)} ctn`, objD ? `${fmtN(pct(dest, objD), 0)} % de l’objectif` : 'sans objectif', objD && dest >= objD ? 'ok' : ''],
       ['Nouveaux clients', fmtN(sum('nc')), `${fmtN(sum('visites'))} visites · ${fmtN(sum('plv'))} PLV`, ''],
-      ['Note moyenne', notes.length ? `${fmtN(notes.reduce((a, r) => a + r.note, 0) / notes.length, 1)} / 10` : '—', `${notes.length} agents notés`, ''],
+      ['Note moyenne', notes.length ? `${fmtN(notes.reduce((a, r) => a + r.note, 0) / notes.length, 1)} / 10` : '—', `${notes.length} hôtesses notéees`, ''],
       ['Primes du mois', fmtF(primes.reduce((a, r) => a + r.prime, 0)), `${primes.length} agent(s) avec une note ≥ ${fmtN(App.I.p.prime_note_min)}`, primes.length ? 'ok' : ''],
     ].map(([l, v, sb, c]) => `<div class="kpi static ${c}"><span class="kpi-l">${l}</span><span class="kpi-v">${v}</span>${sb ? `<span class="kpi-s">${sb}</span>` : ''}</div>`).join('');
     const pal = palette();
@@ -93,10 +93,10 @@ export function renderSuivi(root) {
       { label: 'Ventes (ctn)', data: ev.map((e) => e.v), backgroundColor: pal[0], borderRadius: 3 },
       { label: 'Déstockage (ctn)', data: ev.map((e) => e.d), backgroundColor: pal[1], borderRadius: 3 }] },
       tip: (c) => `${c.dataset.label} : ${fmtQ(c.parsed.y)}` });
-    new Table({ title: `Fiches des agents — ${moisLabel(F.mois)}`, rows, sort: { k: 'equipe', dir: 1 }, pageSize: 40,
+    new Table({ title: `Fiches des hôtesses — ${moisLabel(F.mois)}`, rows, sort: { k: 'equipe', dir: 1 }, pageSize: 40,
       meta: () => `Mois : ${moisLabel(F.mois)}${F.equipe_id ? ' · équipe ' + nm.equipe(F.equipe_id) : ''} · prime de ${fmtF(App.I.p.prime_montant)} à partir de ${fmtN(App.I.p.prime_note_min)}/10`,
       onRow: (r) => ficheAgent(r.agent, F.mois),
-      cols: [{ k: 'nom', l: 'Agent', f: (r) => `<b>${esc(r.nom)}</b>${r.saisi ? '' : ' <span class="muted small">(pas de fiche)</span>'}` }, { k: 'equipe', l: 'Équipe' }, { k: 'marche', l: 'Marché' },
+      cols: [{ k: 'nom', l: 'Hôtesse', f: (r) => `<b>${esc(r.nom)}</b>${r.saisi ? '' : ' <span class="muted small">(pas de fiche)</span>'}` }, { k: 'equipe', l: 'Équipe' }, { k: 'marche', l: 'Marché' },
         { k: 'jp', l: 'Jours présents', num: 1, f: (r) => n0(r.jp) }, { k: 'retards', l: 'Retards', num: 1, f: (r) => n0(r.retards) },
         { k: 'abs_j', l: 'Abs. just.', num: 1, f: (r) => n0(r.abs_j) }, { k: 'abs_nj', l: 'Abs. non just.', num: 1, f: (r) => (r.abs_nj ? `<span class="t-crit">${fmtN(r.abs_nj)}</span>` : n0(r.abs_nj)) },
         { k: 'presence', l: 'Présence', num: 1, v: (r) => r.presence ?? -1, f: (r) => barre(r.presence), x: (r) => (r.presence === null ? '' : Math.round(r.presence)) },
@@ -133,21 +133,21 @@ function ficheAgent(a, mois) {
 function saisieMois(mois0, equipe0) {
   let mois = mois0, equipe = equipe0 || '';
   const cols = [...SUIVI_CHAMPS, ['commentaire', 'Commentaire', 'text']];
-  modal({ title: 'Fiches mensuelles des agents terrain', size: 'xl', wide: true,
+  modal({ title: 'Fiches mensuelles des hôtesses terrain', size: 'xl', wide: true,
     body: `<div class="filters">
       <label class="ff"><span>Mois</span><input type="month" id="s-mois" value="${mois}"></label>
       <label class="ff"><span>Équipe</span><select id="s-eq"><option value="">Toutes les équipes</option>${opts('equipes').map((o) => `<option value="${o.v}" ${equipe === o.v ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}</select></label>
       <button class="btn sm ghost" id="s-prev" type="button">Reprendre les objectifs de déstockage du mois précédent</button></div>
-      <p class="muted small">Laissez vide ce qui n’est pas connu. Les ventes enregistrées dans l’ERP sont comptées automatiquement : « Ventes déclarées » sert pour les agents dont les ventes ne sont pas saisies. L’objectif de ventes se fixe dans « Objectifs et réalisations ».</p>
+      <p class="muted small">Laissez vide ce qui n’est pas connu. Les ventes enregistrées dans l’ERP sont comptées automatiquement : « Ventes déclarées » sert pour les hôtesses dont les ventes ne sont pas saisies. L’objectif de ventes se fixe dans « Objectifs et réalisations ».</p>
       <div class="tbl-wrap"><table class="tbl grid-in" id="s-grid"></table></div>${field({ k: 'motif', l: 'Commentaire de la saisie (facultatif)', t: 'text' }, '')}<p class="err" hidden></p>`,
     footer: '<button class="btn ghost" data-close>Annuler</button><button class="btn primary" id="s-save">Enregistrer les fiches</button>',
     onMount: (m, close) => {
       const grid = () => {
         const fiches = (App.D.suivi_agents || []).filter((r) => r.mois === mois);
-        $('#s-grid', m).innerHTML = `<thead><tr><th>Agent</th>${cols.map(([, l]) => `<th class="n">${esc(l)}</th>`).join('')}</tr></thead><tbody>${agentsDuPerimetre(equipe).map((a) => {
+        $('#s-grid', m).innerHTML = `<thead><tr><th>Hôtesse</th>${cols.map(([, l]) => `<th class="n">${esc(l)}</th>`).join('')}</tr></thead><tbody>${agentsDuPerimetre(equipe).map((a) => {
           const f = fiches.find((x) => x.agent_id === a.id) || {};
           return `<tr data-a="${a.id}"><td><b>${esc(a.nom)}</b><br><span class="muted small">${esc(nm.equipe(a.equipe_id))}</span></td>${cols.map(([k, l, ty]) => `<td class="n"><input ${ty === 'text' ? 'type="text" class="w-txt"' : `type="number" min="0" ${ty === 'note' ? 'max="10" step="0.5"' : ty === 'int' ? 'step="1"' : 'step="any"'}`} data-k="${k}" value="${esc(f[k] ?? '')}" aria-label="${esc(l)} ${esc(a.nom)}"></td>`).join('')}</tr>`;
-        }).join('') || `<tr><td colspan="${cols.length + 1}">Aucun agent actif dans cette équipe (voir Référentiels > Agents commerciaux).</td></tr>`}</tbody>`;
+        }).join('') || `<tr><td colspan="${cols.length + 1}">Aucune hôtesse active dans cette équipe (voir Référentiels > Hôtesses).</td></tr>`}</tbody>`;
       };
       grid();
       $('#s-mois', m).addEventListener('change', (e) => { mois = e.target.value; grid(); });

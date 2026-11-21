@@ -8,14 +8,14 @@ const ORDRE = ['produits', 'zones', 'equipes', 'agents', 'marches', 'clients', '
 
 export function renderReprise(root) {
   App.filters.reprise = App.filters.reprise || { type: 'ventes_comptant' };
-  root.innerHTML = pageHead('Reprise des données historiques', 'Ordre conseillé : référentiels (produits, agents, marchés, clients), puis journaux (comptant, crédit, remboursements), stock confié et dépenses. Rien n’est supprimé automatiquement : doublons et anomalies vous sont soumis.') +
+  root.innerHTML = pageHead('Reprise des données historiques', 'Ordre conseillé : référentiels (produits, hôtesses, marchés, clients), puis journaux (comptant, crédit, remboursements), stock confié et dépenses. Rien n’est supprimé automatiquement : doublons et anomalies vous sont soumis.') +
     `<article class="card"><div class="filters">
       <label class="ff"><span>Type de données</span><select id="rt">${ORDRE.map((k) => [k, TYPES[k]]).map(([k, t]) => `<option value="${k}" ${App.filters.reprise.type === k ? 'selected' : ''}>${t.l}</option>`).join('')}</select></label>
       <button class="btn sm ghost" id="tpl">${icon('download')} Télécharger le modèle</button>
       <label class="btn sm"><input type="file" id="rf" accept=".xlsx,.xls,.csv" hidden>${icon('upload')} Choisir le fichier Excel ou CSV</label></div>
       <p class="muted" id="cols"></p><div id="res"></div></article>
      <article class="card"><header><h3>Historique des reprises</h3></header><div id="hist"></div></article>`;
-  const showCols = () => { const t = TYPES[$('#rt', root).value]; $('#cols', root).innerHTML = `Colonnes attendues (première ligne du fichier) : <code>${t.cols.join(' · ')}</code>. Les agents, marchés, clients et produits sont reconnus par leur code ou leur nom exact ; dates au format JJ/MM/AAAA.${t.aide ? '<br>' + t.aide : ''}<br>Ici, les ventes et dépenses sont marquées « historiques » (le plafond de crédit n’est pas recontrôlé). Pour les saisies du mois en cours, utilisez plutôt le bouton « Importer Excel » de chaque rubrique.`; };
+  const showCols = () => { const t = TYPES[$('#rt', root).value]; $('#cols', root).innerHTML = `Colonnes attendues (première ligne du fichier) : <code>${t.cols.join(' · ')}</code>. Les hôtesses, marchés, clients et produits sont reconnus par leur code ou leur nom exact ; dates au format JJ/MM/AAAA.${t.aide ? '<br>' + t.aide : ''}<br>Ici, les ventes et dépenses sont marquées « historiques » (le plafond de crédit n’est pas recontrôlé). Pour les saisies du mois en cours, utilisez plutôt le bouton « Importer Excel » de chaque rubrique.`; };
   $('#rt', root).addEventListener('change', (e) => { App.filters.reprise.type = e.target.value; showCols(); $('#res', root).innerHTML = ''; });
   showCols();
   $('#tpl', root).addEventListener('click', () => telechargerModele($('#rt', root).value));

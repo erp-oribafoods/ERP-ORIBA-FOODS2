@@ -76,7 +76,7 @@ export function calculer(axe, moisCible, mesure) {
 export function renderPrevisions(root) {
   const f = F();
   const fmt = (x) => (f.mesure === 'cartons' ? `${fmtN(x, 0)} ctn` : fmtF(x));
-  root.innerHTML = pageHead('Prévisions de vente', 'Prévision mensuelle construite à partir des ventes déjà enregistrées et des objectifs, ajustée aux périodes de pic (Ramadan, Korité, Tabaski, fêtes, rentrée) et à l’hivernage, puis comparée aux réalisations.', '') +
+  root.innerHTML = pageHead('Prévisions de vente', 'Prévision mensuelle construite à partir des ventes déjà enregistrées et des objectifs, ajustée aux deux grands pics de l’année (Tabaski et fête de Ramadan), au mois de Ramadan, à la rentrée et à l’hivernage, puis comparée aux réalisations.', '') +
     `<div class="seg onglets" role="tablist">${Object.entries(AXES).map(([k, l]) => `<button data-axe="${k}" class="${f.axe === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     <div class="filters" id="pv-f" ${f.axe === 'pics' || f.axe === 'annee' ? 'hidden' : ''}>
       <label class="ff"><span>Mois</span><input type="month" id="pv-m" value="${f.mois}"></label>
@@ -121,7 +121,7 @@ function vueAxe(root, fmt) {
       <li>Chaque mois passé est corrigé de son effet saisonnier (un mois de Ramadan ou de Tabaski n’est pas comparé tel quel à un mois d’hivernage).</li>
       <li>Le niveau de base est la moyenne des 3 derniers mois corrigés, le mois le plus récent pesant le plus (poids 1, 2, 3).</li>
       <li>La tendance (hausse ou baisse entre les mois anciens et récents) est prolongée, limitée à ${fmtN(num(App.I.p.prev_croissance_max ?? 10), 0)} % par mois et atténuée avec le temps.</li>
-      <li>La prévision du mois = niveau × tendance × coefficient du mois. Le coefficient monte à l’approche des pics : Ramadan +${C.eff.ramadan} %, Korité +${C.eff.korite} %, Tabaski +${C.eff.tabaski} %, Maouloud +${C.eff.maouloud} %, rentrée +${C.eff.rentree} %, fêtes +${C.eff.fetes} %, hivernage ${C.eff.hivernage} % (réglables dans Administration › Paramètres › Prévisions).</li>
+      <li>La prévision du mois = niveau × tendance × coefficient du mois. Le coefficient monte à l’approche des pics : Tabaski +${C.eff.tabaski} %, fête de Ramadan +${C.eff.korite} %, mois de Ramadan +${C.eff.ramadan} %, Maouloud +${C.eff.maouloud} %, rentrée +${C.eff.rentree} %, hivernage ${C.eff.hivernage} % (réglables dans Administration › Paramètres › Prévisions).</li>
       <li>Pendant le mois en cours, la projection est revue chaque jour avec le rythme réellement constaté. Pour un mois passé, la prévision est celle qu’on aurait faite au début du mois, avec les seules données connues alors : l’écart mesure la fiabilité de la méthode.</li>
       <li>Sans historique de ventes, l’objectif sert de base (signalé « base objectif »). Plus les mois de ventes s’accumulent, plus la prévision s’affine.</li></ol></details>`;
 
@@ -276,7 +276,7 @@ function vueAnnee(root) {
     <details class="card methode" open><summary><b>Comment les objectifs ${an} sont proposés</b></summary><ol>
       <li><b>Point de départ :</b> l’objectif mensuel actuel de chaque hôtesse. Si elle vend déjà plus que cet objectif, on part de son niveau de vente réel (on ne lui fixe pas moins que ce qu’elle fait). Sans objectif, on part de ses ventes.</li>
       <li><b>Progression :</b> la hausse visée (${fmtN(num(f.croissance), 0)} % sur l’année) est appliquée petit à petit : janvier +${fmtN(num(f.croissance) / 12, 1)} %, juin +${fmtN(num(f.croissance) / 2, 1)} %, décembre +${fmtN(num(f.croissance), 0)} %.</li>
-      <li><b>Saisons :</b> chaque mois est ajusté selon les périodes de forte ou faible vente : Ramadan (+${P.eff.ramadan} %), Korité (+${P.eff.korite} %), Tabaski (+${P.eff.tabaski} %), Maouloud (+${P.eff.maouloud} %), rentrée (+${P.eff.rentree} %), fêtes de fin d’année (+${P.eff.fetes} %), hivernage (${P.eff.hivernage} %). Seuls les jours concernés comptent, d’où des coefficients comme ${fmtN(coefs[1], 2)} en février ou ${fmtN(coefs[6], 2)} en juillet.</li>
+      <li><b>Saisons :</b> chaque mois est ajusté selon les périodes de forte ou faible vente : Tabaski (+${P.eff.tabaski} %, achats de moutons et grillades), fête de Ramadan (+${P.eff.korite} %), mois de Ramadan (+${P.eff.ramadan} %), Maouloud (+${P.eff.maouloud} %), rentrée (+${P.eff.rentree} %), hivernage (${P.eff.hivernage} %). Seuls les jours concernés comptent, d’où des coefficients comme ${fmtN(coefs[1], 2)} en février ou ${fmtN(coefs[6], 2)} en juillet.</li>
       <li><b>Arrondi :</b> chaque objectif est arrondi aux 5 cartons supérieurs. Marchés et zones = somme des hôtesses qui y sont rattachées.</li>
       <li>Les ventes disponibles couvrent ${moisVentes.length ? moisVentes.map((m) => libM(m)).join(', ') : 'aucun mois'} : plus l’historique s’allonge, plus la proposition s’affine. Les objectifs restent modifiables un par un dans « Agents et objectifs ».</li></ol></details>`;
   $('#pa-an', root).addEventListener('change', (e) => { f.annee = String(e.target.value || ANNEE()); vueAnnee(root); });

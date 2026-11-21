@@ -565,3 +565,10 @@ table.mayo-saisie input[type=text] { text-align: left; min-width: 120px; }
 details.methode summary { cursor: pointer; padding: 4px 0; }
 details.methode ol { margin: 10px 0 4px 18px; line-height: 1.55; }
 .tbl tr.sel td { background: color-mix(in srgb, var(--accent, #2E7D32) 10%, transparent); }
+
+/* Afficher / masquer le mot de passe */
+.pw-w { position: relative; display: block; }
+.pw-w input { width: 100%; padding-right: 44px; }
+.pw-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; display: grid; place-items: center; border: 0; background: transparent; color: var(--ink-2); border-radius: 8px; cursor: pointer; }
+.pw-eye:hover, .pw-eye.on { color: var(--accent, #2E7D32); background: color-mix(in srgb, currentColor 10%, transparent); }
+.pw-eye svg { width: 20px; height: 20px; }

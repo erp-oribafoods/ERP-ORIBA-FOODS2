@@ -199,7 +199,7 @@ function ongletFiches(root) {
   const FI = fiches();
   root.innerHTML = `<div class="page-h"><div><h1>Fiches journalières</h1><p class="sub">Une fiche par vendeur et par jour : stock initial, packs vendus au comptant et à crédit, stock final calculé, observations et réactions du terrain. Une fiche reste modifiable le jour de sa saisie.</p></div>
     <div class="page-act">${peutSaisir() ? `<button class="btn primary" id="mf-new">${icon('plus')} Nouvelle fiche du jour</button>` : ''}</div></div><div id="mf-t"></div>`;
-  new Table({ rows: FI.map((x) => ({ ...x, _cls: x.statut === 'annulee' ? 'annule' : '' })), sort: { k: 'date', dir: -1 }, pageSize: 25, title: 'Fiches journalières mayonnaise', onRow: (id) => detailFiche(FI.find((x) => x.id === id)),
+  new Table({ rows: FI.map((x) => ({ ...x, _cls: x.statut === 'annulee' ? 'annule' : '' })), sort: { k: 'date', dir: -1 }, pageSize: 25, title: 'Fiches journalières mayonnaise', onRow: (r) => detailFiche(FI.find((x) => x.id === r.id)),
     cols: [{ k: 'numero', l: 'N°' }, { k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'vendeur', l: 'Vendeur', f: (r) => `<b>${esc(r.vendeur)}</b>` }, { k: 'axe', l: 'Axe' },
       ...MAYO_PRODUITS.map((p) => ({ k: p.k, l: `${p.l.replace('Mayonnaise ', '')} vendus`, num: 1, v: (r) => sum(r.lignes.filter((l) => l.produit === p.k), 'vendu') })),
       { k: 'si', l: 'Stock initial', num: 1 }, { k: 'vendu', l: 'Packs vendus', num: 1, f: (r) => `<b>${fmtN(r.vendu)}</b>` }, { k: 'final', l: 'Stock final', num: 1 },
@@ -276,7 +276,7 @@ function ongletVisites(root) {
   const VI = visites();
   root.innerHTML = `<div class="page-h"><div><h1>Vendeurs visités</h1><p class="sub">Chaque visite indique si le vendeur a pris la commande, les marques de mayonnaise présentes chez lui (nos marques et les concurrents) et la raison d’un refus.</p></div>
     <div class="page-act">${peutSaisir() ? `<button class="btn primary" id="mv-new">${icon('plus')} Nouvelle visite</button>` : ''}</div></div><div id="mv-t"></div>`;
-  new Table({ rows: VI.map((v) => ({ ...v, marq: v.marques.map(libMarque).join(', '), _cls: v.statut === 'annulee' ? 'annule' : '' })), sort: { k: 'date', dir: -1 }, pageSize: 25, title: 'Visites des vendeurs de mayonnaise', onRow: (id) => detailVisite(VI.find((v) => v.id === id)),
+  new Table({ rows: VI.map((v) => ({ ...v, marq: v.marques.map(libMarque).join(', '), _cls: v.statut === 'annulee' ? 'annule' : '' })), sort: { k: 'date', dir: -1 }, pageSize: 25, title: 'Visites des vendeurs de mayonnaise', onRow: (r) => detailVisite(VI.find((v) => v.id === r.id)),
     cols: [{ k: 'date', l: 'Date', f: (r) => fmtD(r.date) }, { k: 'agent', l: 'Agent' }, { k: 'axe', l: 'Axe' }, { k: 'client', l: 'Vendeur visité', f: (r) => `<b>${esc(r.client)}</b>` }, { k: 'telephone', l: 'Téléphone' }, { k: 'lieu', l: 'Lieu' },
       { k: 'prise', l: 'Prise', f: (r) => (r.prise ? '<span class="pill ok">Oui</span>' : '<span class="pill warn">Non</span>'), txt: (r) => (r.prise ? 'Oui' : 'Non') },
       { k: 'marq', l: 'Marques présentes', f: (r) => r.marques.map((m) => `<span class="pill ${NOUS.has(m) ? 'ok' : LEADERS.has(m) ? 'crit' : 'mute'}">${esc(libMarque(m))}</span>`).join(' '), txt: (r) => r.marq },

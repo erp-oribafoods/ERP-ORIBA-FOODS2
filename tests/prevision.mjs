@@ -1,0 +1,26 @@
+// Méthode de prévision : saisonnalité, tendance plafonnée, base objectif, révision du mois en cours.
+import { prevoir, reviser, coefMois, effets, repartition, listeMois } from '../shared/prevision.js';
+let ko = 0; const ok = (c, m) => { console.log(c ? '  ✓' : '  ✗', m); if (!c) ko++; };
+const eff = effets({});
+const s = new Map([['2026-09', 100], ['2026-10', 120]]);
+const nov = prevoir(s, '2026-11', { debut: '2026-09', dernier: '2026-10', eff });
+ok(nov.source === 'historique' && nov.valeur > 110 && nov.valeur < 135, `Novembre ≈ ${nov.valeur.toFixed(1)} (hausse modérée)`);
+ok(nov.tendance > 0 && nov.tendance <= 0.10, `Tendance positive et plafonnée : ${(nov.tendance * 100).toFixed(1)} %`);
+ok(prevoir(new Map([['2026-09', 100], ['2026-10', 300]]), '2026-11', { debut: '2026-09', dernier: '2026-10', eff }).tendance === 0.1, 'Forte hausse plafonnée à 10 %/mois');
+const dec = prevoir(s, '2026-12', { debut: '2026-09', dernier: '2026-10', eff });
+ok(dec.valeur > nov.valeur * 1.05, `Décembre (fêtes) au-dessus de novembre : ${dec.valeur.toFixed(1)}`);
+ok(coefMois('2027-05', eff) > 1.1 && coefMois('2027-08', eff) < 1, 'Mai 2027 (Tabaski) en pic, août (hivernage) en creux');
+const mai = prevoir(s, '2027-05', { debut: '2026-09', dernier: '2026-10', eff }), avr = prevoir(s, '2027-04', { debut: '2026-09', dernier: '2026-10', eff });
+ok(mai.valeur > avr.valeur, 'Prévision non statique : Tabaski au-dessus d’avril');
+const sept = prevoir(s, '2026-09', { debut: '2026-09', dernier: '2026-10', eff, base: 80 });
+ok(sept.source === 'objectif' && sept.valeur === 80, 'Sans historique : l’objectif sert de base');
+ok(prevoir(new Map(), '2026-11', { debut: '2026-09', dernier: '2026-10', eff }).valeur === 0, 'Ni vente ni objectif : 0');
+const r = repartition('2026-12', 310, eff);
+ok(Math.abs(r.reduce((a, x) => a + x.prev, 0) - 310) < 1e-6 && r[25].prev > r[2].prev, 'Répartition journalière : total conservé, fin décembre plus forte');
+const rv = reviser(300, 50, '2026-11', '2026-11-15', eff);
+ok(rv.projection < 300 && rv.projection > 50, `Mois en retard : projection révisée ${rv.projection.toFixed(0)} < 300`);
+const rv2 = reviser(300, 250, '2026-11', '2026-11-15', eff);
+ok(rv2.projection > 300, `Mois en avance : projection révisée ${rv2.projection.toFixed(0)} > 300`);
+const eff2 = effets({ prev_effet_tabaski: 60, prev_effet_hivernage: 20 });
+ok(eff2.tabaski === 60 && eff2.hivernage === -20 && coefMois('2027-05', eff2) > coefMois('2027-05', eff), 'Effets paramétrables');
+console.log(ko ? `${ko} échec(s)` : 'Tout est conforme.'); process.exit(ko ? 1 : 0);

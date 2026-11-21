@@ -110,6 +110,7 @@ export const DEFAULT_PARAMS = {
   prime_montant: 25000,
   circuit_date_depart: { date: null },
   mayo_prix_oriba: 9500, mayo_prix_aida: 11000, mayo_prix_delice: 9500,
+  prev_effet_ramadan: 25, prev_effet_korite: 20, prev_effet_tabaski: 35, prev_effet_maouloud: 10, prev_effet_rentree: 10, prev_effet_fetes: 20, prev_effet_hivernage: 10, prev_croissance_max: 10,
 };
 
 export const PARAM_DEFS = [
@@ -129,6 +130,14 @@ export const PARAM_DEFS = [
   { k: 'mayo_prix_oriba', l: 'Prix du pack Mayonnaise Oriba (FCFA)', t: 'number', g: 'Vente de mayonnaise' },
   { k: 'mayo_prix_aida', l: 'Prix du pack Mayonnaise Aïda (FCFA)', t: 'number', g: 'Vente de mayonnaise' },
   { k: 'mayo_prix_delice', l: 'Prix du pack Mayonnaise Délice (FCFA)', t: 'number', g: 'Vente de mayonnaise' },
+  { k: 'prev_effet_ramadan', l: 'Hausse des ventes pendant le Ramadan (%)', t: 'number', g: 'Prévisions' },
+  { k: 'prev_effet_korite', l: 'Hausse avant la Korité (%)', t: 'number', g: 'Prévisions' },
+  { k: 'prev_effet_tabaski', l: 'Hausse avant la Tabaski (%)', t: 'number', g: 'Prévisions' },
+  { k: 'prev_effet_maouloud', l: 'Hausse au Maouloud (%)', t: 'number', g: 'Prévisions' },
+  { k: 'prev_effet_rentree', l: 'Hausse à la rentrée scolaire (%)', t: 'number', g: 'Prévisions' },
+  { k: 'prev_effet_fetes', l: 'Hausse aux fêtes de fin d’année (%)', t: 'number', g: 'Prévisions' },
+  { k: 'prev_effet_hivernage', l: 'Baisse pendant l’hivernage (%)', t: 'number', g: 'Prévisions' },
+  { k: 'prev_croissance_max', l: 'Tendance maximale retenue (% par mois)', t: 'number', g: 'Prévisions' },
   { k: 'double_controle', l: 'Double contrôle : interdire de valider ses propres saisies (dépenses, demandes carburant/vidange)', t: 'bool', g: 'Dépenses' },
   { k: 'prime_note_min', l: 'Note minimale pour la prime mensuelle (sur 10)', t: 'number', g: 'Agents terrain' },
   { k: 'prime_montant', l: 'Montant de la prime mensuelle (FCFA)', t: 'number', g: 'Agents terrain' },
